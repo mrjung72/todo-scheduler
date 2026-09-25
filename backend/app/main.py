@@ -35,13 +35,13 @@ def seed(db):
             User(userid="admin", user_name="관리자", dept_name="IT", job_title="팀장",
                  user_grade=0, user_stat="Y"),
             User(userid="itos01", user_name="김아이티", dept_name="IT운영팀",
-                 job_title="대리", user_grade=1, user_stat="Y"),
+                 job_title="대리", user_grade=2, user_stat="Y"),
             User(userid="req01", user_name="박현업", dept_name="영업팀",
-                 job_title="과장", user_grade=2, user_stat="Y"),
+                 job_title="과장", user_grade=3, user_stat="Y"),
             User(userid="dev01", user_name="이개발", dept_name="개발팀",
-                 job_title="선임", user_grade=0, user_stat="Y"),
+                 job_title="선임", user_grade=1, user_stat="Y"),
             User(userid="dev02", user_name="최코더", dept_name="개발팀",
-                 job_title="주임", user_grade=0, user_stat="Y"),
+                 job_title="주임", user_grade=1, user_stat="Y"),
         ])
     if db.query(Site).count() == 0:
         db.add_all([

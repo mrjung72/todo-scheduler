@@ -51,7 +51,7 @@ function EditableCell({ value, onSave, type = 'text', options }) {
 /* ---------------- 사용자 ---------------- */
 function UsersTab() {
   const empty = { userid: '', user_name: '', dept_name: '', job_title: '',
-    user_tel: '', user_email: '', user_grade: 3, user_stat: 'Y' }
+    user_tel: '', user_email: '', user_grade: 9, user_stat: 'Y' }
   const [rows, setRows] = useState([])
   const [form, setForm] = useState(empty)
   const load = useCallback(() => api.get('/users').then(r => setRows(r.data)), [])
@@ -129,7 +129,7 @@ function SitesTab() {
     api.delete(`/sites/${id}`).then(load)
 
   const itosOptions = [{ value: '', label: '-' },
-    ...users.filter(u => [0, 1].includes(u.user_grade))
+    ...users.filter(u => [0, 2].includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
 
   return (
@@ -251,9 +251,9 @@ function TasksTab() {
                 options={Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))} /></td>
               <td><EditableCell value={t.task_csrid} onSave={v => save(t.taskid, { task_csrid: v })} /></td>
               <td><EditableCell value={t.req_userid} onSave={v => save(t.taskid, { req_userid: v })}
-                options={uopt([2, 3])} /></td>
+                options={uopt([3, 9])} /></td>
               <td><EditableCell value={t.itos_userid} onSave={v => save(t.taskid, { itos_userid: v })}
-                options={uopt([0, 1])} /></td>
+                options={uopt([0, 2])} /></td>
               <td><EditableCell value={t.task_req_remark}
                 onSave={v => save(t.taskid, { task_req_remark: v })} /></td>
               <td>{['W', 'C'].includes(t.task_stat) &&

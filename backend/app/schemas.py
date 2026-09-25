@@ -10,7 +10,7 @@ class UserBase(BaseModel):
     job_title: Optional[str] = None
     user_tel: Optional[str] = None
     user_email: Optional[str] = None
-    user_grade: Optional[int] = 3
+    user_grade: Optional[int] = 9
     user_stat: Optional[str] = "Y"
 
 

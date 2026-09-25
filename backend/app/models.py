@@ -11,7 +11,7 @@ class User(Base):
     job_title = Column(Text)
     user_tel = Column(Text)
     user_email = Column(Text)
-    user_grade = Column(Integer)          # 0-관리자, 1-IT업무담당자, 2-현업담당자, 3-기타
+    user_grade = Column(Integer)          # 0-관리자, 1-개발자, 2-IT업무담당자, 3-현업담당자, 9-기타
     user_stat = Column(Text, default="Y")
     create_date = Column(DateTime, default=datetime.now)
 

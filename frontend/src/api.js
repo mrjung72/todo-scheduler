@@ -23,10 +23,11 @@ export const DAY_STAT_LABEL = {
 }
 
 export const GRADE_LABEL = {
-  0: '관리자(개발자)',
-  1: 'IT업무담당자',
-  2: '현업담당자',
-  3: '기타사용자',
+  0: '관리자',
+  1: '개발자',
+  2: 'IT업무담당자',
+  3: '현업담당자',
+  9: '기타사용자',
 }
 
 const PALETTE = [
