@@ -8,8 +8,8 @@ from ..models import WorkSchedule, Task, User, Site
 from ..schemas import ScheduleCreate, ScheduleUpdate, ScheduleOut
 from ..security import get_current_user, check_owner_or_admin
 from ..scheduler import (
-    get_calendar_map, get_holiday_map, next_work_start, add_work_hours,
-    worker_segments,
+    get_calendar_map, get_holiday_map, add_work_hours,
+    worker_segments, workday_cal, FREE_DAY_STAT,
 )
 from datetime import timedelta
 
@@ -41,7 +41,9 @@ def _daily_breakdown(start, end, cal, hol, uid):
                 offset += seg_dur
             if hours > 0:
                 result[d.strftime("%Y-%m-%d")] = {
-                    "hours": round(hours, 1), "spans": spans}
+                    "hours": round(hours, 1), "spans": spans,
+                    # 'F'(휴일 수동작업): 24h 기준 비율 -> 프론트에서 최소폭 보정
+                    "free": cal.get(d.strftime("%Y%m%d")) == FREE_DAY_STAT}
         d += timedelta(days=1)
     return result
 
@@ -95,9 +97,11 @@ def calendar_events(db: Session = Depends(get_db)):
                 "work_hours_estimated": task.work_hours_estimated,
                 "start_fixed": sched.start_fixed,
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도
+                # (시작일이 휴일이면 그 날짜도 작업가능일로 간주해 분해)
                 "daily": _daily_breakdown(
                     sched.start_datetime, sched.end_datetime_estimated,
-                    cal, hol, sched.work_userid or ""),
+                    workday_cal(cal, sched.start_datetime.date()),
+                    hol, sched.work_userid or ""),
             },
         })
     return events
@@ -115,7 +119,8 @@ def daily_hours(workschid: int, db: Session = Depends(get_db)):
     hol = get_holiday_map(db)
     uid = sched.work_userid or ""
     bd = _daily_breakdown(
-        sched.start_datetime, sched.end_datetime_estimated, cal, hol, uid)
+        sched.start_datetime, sched.end_datetime_estimated,
+        workday_cal(cal, sched.start_datetime.date()), hol, uid)
     return [{"date": k, "hours": v["hours"]} for k, v in bd.items()]
 
 
@@ -148,8 +153,11 @@ def set_start(workschid: int, body: StartSet, db: Session = Depends(get_db),
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
     uid = sched.work_userid or ""
-    sched.start_datetime = next_work_start(body.start_datetime, cal, hol, uid)
+    # 입력값 그대로 저장 (휴일/근무시간 스냅 없음). 지정일이 휴일이면
+    # 근무구간을 무시하고 그날의 경과시간 그대로 작업시간을 적용해 종료를 계산
+    sched.start_datetime = body.start_datetime
     sched.start_fixed = 1
+    cal = workday_cal(cal, body.start_datetime.date())
     sched.end_datetime_estimated = add_work_hours(
         sched.start_datetime, (task.work_hours_estimated or 0) if task else 0, cal, hol, uid
     )

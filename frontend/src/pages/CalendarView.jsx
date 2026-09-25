@@ -30,17 +30,24 @@ function trimBarToWork(arg) {
     endKey = fmtYMD(ed)
   }
 
+  const startDay = p.daily[startKey]
+  const endDay = p.daily[endKey]
+  let f0 = startDay?.spans?.[0]?.[0]
+  let f1 = endDay?.spans?.at(-1)?.[1]
+
+  // 휴일 시작일(free): 시작일 칸은 전체 폭으로 표시 (여백 미적용)
+  if (startDay?.free) {
+    f0 = 0
+    if (startKey === endKey) f1 = 1
+  }
+
   // margin % 기준은 harness 너비. 토/일 칸이 좁으므로 칸별 실제 px 너비를 %로 환산
   // 시작일이 있는 세그먼트: 앞쪽 비작업 비율만큼 왼쪽 여백
-  if (arg.isStart) {
-    const f0 = p.daily[startKey]?.spans?.[0]?.[0]
-    if (f0 > 0 && dayEl.offsetWidth) {   // isStart 세그먼트의 첫 칸 = 시작일
-      arg.el.style.marginLeft = `${(f0 * dayEl.offsetWidth / segW * 100).toFixed(3)}%`
-    }
+  if (arg.isStart && f0 > 0 && dayEl.offsetWidth) {
+    arg.el.style.marginLeft = `${(f0 * dayEl.offsetWidth / segW * 100).toFixed(3)}%`
   }
   // 종료일이 있는 세그먼트: 뒤쪽 비작업 비율만큼 오른쪽 여백
   if (arg.isEnd) {
-    const f1 = p.daily[endKey]?.spans?.at(-1)?.[1]
     // 종료일 칸 = 같은 주(같은 tr) 안의 해당 날짜 td
     const endEl = dayEl.parentElement
       ?.querySelector(`td.fc-daygrid-day[data-date="${endKey}"]`)

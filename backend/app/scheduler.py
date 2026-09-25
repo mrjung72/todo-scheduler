@@ -3,6 +3,7 @@
 근무시간: 환경변수 WORK_SEGMENTS 로 설정 (기본 "09:00-12:00,13:00-18:00" = 하루 8시간)
 비근무일: 토/일 + calendar_define 에서 date_stat 이 'H'(휴일)인 날
 calendar_define 에 없는 날짜는 월~금=근무일, 토/일=휴일로 간주.
+휴일 수동작업: workday_cal 이 해당일을 'F' 로 표시 -> 근무구간 무시, 경과시간 그대로 적용.
 작업자별 휴가: user_holiday 에 해당 작업자+일자가 있으면
   A(종일) -> 그날 근무 불가, P(일부) -> holiday_hours 만큼 하루 근무시간 차감(하루 뒤쪽부터 차감)
 
@@ -75,16 +76,28 @@ def _day_segments(d: date):
     ]
 
 
+# 휴일 수동작업 표시: 근무구간(WORK_SEGMENTS) 무시하고 하루 전체(24h) 작업가능
+FREE_DAY_STAT = "F"
+
+
 def worker_segments(d: date, cal: dict, hol: dict, userid) -> list:
-    """작업자의 해당 일 근무 구간 목록 (개인휴가 반영)."""
-    if not is_working_day(d, cal):
+    """작업자의 해당 일 근무 구간 목록 (개인휴가 반영).
+    달력 값이 'F' 이면 근무구간 무시하고 00:00~24:00 전체를 작업가능으로 둔다."""
+    stat = cal.get(d.strftime("%Y%m%d"))
+    if stat == FREE_DAY_STAT:
+        base = datetime.combine(d, time(0, 0))
+        segs = [(base, base + timedelta(days=1))]
+    elif not is_working_day(d, cal):
         return []
-    segs = _day_segments(d)
+    else:
+        segs = _day_segments(d)
     h = hol.get((userid or "", d.strftime("%Y%m%d")))
     if not h:
         return segs
     cat, hrs = h
-    if cat == "A" or (hrs or 0) >= WORK_HOURS_PER_DAY:
+    day_hours = sum(
+        (e - s).total_seconds() for s, e in segs) / 3600.0
+    if cat == "A" or (hrs or 0) >= day_hours:
         return []
     # P-일부휴가: 하루 근무의 마지막 hrs 시간을 제외 (오후반차 방식)
     remaining = float(hrs)
@@ -100,6 +113,16 @@ def worker_segments(d: date, cal: dict, hol: dict, userid) -> list:
         out.append((s, e - timedelta(hours=remaining)))
         remaining = 0
     return list(reversed(out))
+
+
+def workday_cal(cal: dict, d: date) -> dict:
+    """d 가 휴일이면 그 날짜만 'F'(종일 작업가능)로 간주한 달력 맵 반환.
+    휴일에 수동으로 작업을 등록할 때 사용 — 근무구간 무시, 경과시간 그대로."""
+    if is_working_day(d, cal):
+        return cal
+    c = dict(cal)
+    c[d.strftime("%Y%m%d")] = FREE_DAY_STAT
+    return c
 
 
 def next_work_start(dt: datetime, cal: dict, hol: dict = None, userid=None) -> datetime:
@@ -196,18 +219,21 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
         for sched, task in items:
             uid = sched.work_userid or ""
             if sched.start_fixed and sched.start_datetime:
-                start = next_work_start(sched.start_datetime, cal, hol, uid)
-                sched.start_datetime = start
+                # 수동 고정 시작일시는 입력값 그대로 유지 (스냅 없음).
+                # 시작일이 휴일이면 그 날짜는 경과시간 그대로 작업시간 적용
+                cal_f = workday_cal(cal, sched.start_datetime.date())
+                start = sched.start_datetime
             else:
+                cal_f = cal
                 start = next_work_start(cursor, cal, hol, uid)
                 sched.start_datetime = start
 
             est_hours = task.work_hours_estimated or 0
-            sched.end_datetime_estimated = add_work_hours(start, est_hours, cal, hol, uid)
+            sched.end_datetime_estimated = add_work_hours(start, est_hours, cal_f, hol, uid)
 
             real_hours = task.work_hours_real or 0
             if real_hours > 0:
-                sched.end_datetime_real = add_work_hours(start, real_hours, cal, hol, uid)
+                sched.end_datetime_real = add_work_hours(start, real_hours, cal_f, hol, uid)
 
             # tasks 테이블의 시작/완료일자도 동기화
             task.task_start_date = sched.start_datetime
