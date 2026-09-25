@@ -7,6 +7,7 @@ body { margin: 0; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; backgrou
   background: #1f2937; color: #fff; padding: 0 20px; height: 52px;
 }
 .logo { font-weight: 700; font-size: 17px; }
+.topbar a.logo { color: #fff; padding: 0; font-size: 17px; }
 .version { font-size: 11px; font-weight: 400; color: #9ca3af; margin-left: 4px; }
 .topbar nav { display: flex; gap: 4px; }
 .topbar a {

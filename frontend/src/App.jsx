@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Route, Routes, Navigate } from 'react-router-dom'
+import { NavLink, Link, Route, Routes, Navigate } from 'react-router-dom'
 import api from './api'
 import Home from './pages/Home'
 import TaskList from './pages/TaskList'
@@ -31,9 +31,9 @@ export default function App() {
     return (
       <div className="app">
         <header className="topbar">
-          <span className="logo">
+          <Link to="/" className="logo">
             TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
-          </span>
+          </Link>
           <button className="primary" style={{ marginLeft: 'auto' }}
             onClick={() => setWantLogin(true)}>로그인</button>
         </header>
@@ -50,11 +50,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="logo">
+        <Link to="/" className="logo">
           TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
-        </span>
+        </Link>
         <nav>
-          <NavLink to="/" end>홈</NavLink>
           <NavLink to="/tasks">작업목록</NavLink>
           <NavLink to="/calendar">달력</NavLink>
           {[0, 1].includes(me.user_grade) && <NavLink to="/admin">관리자</NavLink>}
