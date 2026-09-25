@@ -256,7 +256,8 @@ function TasksTab() {
                 options={uopt([0, 1])} /></td>
               <td><EditableCell value={t.task_req_remark}
                 onSave={v => save(t.taskid, { task_req_remark: v })} /></td>
-              <td><button className="danger" onClick={() => del(t.taskid)}>삭제</button></td>
+              <td>{['W', 'C'].includes(t.task_stat) &&
+                <button className="danger" onClick={() => del(t.taskid)}>삭제</button>}</td>
             </tr>
           ))}
         </tbody>
@@ -461,7 +462,8 @@ function SchedulesTab() {
 
   const recalc = async () => {
     const { data } = await api.post('/tasks/recalculate')
-    setMsg(`재계산 완료: ${data.updated}건 갱신 (대기중 작업만)`)
+    setMsg(`재계산 완료: ${data.updated}건 반영` +
+      (data.created ? ` (스케줄 신규 추가 ${data.created}건)` : ''))
     load()
   }
 
@@ -563,7 +565,8 @@ function SchedulesTab() {
                     {s.start_fixed ? <button onClick={() => unfix(s.workschid)}>해제</button> : null}
                   </span>
                 </td>
-                <td><button className="danger" onClick={() => del(s.workschid)}>삭제</button></td>
+                <td>{['W', 'C'].includes(s.work_stat) &&
+                  <button className="danger" onClick={() => del(s.workschid)}>삭제</button>}</td>
               </tr>
             )
           })}

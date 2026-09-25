@@ -109,9 +109,11 @@ def list_tasks(
 
 @router.post("/recalculate")
 def recalc(db: Session = Depends(get_db)):
-    """우선순위 기준으로 전체 작업의 시작/종료일시를 재계산."""
-    updated = recalculate(db)
-    return {"updated": updated}
+    """우선순위 기준으로 전체 작업의 시작/종료일시를 재계산.
+
+    스케줄이 없는 대기중 작업은 스케줄을 자동 생성해 함께 배치한다."""
+    updated, created = recalculate(db)
+    return {"updated": updated, "created": created}
 
 
 @router.post("/auto-schedule/{taskid}", response_model=TaskDetail)
