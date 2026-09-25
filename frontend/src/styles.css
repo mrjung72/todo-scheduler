@@ -13,6 +13,11 @@ body { margin: 0; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; backgrou
 }
 .topbar a.active { color: #fff; border-bottom: 3px solid #3b82f6; }
 .topbar a:hover { color: #fff; }
+.workhours {
+  margin-left: auto; font-size: 12px; color: #93c5fd;
+  padding: 3px 10px; border: 1px solid #374151; border-radius: 12px;
+  background: #111827;
+}
 
 main { padding: 16px 20px; }
 
