@@ -2,11 +2,12 @@ from datetime import date, timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import __version__
 from .database import Base, engine, SessionLocal
 from .models import User, Site, Task, CalendarDefine, WorkSchedule
 from .routers import users, sites, tasks, calendar, schedules
 
-app = FastAPI(title="TODO Scheduler API")
+app = FastAPI(title="TODO Scheduler API", version=__version__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,6 +81,7 @@ def health():
 def config():
     from .scheduler import WORK_SEGMENTS, WORK_HOURS_PER_DAY, DAY_SEGMENTS
     return {
+        "version": __version__,
         "work_segments": WORK_SEGMENTS,
         "work_hours_per_day": WORK_HOURS_PER_DAY,
         "segments": [

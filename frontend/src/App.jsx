@@ -14,7 +14,9 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="logo">TODO 작업 스케줄러</span>
+        <span className="logo">
+          TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
+        </span>
         <nav>
           <NavLink to="/tasks">작업목록</NavLink>
           <NavLink to="/calendar">달력</NavLink>
