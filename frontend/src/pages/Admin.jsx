@@ -51,7 +51,7 @@ function EditableCell({ value, onSave, type = 'text', options }) {
 /* ---------------- 사용자 ---------------- */
 function UsersTab() {
   const empty = { userid: '', user_name: '', dept_name: '', job_title: '',
-    user_tel: '', user_email: '', user_grade: 9, user_stat: 'Y' }
+    user_tel: '', user_email: '', user_grade: 9, user_stat: 'Y', password: '' }
   const [rows, setRows] = useState([])
   const [form, setForm] = useState(empty)
   const load = useCallback(() => api.get('/users').then(r => setRows(r.data)), [])
@@ -81,12 +81,14 @@ function UsersTab() {
           onChange={e => setForm({ ...form, user_grade: +e.target.value })}>
           {Object.entries(GRADE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
+        <input type="password" placeholder="비밀번호(기본 1234)" value={form.password}
+          onChange={e => setForm({ ...form, password: e.target.value })} />
         <button type="submit">추가</button>
       </form>
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
-          <th>이메일</th><th>등급</th><th>상태</th><th></th>
+          <th>이메일</th><th>등급</th><th>비밀번호</th><th>상태</th><th></th>
         </tr></thead>
         <tbody>
           {rows.map(u => (
@@ -99,6 +101,10 @@ function UsersTab() {
               <td><EditableCell value={u.user_email} onSave={v => save(u.userid, { user_email: v })} /></td>
               <td><EditableCell value={u.user_grade} onSave={v => save(u.userid, { user_grade: v })}
                 options={Object.entries(GRADE_LABEL).map(([k, l]) => ({ value: +k, label: l }))} /></td>
+              <td><button onClick={() => {
+                const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
+                if (pw) save(u.userid, { password: pw })
+              }}>변경</button></td>
               <td><EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
                 options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
               <td><button className="danger" onClick={() => del(u.userid)}>삭제</button></td>

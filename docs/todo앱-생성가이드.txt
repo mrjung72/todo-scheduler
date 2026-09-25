@@ -95,7 +95,7 @@ CREATE TABLE work_schedule (
 
 
 
-버전 ０。２。０
+>>> 버전 0.2.0
 작업자별 휴가정보를 아래와 같이 정의하고 작업기간에 반영하도록 기능 개선해줘
 관리자화면도 추가해주고.
 
@@ -110,6 +110,13 @@ CREATE TABLE user_holiday (
 	FOREIGN KEY (work_userid) REFERENCES users(userid),
 	PRIMARY KEY (dateid, work_userid)
 );
+
+
+
+>>> 버전 0.3.0
+사용자 테이블에 비밀번호 컬럼 추가 할꺼야
+password  TEXT NOT NULL,   -- 비밀번호(암호화)
+
 
 
 

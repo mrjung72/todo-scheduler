@@ -12,6 +12,7 @@ class User(Base):
     user_tel = Column(Text)
     user_email = Column(Text)
     user_grade = Column(Integer)          # 0-관리자, 1-개발자, 2-IT업무담당자, 3-현업담당자, 9-기타
+    password = Column(Text, nullable=False, default='')   # 비밀번호(pbkdf2 해시)
     user_stat = Column(Text, default="Y")
     create_date = Column(DateTime, default=datetime.now)
 

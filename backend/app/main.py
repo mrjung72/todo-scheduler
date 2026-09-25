@@ -9,6 +9,7 @@ from . import __version__
 from .database import Base, engine, SessionLocal
 from .models import User, Site, Task, CalendarDefine, WorkSchedule
 from .routers import users, sites, tasks, calendar, schedules, user_holidays
+from .security import hash_password
 
 app = FastAPI(title="TODO Scheduler API", version=__version__)
 
@@ -31,17 +32,18 @@ app.include_router(user_holidays.router)
 def seed(db):
     """최초 실행 시 기본 마스터 데이터 + 올해/내년 달력 생성."""
     if db.query(User).count() == 0:
+        pw = hash_password("1234")
         db.add_all([
             User(userid="admin", user_name="관리자", dept_name="IT", job_title="팀장",
-                 user_grade=0, user_stat="Y"),
+                 user_grade=0, password=pw, user_stat="Y"),
             User(userid="itos01", user_name="김아이티", dept_name="IT운영팀",
-                 job_title="대리", user_grade=2, user_stat="Y"),
+                 job_title="대리", user_grade=2, password=pw, user_stat="Y"),
             User(userid="req01", user_name="박현업", dept_name="영업팀",
-                 job_title="과장", user_grade=3, user_stat="Y"),
+                 job_title="과장", user_grade=3, password=pw, user_stat="Y"),
             User(userid="dev01", user_name="이개발", dept_name="개발팀",
-                 job_title="선임", user_grade=1, user_stat="Y"),
+                 job_title="선임", user_grade=1, password=pw, user_stat="Y"),
             User(userid="dev02", user_name="최코더", dept_name="개발팀",
-                 job_title="주임", user_grade=1, user_stat="Y"),
+                 job_title="주임", user_grade=1, password=pw, user_stat="Y"),
         ])
     if db.query(Site).count() == 0:
         db.add_all([
@@ -66,10 +68,30 @@ def seed(db):
     db.commit()
 
 
+def migrate(db):
+    """기존 DB에 나중에 추가된 컬럼을 보강 (SQLite ALTER TABLE)."""
+    from sqlalchemy import text
+    cols = {r[1] for r in db.execute(text("PRAGMA table_info(users)"))}
+    if "password" not in cols:
+        db.execute(text(
+            "ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ''"))
+        db.execute(text("UPDATE users SET password = :pw WHERE password = ''"),
+                   {"pw": hash_password("1234")})
+    cols = {r[1] for r in db.execute(text("PRAGMA table_info(tasks)"))}
+    if "work_userid" not in cols:
+        db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))
+    db.commit()
+
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
+    try:
+        migrate(db)
+        seed(db)
+    finally:
+        db.close()
     try:
         seed(db)
     finally:

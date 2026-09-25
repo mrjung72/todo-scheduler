@@ -16,10 +16,12 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     userid: str
+    password: Optional[str] = None   # 미입력 시 기본값 '1234'
 
 
 class UserUpdate(UserBase):
     user_name: Optional[str] = None
+    password: Optional[str] = None   # 지정 시에만 변경 (해시는 응답에 노출 안 함)
 
 
 class UserOut(UserBase):
