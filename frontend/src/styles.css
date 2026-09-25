@@ -197,6 +197,7 @@ button.logout { padding: 3px 10px; font-size: 12px; }
 }
 .home-stat.st-W { background: #dbeafe; color: #1d4ed8; }
 .home-stat.st-P { background: #fef3c7; color: #92400e; }
+.home-stat.st-D { background: #ede9fe; color: #6d28d9; }
 .home-stat.st-F { background: #dcfce7; color: #15803d; }
 .home-stat.st-C { background: #f3f4f6; color: #9ca3af; }
 .home-detail {

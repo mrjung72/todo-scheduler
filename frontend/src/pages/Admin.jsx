@@ -307,7 +307,7 @@ function TasksTab() {
                 options={devOpt} /></td>
               <td><EditableCell value={t.task_req_remark} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_req_remark: v })} /></td>
-              <td>{['W', 'C'].includes(t.task_stat) && can(t) &&
+              <td>{['W', 'C', 'D'].includes(t.task_stat) && can(t) &&
                 <button className="danger" onClick={() => del(t.taskid)}>삭제</button>}</td>
             </tr>
           ))}
@@ -637,7 +637,7 @@ function SchedulesTab() {
                 </td>
                 <td className="c">{fmtDT(s.end_datetime_estimated)}</td>
                 <td className="c">{fmtDT(s.end_datetime_real)}</td>
-                <td>{['W', 'C'].includes(s.work_stat) && can(s) &&
+                <td>{['W', 'C', 'D'].includes(s.work_stat) && can(s) &&
                   <button className="danger" onClick={() => del(s.workschid)}>삭제</button>}</td>
               </tr>
             )

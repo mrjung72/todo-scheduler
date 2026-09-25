@@ -148,8 +148,8 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
     task = Task(**data)
     db.add(task)
     db.flush()  # taskid 확보
-    # 대표 작업스케줄 자동 생성 (작업자는 작업의 work_userid)
-    sched = WorkSchedule(taskid=task.taskid, work_stat="W",
+    # 대표 작업스케줄 자동 생성 (상태는 작업 상태 그대로 -> 보류/완료 작업은 미배치)
+    sched = WorkSchedule(taskid=task.taskid, work_stat=task.task_stat or "W",
                          work_userid=task.work_userid)
     db.add(sched)
     db.commit()
@@ -169,6 +169,11 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
     for k, v in data.items():
         setattr(obj, k, v)
+    # 작업상태 변경 시 연결된 스케줄(work_stat)도 동기화
+    if "task_stat" in data:
+        db.query(WorkSchedule).filter(
+            WorkSchedule.taskid == taskid,
+        ).update({WorkSchedule.work_stat: obj.task_stat})
     # 작업자 변경 시 대기중 스케줄의 작업자도 함께 갱신
     if "work_userid" in data:
         db.query(WorkSchedule).filter(

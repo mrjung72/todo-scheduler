@@ -30,6 +30,7 @@ export const fmtDT = (iso) => {
 export const STAT_LABEL = {
   W: '대기중',
   P: '작업중',
+  D: '작업보류',
   F: '완료',
   C: '취소',
 }

@@ -36,7 +36,7 @@ class Task(Base):
     priority = Column(Integer, default=0)
     work_hours_estimated = Column(REAL, default=0)
     work_hours_real = Column(REAL, default=0)
-    task_stat = Column(Text, default="W")  # W-대기중, P-작업중, F-완료, C-취소
+    task_stat = Column(Text, default="W")  # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
     task_csrid = Column(Text)
     task_req_remark = Column(Text)
     task_req_filepath = Column(Text)
@@ -69,7 +69,7 @@ class WorkSchedule(Base):
     __tablename__ = "work_schedule"
     workschid = Column(Integer, primary_key=True, autoincrement=True)
     taskid = Column(Integer, ForeignKey("tasks.taskid"))
-    work_stat = Column(Text, default="W")     # W-대기중, P-작업중, F-완료, C-취소
+    work_stat = Column(Text, default="W")     # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
     work_remark = Column(Text)
     work_filepath = Column(Text)
     work_userid = Column(Text)

@@ -285,11 +285,6 @@ export default function CalendarView() {
         </select>
         <button onClick={load}>검색</button>
       </div>
-      <div className="legend">
-        <span className="lg lg-h">휴일</span>
-        <span className="lg lg-uh">개인휴가</span>
-        <span className="lg-note">작업 색상 = 작업별 자동 배정 / 시작일·종료일 바 길이 = 당일 작업시간 / 클릭 시 상세</span>
-      </div>
       <FullCalendar
         ref={calRef}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}

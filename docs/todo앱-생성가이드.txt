@@ -57,7 +57,7 @@ CREATE TABLE tasks (
     priority INTEGER DEFAULT 0,         -- 우선순위 (정렬 기준)
     work_hours_estimated REAL DEFAULT 0,     -- 작업 예상기간(시간) 
     work_hours_real REAL DEFAULT 0,       -- 실제 작업기간(시간)
-	task_stat TEXT,                -- 작업상태(W-대기중,P-작업중,F-완료,C-취소)
+	task_stat TEXT,                -- 작업상태(W-대기중,P-작업중,D-작업보류,F-완료,C-취소)
 	task_csrid TEXT,               -- 관련 CSR ID
 	task_req_remark TEXT,          -- 작업요청내용
 	task_req_filepath TEXT,        -- 작업요청첨부파일경로
