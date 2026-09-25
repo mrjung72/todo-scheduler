@@ -10,6 +10,11 @@ export default function CalendarView() {
   const [dayEvents, setDayEvents] = useState([])
   const [holEvents, setHolEvents] = useState([])
   const [selected, setSelected] = useState(null)
+  const [users, setUsers] = useState([])
+  const [dayMap, setDayMap] = useState({})
+  const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
+    holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
+  const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
   const calRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -25,6 +30,7 @@ export default function CalendarView() {
       classNames: ['arrow-event'],
     })))
     // 휴일/휴가를 배경 이벤트로 표시
+    setDayMap(Object.fromEntries(days.map(d => [d.dateid, d])))
     setDayEvents(
       days.filter(d => d.date_stat !== 'W').map(d => ({
         start: `${d.dateid.slice(0, 4)}-${d.dateid.slice(4, 6)}-${d.dateid.slice(6, 8)}`,
@@ -47,7 +53,52 @@ export default function CalendarView() {
     })))
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    api.get('/users').then(r => setUsers(r.data))
+  }, [load])
+
+  const onDateClick = (info) => {
+    // 이벤트(작업바/휴가바) 위 클릭은 eventClick이 처리 -> 여기선 건너뜀
+    if (info.jsEvent.target.closest('.fc-daygrid-event-harness, .fc-event')) return
+    setSelected(null)
+    const date = info.dateStr.slice(0, 10)
+    const day = dayMap[date.replaceAll('-', '')]
+    setHolForm({ date, ...emptyHol,
+      date_stat: day?.date_stat === 'W' ? 'H' : (day?.date_stat || 'H'),
+      holiday_remark: day?.holiday_remark || '' })
+  }
+
+  const saveHoliday = async e => {
+    e.preventDefault()
+    const dateid = holForm.date.replaceAll('-', '')
+    if (holForm.kind === 'day') {
+      // 공통 휴일/휴가: calendar_define 에 없으면 생성, 있으면 갱신
+      if (dayMap[dateid]) {
+        await api.put(`/calendar/${dateid}`, {
+          date_stat: holForm.date_stat,
+          holiday_remark: holForm.holiday_remark,
+        })
+      } else {
+        await api.post('/calendar', {
+          dateid, date_name: holForm.date,
+          date_stat: holForm.date_stat,
+          holiday_remark: holForm.holiday_remark,
+        })
+      }
+    } else {
+      if (!holForm.work_userid) return
+      await api.post('/user-holidays', {
+        dateid,
+        work_userid: holForm.work_userid,
+        holiday_category: holForm.holiday_category,
+        holiday_hours: holForm.holiday_category === 'P' ? +holForm.holiday_hours : 0,
+        holiday_remark: holForm.holiday_remark,
+      })
+    }
+    setHolForm(null)
+    load()
+  }
 
   const onEventClick = async (info) => {
     const props = { ...info.event.extendedProps, title: info.event.title,
@@ -81,6 +132,7 @@ export default function CalendarView() {
         fixedWeekCount={false}
         events={[...events, ...dayEvents, ...holEvents]}
         eventClick={onEventClick}
+        dateClick={onDateClick}
         eventContent={(arg) => {
           if (arg.event.extendedProps.holiday) return arg.event.title
           const w = arg.event.extendedProps.work_user_name
@@ -150,6 +202,64 @@ export default function CalendarView() {
               </>
             )}
             <button onClick={() => setSelected(null)}>닫기</button>
+          </div>
+        </div>
+      )}
+      {holForm && (
+        <div className="popup" onClick={() => setHolForm(null)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <h3>{holForm.date.slice(5).replace('-', '/')} 휴일/휴가 등록</h3>
+            <form className="holiday-form" onSubmit={saveHoliday}>
+              <label>등록구분
+                <select value={holForm.kind}
+                  onChange={e => setHolForm({ ...holForm, kind: e.target.value })}>
+                  <option value="user">개인 휴가</option>
+                  <option value="day">공통 휴일/휴가</option>
+                </select>
+              </label>
+              {holForm.kind === 'user' ? (
+                <>
+                  <label>작업자
+                    <select required value={holForm.work_userid}
+                      onChange={e => setHolForm({ ...holForm, work_userid: e.target.value })}>
+                      <option value="">선택</option>
+                      {users.filter(u => u.user_grade === 1)
+                        .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+                    </select>
+                  </label>
+                  <label>구분
+                    <select value={holForm.holiday_category}
+                      onChange={e => setHolForm({ ...holForm, holiday_category: e.target.value })}>
+                      <option value="A">종일</option>
+                      <option value="P">일부(시간)</option>
+                    </select>
+                  </label>
+                  {holForm.holiday_category === 'P' && (
+                    <label>휴가시간
+                      <input type="number" min="0.5" step="0.5" required
+                        value={holForm.holiday_hours}
+                        onChange={e => setHolForm({ ...holForm, holiday_hours: e.target.value })} />
+                    </label>
+                  )}
+                </>
+              ) : (
+                <label>구분
+                  <select value={holForm.date_stat}
+                    onChange={e => setHolForm({ ...holForm, date_stat: e.target.value })}>
+                    {Object.entries(DAY_STAT_LABEL)
+                      .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                </label>
+              )}
+              <label>설명
+                <input placeholder="예: 연차, 오후반차, 공휴일" value={holForm.holiday_remark}
+                  onChange={e => setHolForm({ ...holForm, holiday_remark: e.target.value })} />
+              </label>
+              <div className="popup-btns">
+                <button type="submit" className="primary">등록</button>
+                <button type="button" onClick={() => setHolForm(null)}>취소</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

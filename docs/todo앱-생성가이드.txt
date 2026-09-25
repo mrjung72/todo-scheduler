@@ -27,6 +27,7 @@ DB객체는 우선 사용자정의, 작업정의, 사이트정의, 달력정의,
 CREATE TABLE users (
     userid TEXT PRIMARY KEY,   -- 사용자ID 
     user_name TEXT NOT NULL,   -- 사용자명
+	password  TEXT NOT NULL,   -- 비밀번호(암호화)
     dept_name TEXT,            -- 부서명
 	job_title TEXT,            -- 직급
 	user_tel TEXT,             -- 연락처(전화번호)

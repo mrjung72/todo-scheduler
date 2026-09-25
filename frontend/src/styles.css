@@ -123,3 +123,9 @@ tr.dayoff td { background: #fef2f2; }
 .daily td { padding: 2px 0; }
 .daily td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .daily tr.sum td { border-top: 1px solid #e5e7eb; font-weight: 600; padding-top: 4px; }
+
+/* 휴가 등록 팝업 폼 */
+.holiday-form { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.holiday-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.holiday-form input, .holiday-form select { padding: 6px 8px; font-size: 14px; }
+.popup-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
