@@ -114,7 +114,6 @@ export default function CalendarView() {
     <div className="calendar-wrap">
       <div className="legend">
         <span className="lg lg-h">휴일</span>
-        <span className="lg lg-v">휴가</span>
         <span className="lg lg-uh">개인휴가</span>
         <span className="lg-note">작업 색상 = 작업별 자동 배정 / 클릭 시 상세</span>
       </div>

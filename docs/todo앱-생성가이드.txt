@@ -59,10 +59,11 @@ CREATE TABLE tasks (
 	task_csrid TEXT,               -- 관련 CSR ID
 	task_req_remark TEXT,          -- 작업요청내용
 	task_req_filepath TEXT,        -- 작업요청첨부파일경로
-	req_userid TEXT,              -- 요청자(현업담당자)ID
-	itos_userid TEXT,             -- IT업무담당자ID
-	task_start_date datetime,     -- 작업시작일자
-	task_end_date datetime,       -- 작업완료일자
+	req_userid TEXT,               -- 요청자(현업담당자)ID
+	itos_userid TEXT,              -- IT업무담당자ID
+	work_userid TEXT,              -- 작업자ID
+	task_start_date datetime,      -- 작업시작일자
+	task_end_date datetime,        -- 작업완료일자
 	create_date datetime,          -- 등록일자
 	FOREIGN KEY (siteid) REFERENCES sites(siteid)
 );

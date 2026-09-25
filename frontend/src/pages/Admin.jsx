@@ -225,6 +225,11 @@ function TasksTab() {
         <input type="number" className="num" step="0.5" placeholder="예상시간"
           value={form.work_hours_estimated}
           onChange={e => setForm({ ...form, work_hours_estimated: +e.target.value })} />
+        <select value={form.work_userid}
+          onChange={e => setForm({ ...form, work_userid: e.target.value })}>
+          <option value="">작업자(개발자)</option>
+          {uopt([1]).slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <button type="submit">추가</button>
       </form>
       <div className="toolbar">
@@ -233,8 +238,8 @@ function TasksTab() {
       </div>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>작업명</th><th>사이트</th><th>우선순위</th><th>예상(h)</th><th>실제(h)</th>
-          <th>상태</th><th>CSR</th><th>현업</th><th>IT</th><th>요청내용</th><th></th>
+          <th>ID</th><th>작업명</th><th>사이트</th><th>우선순위</th><th>예상작업시간(h)</th><th>실제작업시간(h)</th>
+          <th>상태</th><th>CSR</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th><th>요청내용</th><th></th>
         </tr></thead>
         <tbody>
           {filtered.map(t => (
@@ -254,6 +259,8 @@ function TasksTab() {
                 options={uopt([3, 9])} /></td>
               <td><EditableCell value={t.itos_userid} onSave={v => save(t.taskid, { itos_userid: v })}
                 options={uopt([0, 2])} /></td>
+              <td><EditableCell value={t.work_userid} onSave={v => save(t.taskid, { work_userid: v })}
+                options={uopt([1])} /></td>
               <td><EditableCell value={t.task_req_remark}
                 onSave={v => save(t.taskid, { task_req_remark: v })} /></td>
               <td>{['W', 'C'].includes(t.task_stat) &&

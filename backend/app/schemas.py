@@ -66,12 +66,13 @@ class TaskBase(BaseModel):
     task_req_filepath: Optional[str] = None
     req_userid: Optional[str] = None
     itos_userid: Optional[str] = None
+    work_userid: Optional[str] = None   # 작업자(개발자)
     task_start_date: Optional[datetime] = None
     task_end_date: Optional[datetime] = None
 
 
 class TaskCreate(TaskBase):
-    work_userid: Optional[str] = None  # work_schedule 생성 시 사용
+    pass
 
 
 class TaskUpdate(BaseModel):
@@ -86,6 +87,7 @@ class TaskUpdate(BaseModel):
     task_req_filepath: Optional[str] = None
     req_userid: Optional[str] = None
     itos_userid: Optional[str] = None
+    work_userid: Optional[str] = None
     task_start_date: Optional[datetime] = None
     task_end_date: Optional[datetime] = None
 

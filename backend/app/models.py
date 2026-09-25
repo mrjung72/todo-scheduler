@@ -40,6 +40,7 @@ class Task(Base):
     task_req_filepath = Column(Text)
     req_userid = Column(Text)
     itos_userid = Column(Text)
+    work_userid = Column(Text)            # 작업자(개발자)
     task_start_date = Column(DateTime)
     task_end_date = Column(DateTime)
     create_date = Column(DateTime, default=datetime.now)

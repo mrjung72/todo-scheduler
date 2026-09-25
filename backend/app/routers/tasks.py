@@ -38,7 +38,8 @@ def _detail_query(db: Session):
         .outerjoin(WorkSchedule, WorkSchedule.workschid == sub.c.mid)
         .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(ItosUser, ItosUser.userid == Task.itos_userid)
-        .outerjoin(WorkUser, WorkUser.userid == WorkSchedule.work_userid)
+        .outerjoin(WorkUser, WorkUser.userid ==
+                   func.coalesce(Task.work_userid, WorkSchedule.work_userid))
         .outerjoin(Site, Site.siteid == Task.siteid)
     )
 
@@ -52,7 +53,7 @@ def _to_detail(row) -> TaskDetail:
         work_user_name=work_name,
         site_name=site_name,
         workschid=sched.workschid if sched else None,
-        work_userid=sched.work_userid if sched else None,
+        work_userid=task.work_userid or (sched.work_userid if sched else None),
         work_stat=sched.work_stat if sched else None,
         start_datetime=sched.start_datetime if sched else None,
         end_datetime_estimated=sched.end_datetime_estimated if sched else None,
@@ -129,13 +130,12 @@ def auto_schedule_one(taskid: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=TaskOut, status_code=201)
 def create_task(body: TaskCreate, db: Session = Depends(get_db)):
-    data = body.model_dump()
-    work_userid = data.pop("work_userid", None)
-    task = Task(**data)
+    task = Task(**body.model_dump())
     db.add(task)
     db.flush()  # taskid 확보
-    # 대표 작업스케줄 자동 생성
-    sched = WorkSchedule(taskid=task.taskid, work_stat="W", work_userid=work_userid)
+    # 대표 작업스케줄 자동 생성 (작업자는 작업의 work_userid)
+    sched = WorkSchedule(taskid=task.taskid, work_stat="W",
+                         work_userid=task.work_userid)
     db.add(sched)
     db.commit()
     db.refresh(task)
@@ -147,8 +147,15 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db)):
     obj = db.get(Task, taskid)
     if not obj:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    for k, v in data.items():
         setattr(obj, k, v)
+    # 작업자 변경 시 대기중 스케줄의 작업자도 함께 갱신
+    if "work_userid" in data:
+        db.query(WorkSchedule).filter(
+            WorkSchedule.taskid == taskid,
+            WorkSchedule.work_stat == "W",
+        ).update({WorkSchedule.work_userid: obj.work_userid})
     db.commit()
     db.refresh(obj)
     return obj

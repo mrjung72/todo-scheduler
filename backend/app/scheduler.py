@@ -153,7 +153,7 @@ def recalculate(db: Session) -> tuple:
     for t in db.query(Task).filter(Task.task_stat.in_(["W", "P"])).all():
         if t.taskid not in scheduled_taskids:
             db.add(WorkSchedule(taskid=t.taskid, work_stat=t.task_stat,
-                                work_userid=t.itos_userid))
+                                work_userid=t.work_userid or t.itos_userid))
             created += 1
     if created:
         db.flush()
