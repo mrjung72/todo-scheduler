@@ -121,6 +121,7 @@ export default function App() {
             <p><b>연락처</b> {profile.user_tel || '-'}</p>
             <p><b>이메일</b> {profile.user_email || '-'}</p>
             <p><b>등급</b> {GRADE_LABEL[profile.user_grade] ?? profile.user_grade}</p>
+            <p><b>기본사이트</b> {profile.default_siteid || '-'}</p>
             <div className="popup-btns">
               <button onClick={openPw}>비밀번호 변경</button>
               <button onClick={() => setProfile(null)}>닫기</button>

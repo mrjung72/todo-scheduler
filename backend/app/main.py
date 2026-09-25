@@ -97,6 +97,9 @@ def migrate(db):
             "ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ''"))
         db.execute(text("UPDATE users SET password = :pw WHERE password = ''"),
                    {"pw": hash_password("1234")})
+    if "default_siteid" not in cols:
+        db.execute(text(
+            "ALTER TABLE users ADD COLUMN default_siteid TEXT REFERENCES sites(siteid)"))
     cols = {r[1] for r in db.execute(text("PRAGMA table_info(tasks)"))}
     if "work_userid" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))

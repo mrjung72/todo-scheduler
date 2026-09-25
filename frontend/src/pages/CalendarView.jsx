@@ -28,7 +28,8 @@ export default function CalendarView() {
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
   const [dayMap, setDayMap] = useState({})
-  const [siteFilter, setSiteFilter] = useState('')
+  // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
+  const [siteFilter, setSiteFilter] = useState(me?.default_siteid || '')
   const [q, setQ] = useState('')
   const [statFilter, setStatFilter] = useState('')
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',

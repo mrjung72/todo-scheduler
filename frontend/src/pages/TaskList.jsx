@@ -4,7 +4,9 @@ import api, { fmtDT, STAT_LABEL, taskColor } from '../api'
 export default function TaskList() {
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
-  const [siteFilter, setSiteFilter] = useState('')
+  // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
+  const [siteFilter, setSiteFilter] = useState(() =>
+    JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid || '')
   const [q, setQ] = useState('')
   const [statFilter, setStatFilter] = useState('')
   const [cfg, setCfg] = useState(null)

@@ -26,5 +26,6 @@ def login(body: LoginBody, db: Session = Depends(get_db)):
             "user_name": user.user_name,
             "dept_name": user.dept_name,
             "user_grade": user.user_grade,
+            "default_siteid": user.default_siteid,
         },
     }

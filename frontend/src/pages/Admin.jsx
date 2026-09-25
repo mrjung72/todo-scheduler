@@ -61,11 +61,16 @@ function EditableCell({ value, onSave, type = 'text', options, disabled }) {
 /* ---------------- 사용자 ---------------- */
 function UsersTab() {
   const empty = { userid: '', user_name: '', dept_name: '', job_title: '',
-    user_tel: '', user_email: '', user_grade: 9, user_stat: 'Y', password: '' }
+    user_tel: '', user_email: '', user_grade: 9, user_stat: 'Y', password: '',
+    default_siteid: '' }
   const [rows, setRows] = useState([])
+  const [sites, setSites] = useState([])
   const [form, setForm] = useState(empty)
   const load = useCallback(() => api.get('/users').then(r => setRows(r.data)), [])
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    api.get('/sites').then(r => setSites(r.data))
+  }, [load])
 
   const save = (id, patch) => api.put(`/users/${id}`, patch).then(load)
   const add = async e => {
@@ -93,12 +98,17 @@ function UsersTab() {
         </select>
         <input type="password" placeholder="비밀번호(기본 1234)" value={form.password}
           onChange={e => setForm({ ...form, password: e.target.value })} />
+        <select value={form.default_siteid}
+          onChange={e => setForm({ ...form, default_siteid: e.target.value })}>
+          <option value="">기본사이트</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
         <button type="submit">추가</button>
       </form>
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
-          <th>이메일</th><th>등급</th><th>비밀번호</th><th>상태</th><th></th>
+          <th>이메일</th><th>등급</th><th>기본사이트</th><th>비밀번호</th><th>상태</th><th></th>
         </tr></thead>
         <tbody>
           {rows.map(u => (
@@ -111,6 +121,10 @@ function UsersTab() {
               <td><EditableCell value={u.user_email} onSave={v => save(u.userid, { user_email: v })} /></td>
               <td><EditableCell value={u.user_grade} onSave={v => save(u.userid, { user_grade: v })}
                 options={Object.entries(GRADE_LABEL).map(([k, l]) => ({ value: +k, label: l }))} /></td>
+              <td className="c"><EditableCell value={u.default_siteid}
+                onSave={v => save(u.userid, { default_siteid: v || null })}
+                options={[{ value: '', label: '-' },
+                  ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]} /></td>
               <td><button onClick={() => {
                 const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
                 if (pw) save(u.userid, { password: pw })

@@ -14,6 +14,7 @@ class User(Base):
     user_grade = Column(Integer)          # 0-관리자, 1-개발자, 2-IT업무담당자, 3-현업담당자, 9-기타
     password = Column(Text, nullable=False, default='')   # 비밀번호(pbkdf2 해시)
     user_stat = Column(Text, default="Y")
+    default_siteid = Column(Text, ForeignKey("sites.siteid"))   # 기본사이트ID
     create_date = Column(DateTime, default=datetime.now)
 
 

@@ -34,7 +34,9 @@ CREATE TABLE users (
 	user_email TEXT,           -- 이메일
 	user_grade INTEGER,        -- 사용자등급(0-관리자, 1-개발자, 2-IT업무담당자, 3-현업담당자, 9-기타사용자)
 	user_stat TEXT,            -- 사용자상태(Y/N)
-	create_date datetime       -- 등록일자
+	create_date datetime,      -- 등록일자
+    default_siteid TEXT,       -- 기본사이트ID
+	FOREIGN KEY (default_siteid) REFERENCES sites(siteid)
 );
 
 -- 2. 사이트정의
@@ -118,19 +120,10 @@ CREATE TABLE user_holiday (
 password  TEXT NOT NULL,   -- 비밀번호(암호화)
 
 
+대신에 사용자정보(users) 테이블에 아래와 같이 
+default_siteid 컬럼을 추가할꺼야
+이걸로 검색시에 디폴트 검색값으로 설정되도록 기능 적용해줘
+관리자 화면에도 반영해줘
 
-
-
-사용자별 사이트 매핑정보를 아래와 같이 정의하고, 
-추가/수정/삭제할 때 자신과 매핑된 사이트의 작업만 처리 하도록 기능 적용해줘
-
--- 7. 사용자사이트정의
-CREATE TABLE user_sites (
-	userid TEXT,              -- 작업자ID
-    siteid TEXT,              -- 사이트ID 
-	create_date datetime,     -- 등록일자
-	FOREIGN KEY (siteid) REFERENCES sites(siteid),
-	FOREIGN KEY (userid) REFERENCES users(userid),
-	PRIMARY KEY (userid, siteid)
-);
-
+default_siteid TEXT,       -- 기본사이트ID
+FOREIGN KEY (default_siteid) REFERENCES sites(siteid)

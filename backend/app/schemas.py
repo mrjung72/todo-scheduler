@@ -12,6 +12,7 @@ class UserBase(BaseModel):
     user_email: Optional[str] = None
     user_grade: Optional[int] = 9
     user_stat: Optional[str] = "Y"
+    default_siteid: Optional[str] = None   # 기본사이트ID
 
 
 class UserCreate(UserBase):

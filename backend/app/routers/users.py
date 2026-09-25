@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import User
+from ..models import User, Site
 from ..schemas import UserCreate, UserUpdate, UserOut
 from ..security import hash_password, verify_password, get_current_user
 
@@ -41,6 +41,8 @@ def change_my_password(body: PasswordChange, db: Session = Depends(get_db),
 def create_user(body: UserCreate, db: Session = Depends(get_db)):
     if db.get(User, body.userid):
         raise HTTPException(409, "이미 존재하는 사용자ID입니다")
+    if body.default_siteid and not db.get(Site, body.default_siteid):
+        raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     data = body.model_dump()
     data["password"] = hash_password(data.pop("password") or "1234")
     obj = User(**data)
@@ -56,6 +58,8 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db)):
     if not obj:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
     data = body.model_dump(exclude_unset=True)
+    if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
+        raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     # password는 값이 있을 때만 해시해서 반영 (빈 값은 무시)
     if "password" in data:
         pw = data.pop("password")
