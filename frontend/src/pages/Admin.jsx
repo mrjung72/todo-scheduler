@@ -104,7 +104,7 @@ function UsersTab() {
           {rows.map(u => (
             <tr key={u.userid}>
               <td>{u.userid}</td>
-              <td><EditableCell value={u.user_name} onSave={v => save(u.userid, { user_name: v })} /></td>
+              <td className="c"><EditableCell value={u.user_name} onSave={v => save(u.userid, { user_name: v })} /></td>
               <td><EditableCell value={u.dept_name} onSave={v => save(u.userid, { dept_name: v })} /></td>
               <td><EditableCell value={u.job_title} onSave={v => save(u.userid, { job_title: v })} /></td>
               <td><EditableCell value={u.user_tel} onSave={v => save(u.userid, { user_tel: v })} /></td>
@@ -115,7 +115,7 @@ function UsersTab() {
                 const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
                 if (pw) save(u.userid, { password: pw })
               }}>변경</button></td>
-              <td><EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
+              <td className="c"><EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
                 options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
               <td><button className="danger" onClick={() => del(u.userid)}>삭제</button></td>
             </tr>
@@ -174,9 +174,9 @@ function SitesTab() {
               <td>{s.siteid}</td>
               <td><EditableCell value={s.site_name} onSave={v => save(s.siteid, { site_name: v })} /></td>
               <td><EditableCell value={s.site_remark} onSave={v => save(s.siteid, { site_remark: v })} /></td>
-              <td><EditableCell value={s.itos_userid} onSave={v => save(s.siteid, { itos_userid: v })}
+              <td className="c"><EditableCell value={s.itos_userid} onSave={v => save(s.siteid, { itos_userid: v })}
                 options={itosOptions} /></td>
-              <td><EditableCell value={s.site_stat} onSave={v => save(s.siteid, { site_stat: v })}
+              <td className="c"><EditableCell value={s.site_stat} onSave={v => save(s.siteid, { site_stat: v })}
                 options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
               <td><button className="danger" onClick={() => del(s.siteid)}>삭제</button></td>
             </tr>
@@ -266,29 +266,29 @@ function TasksTab() {
         <tbody>
           {filtered.map(t => (
             <tr key={t.taskid}>
-              <td>{t.taskid}</td>
+              <td className="r">{t.taskid}</td>
               <td><EditableCell value={t.task_name} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_name: v })} /></td>
               <td><EditableCell value={t.siteid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { siteid: v })} options={sopt} /></td>
-              <td><EditableCell type="number" value={t.priority} disabled={!can(t)}
+              <td className="r"><EditableCell type="number" value={t.priority} disabled={!can(t)}
                 onSave={v => save(t.taskid, { priority: v })} /></td>
-              <td><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t)}
+              <td className="r"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t)}
                 onSave={v => save(t.taskid, { work_hours_estimated: v })} /></td>
-              <td><EditableCell type="number" value={t.work_hours_real} disabled={!can(t)}
+              <td className="r"><EditableCell type="number" value={t.work_hours_real} disabled={!can(t)}
                 onSave={v => save(t.taskid, { work_hours_real: v })} /></td>
-              <td><EditableCell value={t.task_stat} disabled={!can(t)}
+              <td className="c"><EditableCell value={t.task_stat} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_stat: v })}
                 options={Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))} /></td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
-              <td><EditableCell value={t.req_userid} disabled={!can(t)}
+              <td className="c"><EditableCell value={t.req_userid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { req_userid: v })}
                 options={uopt([3, 9])} /></td>
-              <td><EditableCell value={t.itos_userid} disabled={!can(t)}
+              <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { itos_userid: v })}
                 options={uopt([0, 2])} /></td>
-              <td><EditableCell value={t.work_userid} disabled={!admin}
+              <td className="c"><EditableCell value={t.work_userid} disabled={!admin}
                 onSave={v => save(t.taskid, { work_userid: v })}
                 options={devOpt} /></td>
               <td><EditableCell value={t.task_req_remark} disabled={!can(t)}
@@ -341,10 +341,10 @@ function CalendarTab() {
             const wd = '일월화수목금토'[dt.getDay()]
             return (
               <tr key={d.dateid} className={d.date_stat === 'W' ? '' : 'dayoff'}>
-                <td>{d.dateid}</td>
-                <td>{d.date_name}</td>
-                <td>{wd}</td>
-                <td><EditableCell value={d.date_stat} onSave={v => save(d.dateid, { date_stat: v })}
+                <td className="c">{d.dateid}</td>
+                <td className="c">{d.date_name}</td>
+                <td className="c">{wd}</td>
+                <td className="c"><EditableCell value={d.date_stat} onSave={v => save(d.dateid, { date_stat: v })}
                   options={Object.entries(DAY_STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))} /></td>
                 <td><EditableCell value={d.holiday_remark}
                   onSave={v => save(d.dateid, { holiday_remark: v })} /></td>
@@ -453,11 +453,11 @@ function HolidaysTab() {
         <tbody>
           {rows.map(h => (
             <tr key={`${h.dateid}-${h.work_userid}`}>
-              <td>{h.dateid.slice(0,4)}-{h.dateid.slice(4,6)}-{h.dateid.slice(6,8)}</td>
-              <td>{h.user_name || h.work_userid}</td>
-              <td><EditableCell value={h.holiday_category} disabled={!can(h)}
+              <td className="c">{h.dateid.slice(0,4)}-{h.dateid.slice(4,6)}-{h.dateid.slice(6,8)}</td>
+              <td className="c">{h.user_name || h.work_userid}</td>
+              <td className="c"><EditableCell value={h.holiday_category} disabled={!can(h)}
                 onSave={v => save(h, { holiday_category: v })} options={catOptions} /></td>
-              <td><EditableCell type="number" value={h.holiday_hours} disabled={!can(h)}
+              <td className="r"><EditableCell type="number" value={h.holiday_hours} disabled={!can(h)}
                 onSave={v => save(h, { holiday_hours: v })} /></td>
               <td><EditableCell value={h.holiday_remark} disabled={!can(h)}
                 onSave={v => save(h, { holiday_remark: v })} /></td>
@@ -593,28 +593,28 @@ function SchedulesTab() {
             const t = taskOf(s.taskid)
             return (
               <tr key={s.workschid}>
-                <td>{s.workschid}</td>
+                <td className="r">{s.workschid}</td>
                 <td><EditableCell value={s.taskid} disabled={!admin}
                   onSave={v => saveSched(s.workschid, { taskid: v })}
                   options={topt} /></td>
-                <td><EditableCell type="number" value={t?.priority ?? ''} disabled={!can(s)}
+                <td className="r"><EditableCell type="number" value={t?.priority ?? ''} disabled={!can(s)}
                   onSave={v => t && saveTask(t.taskid, { priority: v })} /></td>
-                <td><EditableCell type="number" value={t?.work_hours_estimated ?? ''} disabled={!can(s)}
+                <td className="r"><EditableCell type="number" value={t?.work_hours_estimated ?? ''} disabled={!can(s)}
                   onSave={v => t && saveTask(t.taskid, { work_hours_estimated: v })} /></td>
-                <td><EditableCell value={s.work_userid} disabled={!admin}
+                <td className="c"><EditableCell value={s.work_userid} disabled={!admin}
                   onSave={v => saveSched(s.workschid, { work_userid: v })}
                   options={woptFor(s.work_userid)} /></td>
-                <td><EditableCell value={s.work_stat} disabled={!can(s)}
+                <td className="c"><EditableCell value={s.work_stat} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_stat: v })}
                   options={statOpt} /></td>
                 <td><EditableCell value={s.work_remark} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_remark: v })} /></td>
-                <td>
+                <td className="c">
                   {fmtDT(s.start_datetime)}
                   {s.start_fixed ? <span className="badge">고정</span> : null}
                 </td>
-                <td>{fmtDT(s.end_datetime_estimated)}</td>
-                <td>{fmtDT(s.end_datetime_real)}</td>
+                <td className="c">{fmtDT(s.end_datetime_estimated)}</td>
+                <td className="c">{fmtDT(s.end_datetime_real)}</td>
                 <td>
                   {can(s) && (
                     <span className="startset">

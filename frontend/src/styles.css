@@ -47,7 +47,11 @@ table.grid { width: 100%; border-collapse: collapse; background: #fff; font-size
 table.grid th, table.grid td {
   border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; white-space: nowrap;
 }
-table.grid th { background: #f1f5f9; font-weight: 600; }
+table.grid th { background: #f1f5f9; font-weight: 600; text-align: center; }
+table.grid td.r { text-align: right; }
+table.grid td.r input { text-align: right; }
+table.grid td.c { text-align: center; }
+table.grid td.c input, table.grid td.c select { text-align: center; }
 table.grid td input, table.grid td select { width: 100%; border: 1px solid transparent; background: transparent; }
 table.grid td input:hover, table.grid td select:hover { border-color: #d1d5db; }
 table.grid td input:focus, table.grid td select:focus { border-color: #3b82f6; outline: none; }

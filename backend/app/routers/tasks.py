@@ -69,9 +69,13 @@ def list_tasks(
     q: str = Query(None, description="검색어"),
     field: str = Query("all", description="all|task_name|req_user|itos_user|work_user"),
     task_stat: str = Query(None),
+    siteid: str = Query(None),
     db: Session = Depends(get_db),
 ):
     query = _detail_query(db)
+
+    if siteid:
+        query = query.filter(Task.siteid == siteid)
 
     if task_stat:
         query = query.filter(Task.task_stat == task_stat)
