@@ -9,6 +9,16 @@
 
 ## 실행
 
+Windows bat 파일 사용 (프로젝트 루트):
+
+```bat
+start.bat    :: 백엔드(8000)+프론트엔드(5173) 시작
+stop.bat     :: 두 서버 종료
+restart.bat  :: 재기동 (.env 변경 후 사용)
+```
+
+수동 실행:
+
 ```bash
 # 백엔드 (port 8000)
 cd backend
