@@ -5,6 +5,14 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT } from '../api'
 
+// Date 객체를 로컬 시각 'YYYY-MM-DD HH:mm'으로 포맷 (toISOString은 UTC라 9시간 밀림)
+const fmtLocal = d => {
+  if (!d) return ''
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 export default function CalendarView() {
   const [events, setEvents] = useState([])
   const [dayEvents, setDayEvents] = useState([])
@@ -172,8 +180,8 @@ export default function CalendarView() {
                 <p><b>우선순위</b> {selected.priority}</p>
                 <p><b>예상시간</b> {selected.work_hours_estimated}h
                   {selected.daily && ` (총 ${selected.daily.length}일)`}</p>
-                <p><b>시작</b> {fmtDT(selected.start?.toISOString?.() ?? selected.start)}</p>
-                <p><b>종료(예상)</b> {fmtDT(selected.end?.toISOString?.() ?? selected.end)}</p>
+                <p><b>시작</b> {fmtLocal(selected.start)}</p>
+                <p><b>종료(예상)</b> {fmtLocal(selected.end)}</p>
                 {selected.daily && selected.daily.length > 0 && (
                   <div className="daily">
                     <b>일별 작업시간</b>
