@@ -1,0 +1,127 @@
+
+TODO리스트 앱을 만들고 싶은데
+첫번째 화면은 작업목록을 우선순위 기준으로 위에서 아래로 나열하는 것이야
+두번째 화면은 달력 형식으로 각 작업을 정해진 기간에 각각의 색깔로 긴 화살표 형식으로 보여주는거야
+
+입력값은 우선순위와 작업기간(시)을 표시하면 자동으로 작업시작 년월일시와 종료 년월일시를 적용해줘
+그리고, 작업시간은 근무일 기준으로 적용할꺼야 (토,일,공휴일,개인휴가는 제외)
+휴가는 직접 설정할 수 있게 해줘
+또한, 각 작업의 시작일시를 직접 설정할 수 있게 해줘
+현업담당자, IT업무담당자, 작업자(개발자), 작업명으로 검색 기능도 필요하고
+
+우선순위를 변경 후에 재적용 버튼을 클릭하면 각 작업의 시작일시, 종료일시를 다시 자동으로 셋팅해줘
+그리고 사용자,작업, 사이트, 달력, 작업스케쥴 정보를 입력/수정할 수 있는 관리자 화면도 필요해
+
+백엔드는 Python FastAPI, 
+프론트엔드는 Vue.js(또는 React) 조합으로 
+FullCalendar 오픈소스 캘린더 라이브러리를 써서 만들어줘
+
+데이터베이스는 SQLiteDB로 할꺼야
+
+DB객체는 우선 사용자정의, 작업정의, 사이트정의, 달력정의, 작업스케쥴정의 이렇게 구성할꺼야
+아래는 각 객체별 속성이야
+작업정의(tasks)는 작업을 정의하는 것이고,
+실제 작업일정관리는 work_schedule 테이블을 기준으로 할꺼야
+
+-- 1. 사용자정의
+CREATE TABLE users (
+    userid TEXT PRIMARY KEY,   -- 사용자ID 
+    user_name TEXT NOT NULL,   -- 사용자명
+    dept_name TEXT,            -- 부서명
+	job_title TEXT,            -- 직급
+	user_tel TEXT,             -- 연락처(전화번호)
+	user_email TEXT,           -- 이메일
+	user_grade INTEGER,        -- 사용자등급(0-관리자(개발자), 1-IT업무담당자, 2-현업담당자, 3-기타사용자)
+	user_stat TEXT,            -- 사용자상태(Y/N)
+	create_date datetime       -- 등록일자
+);
+
+-- 2. 사이트정의
+CREATE TABLE sites (
+    siteid TEXT PRIMARY KEY,       -- 사이트ID 
+    site_name TEXT NOT NULL,       -- 사이트명
+	site_stat TEXT,                -- 사이트상태(Y/N)
+	site_remark TEXT,              -- 사이트설명
+	itos_userid TEXT,              -- IT업무담당자ID
+	create_date datetime           -- 등록일자
+);
+
+-- 3. 작업정의
+CREATE TABLE tasks (
+    taskid INTEGER PRIMARY KEY,    -- 작업ID 
+    task_name TEXT NOT NULL,       -- 작업명
+    siteid TEXT,                 -- 사이트ID
+    priority INTEGER DEFAULT 0,         -- 우선순위 (정렬 기준)
+    work_hours_estimated REAL DEFAULT 0,     -- 작업 예상기간(시간) 
+    work_hours_real REAL DEFAULT 0,       -- 실제 작업기간(시간)
+	task_stat TEXT,                -- 작업상태(W-대기중,P-작업중,F-완료,C-취소)
+	task_csrid TEXT,               -- 관련 CSR ID
+	task_req_remark TEXT,          -- 작업요청내용
+	task_req_filepath TEXT,        -- 작업요청첨부파일경로
+	req_userid TEXT,              -- 요청자(현업담당자)ID
+	itos_userid TEXT,             -- IT업무담당자ID
+	task_start_date datetime,     -- 작업시작일자
+	task_end_date datetime,       -- 작업완료일자
+	create_date datetime,          -- 등록일자
+	FOREIGN KEY (siteid) REFERENCES sites(siteid)
+);
+
+
+-- 4. 달력정의
+CREATE TABLE calendar_define (
+    dateid TEXT PRIMARY KEY,       -- 일자ID (yyyymmdd)
+    date_name TEXT NOT NULL,       -- 일자 라벨 (yyyy-mm-dd)
+	date_stat TEXT,                -- 일자상태(W-근무일, H-휴일, V-휴가)
+	holiday_remark TEXT            -- 휴일 설명
+);
+
+
+5. 작업스케쥴정의
+CREATE TABLE work_schedule (
+    workschid INTEGER PRIMARY KEY,    -- 작업스케쥴ID 
+    taskid INTEGER,                   -- 작업ID 
+	work_stat TEXT,                   -- 작업상태(W-대기중,P-작업중,F-완료,C-취소)
+	work_remark TEXT,                 -- 작업내용
+	work_filepath TEXT,               -- 작업첨부파일경로
+	work_userid TEXT,                 -- 작업자ID
+    start_datetime DATETIME,          -- 작업 시작 일시 (자동계산 또는 수동설정)
+    end_datetime_estimated DATETIME,  -- 작업 예상 종료 일시 (자동계산)
+    end_datetime_real DATETIME,       -- 작업 실제 종료 일시 (자동계산)
+	create_date datetime,             -- 등록일자
+	FOREIGN KEY (taskid) REFERENCES tasks(taskid)
+);
+
+
+
+버전 ０。２。０
+작업자별 휴가정보를 아래와 같이 정의하고 작업기간에 반영하도록 기능 개선해줘
+관리자화면도 추가해주고.
+
+-- 6. 작업자휴가정의
+CREATE TABLE user_holiday (
+    dateid TEXT PRIMARY KEY,       -- 일자ID (yyyymmdd)
+	work_userid TEXT,              -- 작업자ID
+	holiday_category TEXT,         -- 휴가구분(A-종일, P-일부)
+	holiday_HOURS INTEGER,         -- 휴가시간(시)
+	holiday_remark TEXT,           -- 휴일 설명
+	FOREIGN KEY (dateid) REFERENCES calendar_define(dateid),
+	FOREIGN KEY (work_userid) REFERENCES users(userid),
+	PRIMARY KEY (dateid, work_userid)
+);
+
+
+
+
+사용자별 사이트 매핑정보를 아래와 같이 정의하고, 
+추가/수정/삭제할 때 자신과 매핑된 사이트의 작업만 처리 하도록 기능 적용해줘
+
+-- 7. 사용자사이트정의
+CREATE TABLE user_sites (
+	userid TEXT,              -- 작업자ID
+    siteid TEXT,              -- 사이트ID 
+	create_date datetime,     -- 등록일자
+	FOREIGN KEY (siteid) REFERENCES sites(siteid),
+	FOREIGN KEY (userid) REFERENCES users(userid),
+	PRIMARY KEY (userid, siteid)
+);
+
