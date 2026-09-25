@@ -1,49 +1,71 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, taskColor } from '../api'
 
 /* 모바일 스타일 메인 화면: 작업 목록을 카드 리스트로 표시, 탭하면 상세 펼침 */
 export default function Home() {
   const [tasks, setTasks] = useState([])
+  const [sites, setSites] = useState([])
+  // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
+  const [siteFilter, setSiteFilter] = useState(() =>
+    JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid || '')
   const [q, setQ] = useState('')
+  const [statFilter, setStatFilter] = useState('')
   const [openId, setOpenId] = useState(null)
 
-  useEffect(() => {
-    api.get('/tasks').then(r => setTasks(r.data)).catch(() => {})
-  }, [])
+  const load = useCallback(async () => {
+    const params = {}
+    if (q) params.q = q
+    if (statFilter) params.task_stat = statFilter
+    if (siteFilter) params.siteid = siteFilter
+    const { data } = await api.get('/tasks', { params })
+    setTasks(data)
+  }, [q, statFilter, siteFilter])
 
-  const kw = q.trim().toLowerCase()
-  const filtered = !kw ? tasks : tasks.filter(t => [
-    t.task_name, t.site_name, t.req_user_name, t.req_userid,
-    t.itos_user_name, t.itos_userid, t.work_user_name, t.work_userid,
-    STAT_LABEL[t.task_stat],
-  ].some(v => (v ?? '').toString().toLowerCase().includes(kw)))
+  useEffect(() => { load().catch(() => {}) }, [load])
+  useEffect(() => { api.get('/sites').then(r => setSites(r.data)) }, [])
 
   return (
     <div className="home-wrap">
-      <input className="home-search" placeholder="검색 (작업명/담당자/작업자/상태)"
-        value={q} onChange={e => setQ(e.target.value)} />
+      <div className="toolbar">
+        <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <input
+          placeholder="검색어 (작업명/담당자명 또는 ID)"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && load()}
+        />
+        <select value={statFilter} onChange={e => setStatFilter(e.target.value)}>
+          <option value="">상태(전체)</option>
+          {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <button onClick={load}>검색</button>
+      </div>
       <div className="home-list">
-        {filtered.map(t => {
+        {tasks.map(t => {
           const open = openId === t.taskid
           return (
             <div key={t.taskid} className={`home-card${open ? ' open' : ''}`}
+              style={{ borderLeft: `5px solid ${taskColor(t.taskid)}` }}
               onClick={() => setOpenId(open ? null : t.taskid)}>
-              <div className="home-row">
-                <span className="home-dot" style={{ background: taskColor(t.taskid) }} />
-                <div className="home-main">
-                  <div className="home-title">
-                    <span className="home-pri">#{t.priority}</span>
-                    {t.task_name}
-                  </div>
-                  <div className="home-sub">
-                    {t.work_user_name || t.work_userid || '미배정'}
-                    {' · '}{t.work_hours_estimated}h
-                    {t.start_datetime && ` · ${fmtDT(t.start_datetime).slice(5)}`}
-                  </div>
-                </div>
+              <div className="kb-title">
+                {t.site_name && <span className="kb-site">{t.site_name}</span>}
+                {t.task_csrid && <span className="csr">{t.task_csrid}</span>}
+                {t.task_name}
                 <span className={`home-stat st-${t.task_stat}`}>
                   {STAT_LABEL[t.task_stat] || t.task_stat}
                 </span>
+              </div>
+              <div className="kb-sub">
+                {t.work_user_name || t.work_userid || '미배정'}
+              </div>
+              <div className="kb-meta">
+                <span>우선순위 {t.priority}</span>
+                <span>{t.work_hours_estimated}h</span>
+                {t.start_datetime &&
+                  <span>{fmtDT(t.start_datetime)}~{fmtDT(t.end_datetime_estimated)}</span>}
               </div>
               {open && (
                 <div className="home-detail">
@@ -61,7 +83,7 @@ export default function Home() {
             </div>
           )
         })}
-        {filtered.length === 0 && <div className="home-empty">작업이 없습니다</div>}
+        {tasks.length === 0 && <div className="home-empty">작업이 없습니다</div>}
       </div>
     </div>
   )

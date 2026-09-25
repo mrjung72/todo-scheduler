@@ -87,6 +87,7 @@ def calendar_events(db: Session = Depends(get_db)):
             "end": sched.end_datetime_estimated.isoformat(),
             "extendedProps": {
                 "taskid": task.taskid,
+                "task_csrid": task.task_csrid,
                 "siteid": task.siteid,
                 "site_name": site_name,
                 "priority": task.priority,

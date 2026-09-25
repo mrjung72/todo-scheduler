@@ -94,6 +94,10 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .lg-v { background: rgba(251,140,0,.25); }
 .lg-uh { background: #fb8c00; color: #fff; }
 
+/* 컬럼 폭 축소: 값 길이에 맞추고 나머지는 다른 컬럼이 사용 */
+.grid td.csr-col, .grid th.csr-col,
+.grid td.fit, .grid th.fit { white-space: nowrap; width: 1%; }
+
 /* 칸반 보드 */
 .kanban-wrap { height: calc(100vh - 84px); display: flex; flex-direction: column; }
 .kanban {
@@ -137,9 +141,13 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .kb-card[draggable="true"]:active { cursor: grabbing; }
 .kb-title { font-weight: 600; font-size: 13px; }
 .kb-site { color: #2563eb; margin-right: 5px; }
-.kb-csr {
+.kb-csr, .csr {
   color: #475569; background: #e2e8f0; border-radius: 3px;
-  padding: 0 5px; margin-right: 5px; font-size: 11px; font-weight: 400;
+  padding: 0 5px; margin-right: 5px; font-weight: 400;
+}
+/* 달력 작업바·팝업 타이틀(컬러 배경) 안의 CSR 칩 */
+.fc .ev-line .csr, .popup-title .csr {
+  background: rgba(255,255,255,.3); color: #fff;
 }
 .kb-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
 .kb-meta {
@@ -191,7 +199,23 @@ table.grid td.clickable:hover { background: #eff6ff; }
   color: #fff; padding: 8px 12px; border-radius: 6px;
   margin: -8px -8px 10px; font-size: 16px;
 }
-.popup-body p { margin: 6px 0; font-size: 14px; }
+.popup-body p {
+  margin: 6px 0; font-size: 14px;
+  display: flex; align-items: baseline;
+}
+.popup-body p > b { flex: 0 0 90px; color: #475569; }   /* 라벨 컬럼 고정폭 */
+/* 라벨/값 정보 영역: 타이틀 색과 대조되는 연한 파스텔 배경 */
+.popup-info {
+  background: #eef4fb; border: 1px solid #dbe7f4; border-radius: 8px;
+  padding: 8px 12px; margin-bottom: 10px;
+}
+.popup-info p:last-child { margin-bottom: 0; }
+/* 수정 폼의 입력 컨트롤도 값 컬럼에 맞춤 */
+.popup-info input:not([type="checkbox"]), .popup-info select {
+  flex: 1; padding: 4px 8px; font-size: 13px;
+  border: 1px solid #d1d5db; border-radius: 4px; background: #fff;
+}
+.popup-info p.chk { align-items: center; gap: 6px; font-weight: 400; }
 
 .daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }
 .daily table { width: 100%; border-collapse: collapse; margin-top: 4px; }
@@ -229,22 +253,13 @@ button.logout { padding: 3px 10px; font-size: 12px; }
 
 /* 메인(모바일 스타일) */
 .home-wrap { max-width: 480px; margin: 0 auto; }
-.home-search {
-  width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 24px;
-  border: 1px solid #e5e7eb; margin-bottom: 12px; outline: none;
-}
-.home-search:focus { border-color: #3b82f6; }
 .home-card {
-  background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  background: #fff; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08); cursor: pointer;
 }
 .home-card.open { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-.home-row { display: flex; align-items: center; gap: 10px; }
-.home-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.home-main { flex: 1; min-width: 0; }
-.home-title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-pri { color: #2563eb; margin-right: 4px; font-size: 13px; }
-.home-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.home-card .kb-title { display: flex; align-items: baseline; }
+.home-card .kb-title .home-stat { margin-left: auto; flex-shrink: 0; }
 .home-stat {
   flex-shrink: 0; font-size: 11px; padding: 2px 8px; border-radius: 10px;
   background: #e5e7eb; color: #374151;

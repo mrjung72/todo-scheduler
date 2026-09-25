@@ -307,9 +307,11 @@ export default function CalendarView() {
             || arg.event.extendedProps.work_userid || ''
           const stat = STAT_LABEL[arg.event.extendedProps.work_stat
             || arg.event.extendedProps.task_stat] || ''
+          const csr = arg.event.extendedProps.task_csrid
           return (
             <div className="ev-line">
               {w && <span className="ev-worker">{w}</span>}
+              {csr && <span className="csr">{csr}</span>}
               <span className="ev-title">{arg.event.title}</span>
               {stat && <span className="ev-stat">{stat}</span>}
             </div>
@@ -325,61 +327,60 @@ export default function CalendarView() {
             <h3 className="popup-title" style={{
               background: selected.holiday ? '#fb8c00' : taskColor(selected.taskid),
             }}>
-              {selected.start
+              {selected.holiday && selected.start
                 ? `${selected.start.getMonth() + 1}/${selected.start.getDate()} `
-                : ''}
+                : (selected.site_name || selected.siteid) &&
+                  `${selected.site_name || selected.siteid} `}
+              {selected.task_csrid && <span className="csr">{selected.task_csrid}</span>}
               {selected.title}
             </h3>
             {editForm ? (
-              <form className="holiday-form" onSubmit={saveEdit}>
-                <label>우선순위
-                  <input type="number" value={editForm.priority}
-                    onChange={e => setEditForm({ ...editForm, priority: e.target.value })} />
-                </label>
-                <label>예상시간(h)
-                  <input type="number" min="0.5" step="0.5" required
-                    value={editForm.work_hours_estimated}
-                    onChange={e => setEditForm({ ...editForm, work_hours_estimated: e.target.value })} />
-                </label>
-                <label>작업자
-                  <select value={editForm.work_userid}
-                    onChange={e => setEditForm({ ...editForm, work_userid: e.target.value })}>
-                    <option value="">-</option>
-                    {users.filter(u => u.user_grade === 1)
-                      .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-                  </select>
-                </label>
-                <label>상태
-                  <select value={editForm.work_stat}
-                    onChange={e => setEditForm({ ...editForm, work_stat: e.target.value })}>
-                    {Object.entries(STAT_LABEL)
-                      .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                  </select>
-                </label>
-                <label>시작일시
-                  <input type="datetime-local" value={editForm.start}
-                    onChange={e => setEditForm({ ...editForm, start: e.target.value })} />
-                </label>
-                {!!selected.start_fixed && (
-                  <label className="chk">
-                    <input type="checkbox" checked={editForm.unfix}
-                      onChange={e => setEditForm({ ...editForm, unfix: e.target.checked })} />
-                    시작일시 고정 해제 (재계산 시 자동 배치)
-                  </label>
-                )}
+              <form onSubmit={saveEdit}>
+                <div className="popup-info">
+                  <p><b>우선순위</b>
+                    <input type="number" value={editForm.priority}
+                      onChange={e => setEditForm({ ...editForm, priority: e.target.value })} /></p>
+                  <p><b>예상시간(h)</b>
+                    <input type="number" min="0.5" step="0.5" required
+                      value={editForm.work_hours_estimated}
+                      onChange={e => setEditForm({ ...editForm, work_hours_estimated: e.target.value })} /></p>
+                  <p><b>작업자</b>
+                    <select value={editForm.work_userid}
+                      onChange={e => setEditForm({ ...editForm, work_userid: e.target.value })}>
+                      <option value="">-</option>
+                      {users.filter(u => u.user_grade === 1)
+                        .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+                    </select></p>
+                  <p><b>상태</b>
+                    <select value={editForm.work_stat}
+                      onChange={e => setEditForm({ ...editForm, work_stat: e.target.value })}>
+                      {Object.entries(STAT_LABEL)
+                        .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                    </select></p>
+                  <p><b>시작일시</b>
+                    <input type="datetime-local" value={editForm.start}
+                      onChange={e => setEditForm({ ...editForm, start: e.target.value })} /></p>
+                  {!!selected.start_fixed && (
+                    <p className="chk">
+                      <input type="checkbox" checked={editForm.unfix}
+                        onChange={e => setEditForm({ ...editForm, unfix: e.target.checked })} />
+                      <span>시작일시 고정 해제 (재계산 시 자동 배치)</span>
+                    </p>
+                  )}
+                </div>
                 <div className="popup-btns">
                   <button type="submit" className="primary">저장</button>
                   <button type="button" onClick={() => setEditForm(null)}>취소</button>
                 </div>
               </form>
             ) : selected.holiday ? (
-              <>
+              <div className="popup-info">
                 <p><b>작업자</b> {selected.user_name || selected.work_userid}</p>
                 <p><b>구분</b> {selected.holiday_category === 'A' ? '종일' : `일부 (${selected.holiday_hours}h)`}</p>
                 {selected.holiday_remark && <p><b>설명</b> {selected.holiday_remark}</p>}
-              </>
+              </div>
             ) : (
-              <>
+              <div className="popup-info">
                 <p><b>사이트</b> {selected.site_name || selected.siteid || '-'}</p>
                 <p><b>작업자</b> {selected.work_user_name || selected.work_userid || '-'}</p>
                 <p><b>우선순위</b> {selected.priority}</p>
@@ -411,7 +412,7 @@ export default function CalendarView() {
                     </table>
                   </div>
                 )}
-              </>
+              </div>
             )}
             {!editForm && (
               <div className="popup-btns">

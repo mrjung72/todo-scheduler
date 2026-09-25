@@ -282,7 +282,7 @@ function TasksTab() {
       </div>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>사이트</th><th>작업명</th><th>우선<br/>순위</th><th>예상 작업<br/>시간(H)</th><th>실제 작업<br/>시간(H)</th>
+          <th>ID</th><th>사이트</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">예상 작업<br/>시간(H)</th><th className="fit">실제 작업<br/>시간(H)</th>
           <th>상태</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th><th>요청내용</th><th></th>
         </tr></thead>
         <tbody>
@@ -293,11 +293,11 @@ function TasksTab() {
                 onSave={v => save(t.taskid, { siteid: v })} options={sopt} /></td>
               <td><EditableCell value={t.task_name} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_name: v })} /></td>
-              <td className="r"><EditableCell type="number" value={t.priority} disabled={!can(t)}
+              <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t)}
                 onSave={v => save(t.taskid, { priority: v })} /></td>
-              <td className="r"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t)}
+              <td className="r fit"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t)}
                 onSave={v => save(t.taskid, { work_hours_estimated: v })} /></td>
-              <td className="r"><EditableCell type="number" value={t.work_hours_real} disabled={!can(t)}
+              <td className="r fit"><EditableCell type="number" value={t.work_hours_real} disabled={!can(t)}
                 onSave={v => save(t.taskid, { work_hours_real: v })} /></td>
               <td className="c"><EditableCell value={t.task_stat} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_stat: v })}
@@ -606,7 +606,7 @@ function SchedulesTab() {
       </div>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>사이트</th><th>우선<br/>순위</th><th>작업</th><th>예상 작업<br/>시간(Hour)</th><th>작업자</th>
+          <th>ID</th><th>사이트</th><th className="fit">우선<br/>순위</th><th>작업</th><th className="fit">예상 작업<br/>시간(Hour)</th><th>작업자</th>
           <th>상태</th><th>작업내용</th>
           <th>시작일시</th><th>종료일시<br/>(예상)</th><th>종료일시<br/>(실제)</th>
           <th></th>
@@ -618,12 +618,12 @@ function SchedulesTab() {
               <tr key={s.workschid}>
                 <td className="r">{s.workschid}</td>
                 <td>{t?.site_name || t?.siteid || '-'}</td>
-                <td className="r"><EditableCell type="number" value={t?.priority ?? ''} disabled={!can(s)}
+                <td className="r fit"><EditableCell type="number" value={t?.priority ?? ''} disabled={!can(s)}
                   onSave={v => t && saveTask(t.taskid, { priority: v })} /></td>
                 <td><EditableCell value={s.taskid} disabled={!admin}
                   onSave={v => saveSched(s.workschid, { taskid: v })}
                   options={topt} /></td>
-                <td className="r"><EditableCell type="number" value={t?.work_hours_estimated ?? ''} disabled={!can(s)}
+                <td className="r fit"><EditableCell type="number" value={t?.work_hours_estimated ?? ''} disabled={!can(s)}
                   onSave={v => t && saveTask(t.taskid, { work_hours_estimated: v })} /></td>
                 <td className="c"><EditableCell value={s.work_userid} disabled={!admin}
                   onSave={v => saveSched(s.workschid, { work_userid: v })}
