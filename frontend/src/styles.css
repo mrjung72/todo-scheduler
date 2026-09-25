@@ -134,3 +134,19 @@ tr.dayoff td { background: #fef2f2; }
 .holiday-form input, .holiday-form select { padding: 6px 8px; font-size: 14px; }
 .popup-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .holiday-form label.chk { flex-direction: row; align-items: center; gap: 6px; font-weight: 400; }
+
+/* 로그인 */
+.login-wrap {
+  height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: #f1f5f9;
+}
+.login-box {
+  background: #fff; padding: 32px 36px; border-radius: 10px; width: 320px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.login-box h2 { margin: 0 0 8px; text-align: center; }
+.login-box input { padding: 10px 12px; font-size: 14px; }
+.login-err { color: #dc2626; font-size: 13px; }
+.me { margin-left: 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+button.logout { padding: 3px 10px; font-size: 12px; }

@@ -2,6 +2,23 @@ import axios from 'axios'
 
 const api = axios.create({ baseURL: '/api' })
 
+// 요청에 로그인 토큰 첨부
+api.interceptors.request.use(cfg => {
+  const t = localStorage.getItem('token')
+  if (t) cfg.headers.Authorization = `Bearer ${t}`
+  return cfg
+})
+
+// 401 -> 세션 제거 후 로그인 화면으로
+api.interceptors.response.use(r => r, err => {
+  if (err.response?.status === 401 && err.config?.url !== '/auth/login') {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    location.reload()
+  }
+  return Promise.reject(err)
+})
+
 export default api
 
 export const fmtDT = (iso) => {

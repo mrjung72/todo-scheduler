@@ -8,8 +8,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import __version__
 from .database import Base, engine, SessionLocal
 from .models import User, Site, Task, CalendarDefine, WorkSchedule
-from .routers import users, sites, tasks, calendar, schedules, user_holidays
-from .security import hash_password
+from .routers import users, sites, tasks, calendar, schedules, user_holidays, auth
+from .security import hash_password, parse_token
 
 app = FastAPI(title="TODO Scheduler API", version=__version__)
 
@@ -21,12 +21,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(sites.router)
 app.include_router(tasks.router)
 app.include_router(calendar.router)
 app.include_router(schedules.router)
 app.include_router(user_holidays.router)
+
+# --- API 인증 가드: /api/* 는 로그인 토큰 필요 (login/health/config 제외) ---
+from fastapi.responses import JSONResponse
+
+_AUTH_OPEN = {"/api/auth/login", "/api/health", "/api/config"}
+
+
+@app.middleware("http")
+async def auth_guard(request, call_next):
+    path = request.url.path
+    if request.method == "OPTIONS" or not path.startswith("/api") or path in _AUTH_OPEN:
+        return await call_next(request)
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not parse_token(token):
+        return JSONResponse({"detail": "로그인이 필요합니다"}, status_code=401)
+    return await call_next(request)
 
 
 def seed(db):
