@@ -127,3 +127,11 @@ default_siteid 컬럼을 추가할꺼야
 
 default_siteid TEXT,       -- 기본사이트ID
 FOREIGN KEY (default_siteid) REFERENCES sites(siteid)
+
+
+
+>>> 버전 0.4.0
+칸반화면 추가해줘   
+작업상태값(W-대기중,P-작업중,D-작업보류,F-완료,C-취소)을 기준으로 5개 영역으로 나눌꺼야, 
+크게 3열로 나누고, 좌측 위쪽 70%는 대기중, 아래쪽 30%는 취소, 중앙 위쪽 70%는 작업중, 
+아래쪽 30%는 작업보류, 우측 전체는 완료 작업 영역으로 적용해줘

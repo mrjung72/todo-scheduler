@@ -94,6 +94,57 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .lg-v { background: rgba(251,140,0,.25); }
 .lg-uh { background: #fb8c00; color: #fff; }
 
+/* 칸반 보드 */
+.kanban-wrap { height: calc(100vh - 84px); display: flex; flex-direction: column; }
+.kanban {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+.kb-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.kb-area {
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(15,23,42,.08);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+}
+.kb-col > .kb-area:only-child { flex: 1; }                      /* 우측: 완료 전체 */
+.kb-col > .kb-area:not(:only-child):first-child { flex: 7 1 0; } /* 위쪽 70% */
+.kb-col > .kb-area:not(:only-child):last-child { flex: 3 1 0; }  /* 아래쪽 30% */
+.kb-head {
+  margin: 0; padding: 10px 14px; font-size: 17px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+  border-bottom: 2px solid;
+}
+.kb-area.st-W .kb-head { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+.kb-area.st-P .kb-head { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+.kb-area.st-D .kb-head { color: #6d28d9; border-color: #ddd6fe; background: #f5f3ff; }
+.kb-area.st-F .kb-head { color: #15803d; border-color: #bbf7d0; background: #f0fdf4; }
+.kb-area.st-C .kb-head { color: #6b7280; border-color: #e5e7eb; background: #f9fafb; }
+.kb-count {
+  background: #fff; border-radius: 12px; padding: 1px 10px;
+  font-size: 13px; color: #334155; font-weight: 700;
+  border: 1px solid #e2e8f0;
+}
+.kb-cards {
+  flex: 1; overflow-y: auto; padding: 8px; background: #f8fafc;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.kb-card {
+  background: #fff; border-radius: 6px; padding: 8px 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.kb-title { font-weight: 600; font-size: 13px; }
+.kb-site { color: #2563eb; margin-right: 5px; }
+.kb-csr {
+  color: #475569; background: #e2e8f0; border-radius: 3px;
+  padding: 0 5px; margin-right: 5px; font-size: 11px; font-weight: 400;
+}
+.kb-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+.kb-meta {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  font-size: 11px; color: #94a3b8; margin-top: 4px;
+}
+.kb-empty { color: #94a3b8; font-size: 12px; text-align: center; padding: 12px; }
+
 /* 작업자 개인 휴가 이벤트 */
 .fc .holiday-event {
   border-style: dashed;

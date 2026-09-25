@@ -3,6 +3,7 @@ import { NavLink, Link, Route, Routes, Navigate } from 'react-router-dom'
 import api, { GRADE_LABEL } from './api'
 import Home from './pages/Home'
 import TaskList from './pages/TaskList'
+import Kanban from './pages/Kanban'
 import CalendarView from './pages/CalendarView'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
@@ -85,6 +86,7 @@ export default function App() {
         </Link>
         <nav>
           <NavLink to="/tasks">작업목록</NavLink>
+          <NavLink to="/kanban">칸반</NavLink>
           <NavLink to="/calendar">달력</NavLink>
           {[0, 1].includes(me.user_grade) && <NavLink to="/admin">관리자</NavLink>}
         </nav>
@@ -104,6 +106,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/tasks" element={<TaskList />} />
+          <Route path="/kanban" element={<Kanban />} />
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/admin" element={
             [0, 1].includes(me.user_grade) ? <Admin /> : <Navigate to="/tasks" replace />
