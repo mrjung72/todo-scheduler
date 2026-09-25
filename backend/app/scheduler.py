@@ -181,9 +181,18 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
     now = datetime.now().replace(second=0, microsecond=0)
     updated = 0
 
+    # 작업자별 작업중(P) 스케줄의 가장 늦은 종료예상시각 -> 대기 작업은 그 이후 배치
+    in_prog_end: dict = {}
+    for sch in db.query(WorkSchedule).filter(WorkSchedule.work_stat == "P"):
+        if sch.end_datetime_estimated:
+            uid = sch.work_userid or ""
+            cur = in_prog_end.get(uid)
+            if cur is None or sch.end_datetime_estimated > cur:
+                in_prog_end[uid] = sch.end_datetime_estimated
+
     for key, items in groups.items():
         items.sort(key=lambda x: (x[1].priority or 0, x[1].taskid))
-        cursor = now
+        cursor = max(now, in_prog_end.get(key, now))
         for sched, task in items:
             uid = sched.work_userid or ""
             if sched.start_fixed and sched.start_datetime:

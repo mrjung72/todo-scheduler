@@ -187,6 +187,11 @@ def update_schedule(workschid: int, body: ScheduleUpdate, db: Session = Depends(
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
     for k, v in data.items():
         setattr(obj, k, v)
+    # 작업상태 변경 시 연결된 작업(tasks.task_stat)도 동기화
+    if "work_stat" in data and obj.taskid:
+        task = db.get(Task, obj.taskid)
+        if task:
+            task.task_stat = obj.work_stat
     db.commit()
     db.refresh(obj)
     return obj
