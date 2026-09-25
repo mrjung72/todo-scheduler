@@ -25,6 +25,7 @@ main { padding: 16px 20px; }
 
 .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .msg { color: #047857; font-size: 13px; }
+.err { color: #dc2626; font-size: 13px; }
 .hint { color: #6b7280; font-size: 12px; }
 
 input, select, button {
@@ -154,6 +155,11 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .login-box input { padding: 10px 12px; font-size: 14px; }
 .login-err { color: #dc2626; font-size: 13px; }
 .me { margin-left: 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.mebtn {
+  background: none; border: none; color: #fff; font-size: inherit;
+  cursor: pointer; padding: 0; text-decoration: underline;
+}
+.mebtn:hover { color: #93c5fd; }
 button.logout { padding: 3px 10px; font-size: 12px; }
 
 /* 메인(모바일 스타일) */

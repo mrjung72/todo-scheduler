@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Link, Route, Routes, Navigate } from 'react-router-dom'
-import api from './api'
+import api, { GRADE_LABEL } from './api'
 import Home from './pages/Home'
 import TaskList from './pages/TaskList'
 import CalendarView from './pages/CalendarView'
@@ -18,6 +18,36 @@ export default function App() {
   }, [])
 
   const [wantLogin, setWantLogin] = useState(false)
+  const [profile, setProfile] = useState(null)   // 사용자 상세 팝업
+  const [pwOpen, setPwOpen] = useState(false)    // 비밀번호 변경 팝업
+  const [pw, setPw] = useState({ cur: '', next: '', confirm: '' })
+  const [pwMsg, setPwMsg] = useState('')
+  const [pwErr, setPwErr] = useState('')
+
+  const openProfile = () => {
+    setPwOpen(false)
+    api.get('/users/me').then(r => setProfile(r.data)).catch(() => setProfile(me))
+  }
+
+  const openPw = () => {
+    setPw({ cur: '', next: '', confirm: '' }); setPwMsg(''); setPwErr('')
+    setPwOpen(true)
+  }
+
+  const changePw = async e => {
+    e.preventDefault()
+    setPwMsg(''); setPwErr('')
+    if (pw.next !== pw.confirm) { setPwErr('새 비밀번호가 일치하지 않습니다'); return }
+    try {
+      await api.post('/users/me/password', {
+        current_password: pw.cur, new_password: pw.next,
+      })
+      setPwMsg('비밀번호가 변경되었습니다')
+      setPw({ cur: '', next: '', confirm: '' })
+    } catch (err) {
+      setPwErr(err.response?.data?.detail || '변경에 실패했습니다')
+    }
+  }
 
   const logout = () => {
     localStorage.removeItem('token')
@@ -65,7 +95,8 @@ export default function App() {
           </span>
         )}
         <span className="me">
-          {me.user_name}({me.userid})
+          <button className="mebtn" title="사용자 정보"
+            onClick={openProfile}>{me.user_name}({me.userid})</button>
           <button className="logout" onClick={logout}>로그아웃</button>
         </span>
       </header>
@@ -79,6 +110,51 @@ export default function App() {
           } />
         </Routes>
       </main>
+      {profile && (
+        <div className="popup" onClick={() => setProfile(null)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <h3>사용자 정보</h3>
+            <p><b>ID</b> {profile.userid}</p>
+            <p><b>이름</b> {profile.user_name}</p>
+            <p><b>부서/직급</b> {[profile.dept_name, profile.job_title]
+              .filter(Boolean).join(' / ') || '-'}</p>
+            <p><b>연락처</b> {profile.user_tel || '-'}</p>
+            <p><b>이메일</b> {profile.user_email || '-'}</p>
+            <p><b>등급</b> {GRADE_LABEL[profile.user_grade] ?? profile.user_grade}</p>
+            <div className="popup-btns">
+              <button onClick={openPw}>비밀번호 변경</button>
+              <button onClick={() => setProfile(null)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pwOpen && (
+        <div className="popup" onClick={() => setPwOpen(false)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <h3>비밀번호 변경</h3>
+            <form className="holiday-form" onSubmit={changePw}>
+              <label>현재 비밀번호
+                <input type="password" required value={pw.cur}
+                  onChange={e => setPw({ ...pw, cur: e.target.value })} />
+              </label>
+              <label>새 비밀번호
+                <input type="password" required value={pw.next}
+                  onChange={e => setPw({ ...pw, next: e.target.value })} />
+              </label>
+              <label>새 비밀번호 확인
+                <input type="password" required value={pw.confirm}
+                  onChange={e => setPw({ ...pw, confirm: e.target.value })} />
+              </label>
+              {pwMsg && <p className="msg">{pwMsg}</p>}
+              {pwErr && <p className="err">{pwErr}</p>}
+              <div className="popup-btns">
+                <button type="submit" className="primary">비밀번호 변경</button>
+                <button type="button" onClick={() => setPwOpen(false)}>닫기</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

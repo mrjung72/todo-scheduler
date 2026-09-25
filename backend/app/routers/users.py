@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from ..database import get_db
 from ..models import User
 from ..schemas import UserCreate, UserUpdate, UserOut
-from ..security import hash_password
+from ..security import hash_password, verify_password, get_current_user
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -12,6 +13,28 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 @router.get("", response_model=list[UserOut])
 def list_users(db: Session = Depends(get_db)):
     return db.query(User).order_by(User.userid).all()
+
+
+@router.get("/me", response_model=UserOut)
+def get_me(me: User = Depends(get_current_user)):
+    return me
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/me/password", status_code=204)
+def change_my_password(body: PasswordChange, db: Session = Depends(get_db),
+                       me: User = Depends(get_current_user)):
+    """본인 비밀번호 재설정 (현재 비밀번호 확인 필요)."""
+    if not verify_password(body.current_password, me.password):
+        raise HTTPException(400, "현재 비밀번호가 일치하지 않습니다")
+    if not body.new_password.strip():
+        raise HTTPException(400, "새 비밀번호를 입력하세요")
+    me.password = hash_password(body.new_password)
+    db.commit()
 
 
 @router.post("", response_model=UserOut, status_code=201)
