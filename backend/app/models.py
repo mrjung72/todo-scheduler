@@ -53,6 +53,15 @@ class CalendarDefine(Base):
     holiday_remark = Column(Text)
 
 
+class UserHoliday(Base):
+    __tablename__ = "user_holiday"
+    dateid = Column(Text, ForeignKey("calendar_define.dateid"), primary_key=True)
+    work_userid = Column(Text, ForeignKey("users.userid"), primary_key=True)
+    holiday_category = Column(Text, default="A")   # A-종일, P-일부
+    holiday_hours = Column(Integer, default=0)     # P 일 때 휴가시간(시)
+    holiday_remark = Column(Text)
+
+
 class WorkSchedule(Base):
     __tablename__ = "work_schedule"
     workschid = Column(Integer, primary_key=True, autoincrement=True)

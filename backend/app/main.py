@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import __version__
 from .database import Base, engine, SessionLocal
 from .models import User, Site, Task, CalendarDefine, WorkSchedule
-from .routers import users, sites, tasks, calendar, schedules
+from .routers import users, sites, tasks, calendar, schedules, user_holidays
 
 app = FastAPI(title="TODO Scheduler API", version=__version__)
 
@@ -25,6 +25,7 @@ app.include_router(sites.router)
 app.include_router(tasks.router)
 app.include_router(calendar.router)
 app.include_router(schedules.router)
+app.include_router(user_holidays.router)
 
 
 def seed(db):
@@ -96,8 +97,11 @@ def config():
 
 # --- 프로덕션: 빌드된 프론트엔드 정적 서빙 (backend/static) ---
 class SPAStaticFiles(StaticFiles):
-    """존재하지 않는 경로는 index.html 로 fallback (React Router용)."""
+    """존재하지 않는 경로는 index.html 로 fallback (React Router용).
+    /api/* 경로는 fallback 대상에서 제외."""
     async def get_response(self, path, scope):
+        if path.startswith("api/") or path == "api":
+            raise StarletteHTTPException(404)
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as ex:

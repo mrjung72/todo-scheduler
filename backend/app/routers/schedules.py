@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..models import WorkSchedule, Task, User, Site
 from ..schemas import ScheduleCreate, ScheduleUpdate, ScheduleOut
-from ..scheduler import get_calendar_map, next_work_start, add_work_hours
+from ..scheduler import get_calendar_map, get_holiday_map, next_work_start, add_work_hours
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
@@ -83,10 +83,12 @@ def set_start(workschid: int, body: StartSet, db: Session = Depends(get_db)):
         raise HTTPException(404, "스케줄을 찾을 수 없습니다")
     task = db.get(Task, sched.taskid)
     cal = get_calendar_map(db)
-    sched.start_datetime = next_work_start(body.start_datetime, cal)
+    hol = get_holiday_map(db)
+    uid = sched.work_userid or ""
+    sched.start_datetime = next_work_start(body.start_datetime, cal, hol, uid)
     sched.start_fixed = 1
     sched.end_datetime_estimated = add_work_hours(
-        sched.start_datetime, (task.work_hours_estimated or 0) if task else 0, cal
+        sched.start_datetime, (task.work_hours_estimated or 0) if task else 0, cal, hol, uid
     )
     if task:
         task.task_start_date = sched.start_datetime

@@ -6,6 +6,7 @@ const TABS = [
   { key: 'sites', label: '사이트' },
   { key: 'tasks', label: '작업' },
   { key: 'calendar', label: '달력' },
+  { key: 'holidays', label: '작업자휴가' },
   { key: 'schedules', label: '작업스케줄' },
 ]
 
@@ -23,6 +24,7 @@ export default function Admin() {
       {tab === 'sites' && <SitesTab />}
       {tab === 'tasks' && <TasksTab />}
       {tab === 'calendar' && <CalendarTab />}
+      {tab === 'holidays' && <HolidaysTab />}
       {tab === 'schedules' && <SchedulesTab />}
     </div>
   )
@@ -297,6 +299,113 @@ function CalendarTab() {
               </tr>
             )
           })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/* ---------------- 작업자휴가 ---------------- */
+const HOL_CAT_LABEL = { A: '종일', P: '일부' }
+
+function HolidaysTab() {
+  const today = new Date()
+  const [month, setMonth] = useState(
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
+  const [rows, setRows] = useState([])
+  const [users, setUsers] = useState([])
+  const [filterUser, setFilterUser] = useState('')
+  const empty = { date: '', work_userid: '', holiday_category: 'A',
+    holiday_hours: 4, holiday_remark: '' }
+  const [form, setForm] = useState(empty)
+
+  const load = useCallback(() => {
+    const params = {
+      start: month.replace('-', '') + '01',
+      end: month.replace('-', '') + '31',
+    }
+    if (filterUser) params.work_userid = filterUser
+    api.get('/user-holidays', { params }).then(r => setRows(r.data))
+  }, [month, filterUser])
+  useEffect(() => {
+    load()
+    api.get('/users').then(r => setUsers(r.data))
+  }, [load])
+
+  const save = (h, patch) =>
+    api.put(`/user-holidays/${h.dateid}/${h.work_userid}`, patch).then(load)
+
+  const add = async e => {
+    e.preventDefault()
+    if (!form.date || !form.work_userid) return
+    await api.post('/user-holidays', {
+      dateid: form.date.replaceAll('-', ''),
+      work_userid: form.work_userid,
+      holiday_category: form.holiday_category,
+      holiday_hours: form.holiday_category === 'P' ? +form.holiday_hours : 0,
+      holiday_remark: form.holiday_remark,
+    })
+    setForm(empty); load()
+  }
+  const del = h => window.confirm(`${h.dateid} ${h.user_name || h.work_userid} 휴가 삭제?`) &&
+    api.delete(`/user-holidays/${h.dateid}/${h.work_userid}`).then(load)
+
+  const catOptions = Object.entries(HOL_CAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
+  const userOptions = [{ value: '', label: '작업자(전체)' },
+    ...users.map(u => ({ value: u.userid, label: u.user_name }))]
+
+  return (
+    <div>
+      <form className="newtask" onSubmit={add}>
+        <input type="date" required value={form.date}
+          onChange={e => setForm({ ...form, date: e.target.value })} />
+        <select required value={form.work_userid}
+          onChange={e => setForm({ ...form, work_userid: e.target.value })}>
+          <option value="">작업자 선택</option>
+          {users.map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
+        <select value={form.holiday_category}
+          onChange={e => setForm({ ...form, holiday_category: e.target.value })}>
+          {catOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        {form.holiday_category === 'P' && (
+          <input type="number" className="num" min="1" max="8" step="0.5"
+            title="휴가시간" value={form.holiday_hours}
+            onChange={e => setForm({ ...form, holiday_hours: e.target.value })} />
+        )}
+        <input placeholder="설명 (예: 연차, 오후반차)" value={form.holiday_remark}
+          onChange={e => setForm({ ...form, holiday_remark: e.target.value })} />
+        <button type="submit">추가</button>
+      </form>
+      <div className="toolbar">
+        <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
+        <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+          {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <span className="hint">
+          종일(A)은 해당일 근무 제외, 일부(P)는 휴가시간만큼 근무시간 차감(하루 뒤쪽부터).
+          반영은 [작업목록]의 재적용 시 적용됩니다.
+        </span>
+      </div>
+      <table className="grid">
+        <thead><tr>
+          <th>일자</th><th>작업자</th><th>구분</th><th>휴가시간</th><th>설명</th><th></th>
+        </tr></thead>
+        <tbody>
+          {rows.map(h => (
+            <tr key={`${h.dateid}-${h.work_userid}`}>
+              <td>{h.dateid.slice(0,4)}-{h.dateid.slice(4,6)}-{h.dateid.slice(6,8)}</td>
+              <td>{h.user_name || h.work_userid}</td>
+              <td><EditableCell value={h.holiday_category}
+                onSave={v => save(h, { holiday_category: v })} options={catOptions} /></td>
+              <td><EditableCell type="number" value={h.holiday_hours}
+                onSave={v => save(h, { holiday_hours: v })} /></td>
+              <td><EditableCell value={h.holiday_remark}
+                onSave={v => save(h, { holiday_remark: v })} /></td>
+              <td><button className="danger" onClick={() => del(h)}>삭제</button></td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan="6" className="empty">등록된 휴가가 없습니다</td></tr>}
         </tbody>
       </table>
     </div>

@@ -117,6 +117,31 @@ class CalendarOut(CalendarBase):
     dateid: str
 
 
+# ---------- user_holiday ----------
+class UserHolidayBase(BaseModel):
+    holiday_category: Optional[str] = "A"   # A-종일, P-일부
+    holiday_hours: Optional[int] = 0
+    holiday_remark: Optional[str] = None
+
+
+class UserHolidayCreate(UserHolidayBase):
+    dateid: str        # yyyymmdd
+    work_userid: str
+
+
+class UserHolidayUpdate(BaseModel):
+    holiday_category: Optional[str] = None
+    holiday_hours: Optional[int] = None
+    holiday_remark: Optional[str] = None
+
+
+class UserHolidayOut(UserHolidayBase):
+    model_config = ConfigDict(from_attributes=True)
+    dateid: str
+    work_userid: str
+    user_name: Optional[str] = None
+
+
 # ---------- work_schedule ----------
 class ScheduleBase(BaseModel):
     taskid: Optional[int] = None
