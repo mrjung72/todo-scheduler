@@ -40,3 +40,14 @@ export function colorOf(key) {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
   return PALETTE[h % PALETTE.length]
 }
+
+// 작업별 색상: 황금각(137.5°) 분포로 연속 taskid도 대비되는 색이 나오게 함
+export function taskColor(taskid) {
+  const s = String(taskid ?? 'none')
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  const n = Number(taskid)
+  const base = Number.isFinite(n) ? n : h
+  const hue = Math.round((base * 137.508) % 360)
+  return `hsl(${hue}, 65%, 45%)`
+}

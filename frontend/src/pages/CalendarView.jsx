@@ -3,7 +3,7 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import api, { colorOf, DAY_STAT_LABEL, fmtDT } from '../api'
+import api, { taskColor, DAY_STAT_LABEL, fmtDT } from '../api'
 
 export default function CalendarView() {
   const [events, setEvents] = useState([])
@@ -21,7 +21,7 @@ export default function CalendarView() {
     setEvents(evs.map(e => ({
       ...e,
       display: 'block',
-      color: colorOf(e.extendedProps.siteid),
+      color: taskColor(e.extendedProps.taskid),
       classNames: ['arrow-event'],
     })))
     // 휴일/휴가를 배경 이벤트로 표시
@@ -49,9 +49,14 @@ export default function CalendarView() {
 
   useEffect(() => { load() }, [load])
 
-  const onEventClick = (info) => {
-    setSelected({ ...info.event.extendedProps, title: info.event.title,
-      start: info.event.start, end: info.event.end })
+  const onEventClick = async (info) => {
+    const props = { ...info.event.extendedProps, title: info.event.title,
+      start: info.event.start, end: info.event.end, daily: null }
+    setSelected(props)
+    if (!props.holiday) {
+      const { data } = await api.get(`/schedules/${info.event.id}/daily`)
+      setSelected(s => s && s.taskid === props.taskid ? { ...s, daily: data } : s)
+    }
   }
 
   return (
@@ -60,7 +65,7 @@ export default function CalendarView() {
         <span className="lg lg-h">휴일</span>
         <span className="lg lg-v">휴가</span>
         <span className="lg lg-uh">개인휴가</span>
-        <span className="lg-note">작업 색상 = 사이트별 자동 배정 / 클릭 시 상세</span>
+        <span className="lg-note">작업 색상 = 작업별 자동 배정 / 클릭 시 상세</span>
       </div>
       <FullCalendar
         ref={calRef}
@@ -72,7 +77,8 @@ export default function CalendarView() {
           right: 'dayGridMonth,timeGridWeek',
         }}
         locale="ko"
-        height="auto"
+        height="100%"
+        fixedWeekCount={false}
         events={[...events, ...dayEvents, ...holEvents]}
         eventClick={onEventClick}
         eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
@@ -97,6 +103,30 @@ export default function CalendarView() {
                 <p><b>예상시간</b> {selected.work_hours_estimated}h</p>
                 <p><b>시작</b> {fmtDT(selected.start?.toISOString?.() ?? selected.start)}</p>
                 <p><b>종료(예상)</b> {fmtDT(selected.end?.toISOString?.() ?? selected.end)}</p>
+                {selected.daily && selected.daily.length > 0 && (
+                  <div className="daily">
+                    <b>일별 작업시간</b>
+                    <table>
+                      <tbody>
+                        {selected.daily.map(d => {
+                          const wd = '일월화수목금토'[new Date(d.date).getDay()]
+                          return (
+                            <tr key={d.date}>
+                              <td>{d.date} ({wd})</td>
+                              <td className="r">{d.hours}h</td>
+                            </tr>
+                          )
+                        })}
+                        <tr className="sum">
+                          <td>합계</td>
+                          <td className="r">
+                            {selected.daily.reduce((a, d) => a + d.hours, 0).toFixed(1)}h
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </>
             )}
             <button onClick={() => setSelected(null)}>닫기</button>

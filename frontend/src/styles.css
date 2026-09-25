@@ -67,7 +67,12 @@ tr.dayoff td { background: #fef2f2; }
 .tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
 
 /* 달력 */
-.calendar-wrap { background: #fff; padding: 14px; border-radius: 8px; border: 1px solid #e5e7eb; }
+.calendar-wrap {
+  background: #fff; padding: 14px; border-radius: 8px; border: 1px solid #e5e7eb;
+  height: calc(100vh - 84px);   /* topbar 52px + main padding 32px */
+  display: flex; flex-direction: column;
+}
+.calendar-wrap .fc { flex: 1; min-height: 0; }
 .legend { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; font-size: 12px; }
 .lg { padding: 2px 8px; border-radius: 3px; }
 .lg-h { background: rgba(229,57,53,.18); }
@@ -102,3 +107,9 @@ tr.dayoff td { background: #fef2f2; }
 }
 .popup-body h3 { margin-top: 0; }
 .popup-body p { margin: 6px 0; font-size: 14px; }
+
+.daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }
+.daily table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.daily td { padding: 2px 0; }
+.daily td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.daily tr.sum td { border-top: 1px solid #e5e7eb; font-weight: 600; padding-top: 4px; }

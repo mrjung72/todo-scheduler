@@ -6,7 +6,11 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..models import WorkSchedule, Task, User, Site
 from ..schemas import ScheduleCreate, ScheduleUpdate, ScheduleOut
-from ..scheduler import get_calendar_map, get_holiday_map, next_work_start, add_work_hours
+from ..scheduler import (
+    get_calendar_map, get_holiday_map, next_work_start, add_work_hours,
+    worker_segments,
+)
+from datetime import timedelta
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
@@ -60,6 +64,33 @@ def calendar_events(db: Session = Depends(get_db)):
             },
         })
     return events
+
+
+@router.get("/{workschid}/daily")
+def daily_hours(workschid: int, db: Session = Depends(get_db)):
+    """스케줄의 시작~종료 구간을 일별 작업시간으로 분해."""
+    sched = db.get(WorkSchedule, workschid)
+    if not sched:
+        raise HTTPException(404, "스케줄을 찾을 수 없습니다")
+    if not sched.start_datetime or not sched.end_datetime_estimated:
+        return []
+    cal = get_calendar_map(db)
+    hol = get_holiday_map(db)
+    uid = sched.work_userid or ""
+    start, end = sched.start_datetime, sched.end_datetime_estimated
+
+    result = []
+    d = start.date()
+    while d <= end.date():
+        hours = 0.0
+        for s, e in worker_segments(d, cal, hol, uid):
+            seg_s, seg_e = max(s, start), min(e, end)
+            if seg_s < seg_e:
+                hours += (seg_e - seg_s).total_seconds() / 3600.0
+        if hours > 0:
+            result.append({"date": d.strftime("%Y-%m-%d"), "hours": round(hours, 1)})
+        d += timedelta(days=1)
+    return result
 
 
 @router.post("", response_model=ScheduleOut, status_code=201)

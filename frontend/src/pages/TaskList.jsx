@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, colorOf } from '../api'
+import api, { fmtDT, STAT_LABEL, taskColor } from '../api'
 
 const SEARCH_FIELDS = [
   { value: 'all', label: '전체' },
@@ -147,7 +147,7 @@ export default function TaskList() {
         </thead>
         <tbody>
           {tasks.map(t => (
-            <tr key={t.taskid} style={{ borderLeft: `6px solid ${colorOf(t.siteid)}` }}>
+            <tr key={t.taskid} style={{ borderLeft: `6px solid ${taskColor(t.taskid)}` }}>
               <td>
                 <input type="number" className="num" value={t.priority ?? 0}
                   onChange={e => updateTask(t.taskid, { priority: +e.target.value })} />
