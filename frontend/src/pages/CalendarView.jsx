@@ -23,6 +23,7 @@ export default function CalendarView() {
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
     holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
   const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
+  const [editForm, setEditForm] = useState(null)  // 작업 수정 모드
   const calRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -108,9 +109,46 @@ export default function CalendarView() {
     load()
   }
 
+  // datetime-local 입력값 'YYYY-MM-DDTHH:mm' (로컬 시각)
+  const toLocalInput = d => d ? fmtLocal(d).replace(' ', 'T') : ''
+
+  const startEdit = () => setEditForm({
+    priority: selected.priority ?? 0,
+    work_hours_estimated: selected.work_hours_estimated ?? 0,
+    work_userid: selected.work_userid || '',
+    work_stat: selected.work_stat || selected.task_stat || 'W',
+    start: toLocalInput(selected.start),
+    unfix: false,
+  })
+  const saveEdit = async e => {
+    e.preventDefault()
+    await api.put(`/tasks/${selected.taskid}`, {
+      priority: +editForm.priority,
+      work_hours_estimated: +editForm.work_hours_estimated,
+      work_userid: editForm.work_userid || null,
+    })
+    await api.put(`/schedules/${selected.workschid}`, {
+      work_stat: editForm.work_stat,
+      work_userid: editForm.work_userid || null,
+    })
+    if (editForm.unfix) {
+      await api.patch(`/schedules/${selected.workschid}/unfix`)
+    } else if (editForm.start && editForm.start !== toLocalInput(selected.start)) {
+      // 로컬 naive 시각 그대로 전송 (toISOString은 UTC로 밀림)
+      await api.patch(`/schedules/${selected.workschid}/start`, {
+        start_datetime: editForm.start.length === 16 ? editForm.start + ':00' : editForm.start,
+      })
+    }
+    setEditForm(null)
+    setSelected(null)
+    load()
+  }
+
   const onEventClick = async (info) => {
     const props = { ...info.event.extendedProps, title: info.event.title,
+      workschid: info.event.id,
       start: info.event.start, end: info.event.end, daily: null }
+    setEditForm(null)
     setSelected(props)
     if (!props.holiday) {
       const { data } = await api.get(`/schedules/${info.event.id}/daily`)
@@ -169,7 +207,49 @@ export default function CalendarView() {
                 : ''}
               {selected.title}
             </h3>
-            {selected.holiday ? (
+            {editForm ? (
+              <form className="holiday-form" onSubmit={saveEdit}>
+                <label>우선순위
+                  <input type="number" value={editForm.priority}
+                    onChange={e => setEditForm({ ...editForm, priority: e.target.value })} />
+                </label>
+                <label>예상시간(h)
+                  <input type="number" min="0.5" step="0.5" required
+                    value={editForm.work_hours_estimated}
+                    onChange={e => setEditForm({ ...editForm, work_hours_estimated: e.target.value })} />
+                </label>
+                <label>작업자
+                  <select value={editForm.work_userid}
+                    onChange={e => setEditForm({ ...editForm, work_userid: e.target.value })}>
+                    <option value="">-</option>
+                    {users.filter(u => u.user_grade === 1)
+                      .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+                  </select>
+                </label>
+                <label>상태
+                  <select value={editForm.work_stat}
+                    onChange={e => setEditForm({ ...editForm, work_stat: e.target.value })}>
+                    {Object.entries(STAT_LABEL)
+                      .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                </label>
+                <label>시작일시
+                  <input type="datetime-local" value={editForm.start}
+                    onChange={e => setEditForm({ ...editForm, start: e.target.value })} />
+                </label>
+                {!!selected.start_fixed && (
+                  <label className="chk">
+                    <input type="checkbox" checked={editForm.unfix}
+                      onChange={e => setEditForm({ ...editForm, unfix: e.target.checked })} />
+                    시작일시 고정 해제 (재계산 시 자동 배치)
+                  </label>
+                )}
+                <div className="popup-btns">
+                  <button type="submit" className="primary">저장</button>
+                  <button type="button" onClick={() => setEditForm(null)}>취소</button>
+                </div>
+              </form>
+            ) : selected.holiday ? (
               <>
                 <p><b>작업자</b> {selected.user_name || selected.work_userid}</p>
                 <p><b>구분</b> {selected.holiday_category === 'A' ? '종일' : `일부 (${selected.holiday_hours}h)`}</p>
@@ -210,7 +290,12 @@ export default function CalendarView() {
                 )}
               </>
             )}
-            <button onClick={() => setSelected(null)}>닫기</button>
+            {!editForm && (
+              <div className="popup-btns">
+                {!selected.holiday && <button onClick={startEdit}>수정</button>}
+                <button onClick={() => setSelected(null)}>닫기</button>
+              </div>
+            )}
           </div>
         </div>
       )}

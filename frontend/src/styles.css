@@ -133,3 +133,4 @@ tr.dayoff td { background: #fef2f2; }
 .holiday-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .holiday-form input, .holiday-form select { padding: 6px 8px; font-size: 14px; }
 .popup-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.holiday-form label.chk { flex-direction: row; align-items: center; gap: 6px; font-weight: 400; }
