@@ -74,3 +74,16 @@ def startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/config")
+def config():
+    from .scheduler import WORK_SEGMENTS, WORK_HOURS_PER_DAY, DAY_SEGMENTS
+    return {
+        "work_segments": WORK_SEGMENTS,
+        "work_hours_per_day": WORK_HOURS_PER_DAY,
+        "segments": [
+            {"start": s.strftime("%H:%M"), "end": e.strftime("%H:%M")}
+            for s, e in DAY_SEGMENTS
+        ],
+    }

@@ -34,9 +34,22 @@ npm run dev
 - **관리자**: 사용자/사이트/작업/달력/작업스케줄 CRUD.
   달력 탭에서 연도별 날짜 일괄 생성, 일자별 W(근무일)/H(휴일)/V(휴가) 지정.
 
+## 환경변수
+
+`backend/.env` 파일(또는 OS 환경변수)로 하루 근무시간 구간 설정 — `backend/.env.example` 참고.
+
+```env
+# 콤마로 여러 구간 지정. 기본값은 점심 제외 8시간.
+WORK_SEGMENTS=09:00-12:00,13:00-18:00
+# 점심 구분 없이 8시간: WORK_SEGMENTS=09:00-17:00
+# 하루 7시간:        WORK_SEGMENTS=09:00-12:00,13:00-17:00
+```
+
+변경 후 백엔드 재시작 필요. 현재 적용값은 `GET /api/config` 로 확인 가능.
+
 ## 스케줄링 규칙 (`backend/app/scheduler.py`)
 
-- 근무시간: 09:00~18:00, 점심 12:00~13:00 제외 → 하루 8시간
+- 근무시간: `WORK_SEGMENTS` 환경변수 (기본 09:00~12:00 + 13:00~18:00 = 하루 8시간)
 - 비근무일: 토·일 + calendar_define 의 H(휴일)/V(휴가)
   - calendar_define 에 없는 날짜는 월~금=근무일로 간주
 - 재계산: work_schedule 을 work_userid 별로 그룹화 → task.priority 순 정렬 →

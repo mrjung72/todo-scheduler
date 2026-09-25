@@ -30,6 +30,7 @@ export default function TaskList() {
   const [form, setForm] = useState(emptyForm)
   const [editStart, setEditStart] = useState({}) // workschid -> datetime-local value
   const [msg, setMsg] = useState('')
+  const [cfg, setCfg] = useState(null)
 
   const load = useCallback(async () => {
     const params = {}
@@ -43,6 +44,7 @@ export default function TaskList() {
   useEffect(() => {
     api.get('/users').then(r => setUsers(r.data))
     api.get('/sites').then(r => setSites(r.data))
+    api.get('/config').then(r => setCfg(r.data))
   }, [])
 
   const updateTask = async (taskid, patch) => {
@@ -191,7 +193,10 @@ export default function TaskList() {
       </table>
       <p className="hint">
         우선순위/예상시간 변경 후 [재적용]을 누르면 작업자별로 우선순위 순서대로
-        시작/종료일시가 재계산됩니다. (근무 09:00~18:00, 점심 12~13시 제외, 토·일·휴일·휴가 제외)
+        시작/종료일시가 재계산됩니다.
+        {cfg
+          ? ` (근무 ${cfg.segments.map(s => `${s.start}~${s.end}`).join(', ')} = 하루 ${cfg.work_hours_per_day}시간, 토·일·휴일·휴가 제외)`
+          : ''}
       </p>
     </div>
   )

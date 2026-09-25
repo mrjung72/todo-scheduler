@@ -1,6 +1,6 @@
 """근무일 기준 작업 스케줄 자동계산 엔진.
 
-근무시간: 09:00~18:00, 점심 12:00~13:00 제외 -> 하루 8시간
+근무시간: 환경변수 WORK_SEGMENTS 로 설정 (기본 "09:00-12:00,13:00-18:00" = 하루 8시간)
 비근무일: 토/일 + calendar_define 에서 date_stat 이 'H'(휴일) 또는 'V'(휴가)인 날
 calendar_define 에 없는 날짜는 월~금=근무일, 토/일=휴일로 간주.
 
@@ -9,18 +9,42 @@ calendar_define 에 없는 날짜는 월~금=근무일, 토/일=휴일로 간주
 - 각 작업자 그룹 내에서 순차 배치 (이전 작업 종료 -> 다음 작업 시작)
 - start_fixed=1 인 스케줄은 start_datetime 을 유지하고 종료일시만 재계산
 """
+import os
 from datetime import datetime, timedelta, date, time
+from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from .models import CalendarDefine, WorkSchedule, Task
 
-WORK_START = time(9, 0)
-LUNCH_START = time(12, 0)
-LUNCH_END = time(13, 0)
-WORK_END = time(18, 0)
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
-# 하루 근무 구간 [(시작, 종료)] = 3h + 5h = 8h
-DAY_SEGMENTS = [(WORK_START, LUNCH_START), (LUNCH_END, WORK_END)]
+
+def _parse_time(s: str) -> time:
+    h, m = s.strip().split(":")
+    return time(int(h), int(m))
+
+
+def _parse_segments(env_val: str):
+    """'09:00-12:00,13:00-18:00' -> [(time,time), ...]"""
+    segs = []
+    for part in env_val.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        s, e = part.split("-")
+        segs.append((_parse_time(s), _parse_time(e)))
+    if not segs:
+        raise ValueError("WORK_SEGMENTS 환경변수가 비어있습니다")
+    return segs
+
+
+# 하루 근무 구간. 예) "09:00-12:00,13:00-18:00" = 8h, "09:00-17:00" = 점심없이 8h
+WORK_SEGMENTS = os.getenv("WORK_SEGMENTS", "09:00-12:00,13:00-18:00")
+DAY_SEGMENTS = _parse_segments(WORK_SEGMENTS)
+WORK_HOURS_PER_DAY = sum(
+    (datetime.combine(date.today(), e) - datetime.combine(date.today(), s)).total_seconds() / 3600
+    for s, e in DAY_SEGMENTS
+)
 
 
 def get_calendar_map(db: Session) -> dict:

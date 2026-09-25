@@ -2,3 +2,4 @@ fastapi>=0.119
 uvicorn[standard]>=0.32
 sqlalchemy>=2.0.36
 pydantic>=2.12
+python-dotenv>=1.0
