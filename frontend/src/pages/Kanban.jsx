@@ -9,12 +9,19 @@ const LAYOUT = [
 ]
 
 export default function Kanban() {
+  const me = JSON.parse(localStorage.getItem('user') || 'null')
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
   // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
   const [siteFilter, setSiteFilter] = useState(() =>
-    JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid || '')
+    me?.default_siteid || '')
   const [q, setQ] = useState('')
+  const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
+  const [err, setErr] = useState('')
+
+  // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
+  const canMove = t => me && (me.user_grade === 0 ||
+    (me.user_grade === 1 && t.work_userid === me.userid))
 
   const load = useCallback(async () => {
     const params = {}
@@ -26,6 +33,20 @@ export default function Kanban() {
 
   useEffect(() => { load().catch(console.error) }, [load])
   useEffect(() => { api.get('/sites').then(r => setSites(r.data)) }, [])
+
+  const onDrop = async (e, st) => {
+    e.preventDefault()
+    setDropTarget(null)
+    const taskid = +e.dataTransfer.getData('text/taskid')
+    const t = tasks.find(x => x.taskid === taskid)
+    if (!t || t.task_stat === st || !canMove(t)) return
+    try {
+      await api.put(`/tasks/${taskid}`, { task_stat: st })  // 스케줄 work_stat도 동기화됨
+      load()
+    } catch (ex) {
+      setErr(ex.response?.data?.detail || '상태 변경에 실패했습니다')
+    }
+  }
 
   const byStat = {}
   for (const t of tasks) (byStat[t.task_stat] ??= []).push(t)
@@ -44,13 +65,22 @@ export default function Kanban() {
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={load}>검색</button>
+        {err && <span className="err">{err}</span>}
       </div>
 
       <div className="kanban">
         {LAYOUT.map((stats, i) => (
           <div className="kb-col" key={i}>
             {stats.map(st => (
-              <section className={`kb-area st-${st}`} key={st}>
+              <section
+                className={`kb-area st-${st}` + (dropTarget === st ? ' drop-over' : '')}
+                key={st}
+                onDragOver={e => { e.preventDefault(); setDropTarget(st) }}
+                onDragLeave={e => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget(null)
+                }}
+                onDrop={e => onDrop(e, st)}
+              >
                 <h4 className="kb-head">
                   {STAT_LABEL[st] || st}
                   <span className="kb-count">{byStat[st]?.length || 0}</span>
@@ -58,6 +88,9 @@ export default function Kanban() {
                 <div className="kb-cards">
                   {(byStat[st] || []).map(t => (
                     <div className="kb-card" key={t.taskid}
+                      draggable={canMove(t)}
+                      onDragStart={e =>
+                        e.dataTransfer.setData('text/taskid', String(t.taskid))}
                       style={{ borderLeft: `5px solid ${taskColor(t.taskid)}` }}>
                       <div className="kb-title">
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
