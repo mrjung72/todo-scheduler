@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import UserHoliday, User
 from ..schemas import UserHolidayCreate, UserHolidayUpdate, UserHolidayOut
+from ..scheduler import WORK_HOURS_PER_DAY
 from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/user-holidays", tags=["user-holidays"])
@@ -18,6 +19,12 @@ def _query(db: Session):
 
 def _to_out(row) -> UserHolidayOut:
     hol, user_name = row
+    hrs = hol.holiday_hours or 0
+    if hol.holiday_category == "P" and 0 < hrs < WORK_HOURS_PER_DAY:
+        # 일부휴가는 하루 근무의 뒤쪽 hrs 시간을 차지 -> 뒤쪽 비율 구간
+        span = [round(1 - hrs / WORK_HOURS_PER_DAY, 3), 1.0]
+    else:
+        span = [0.0, 1.0]
     return UserHolidayOut(
         dateid=hol.dateid,
         work_userid=hol.work_userid,
@@ -25,6 +32,7 @@ def _to_out(row) -> UserHolidayOut:
         holiday_hours=hol.holiday_hours,
         holiday_remark=hol.holiday_remark,
         user_name=user_name,
+        span=span,
     )
 
 

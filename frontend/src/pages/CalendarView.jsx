@@ -15,12 +15,21 @@ const fmtYMD = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate()
 //   하루의 spans는 연속 구간이므로 첫 span의 f0, 마지막 span의 f1이 바의 양끝
 function trimBarToWork(arg) {
   const p = arg.event.extendedProps || {}
-  if (p.holiday || !p.daily) return
   const harness = arg.el.closest('.fc-daygrid-event-harness')
   const dayEl = arg.el.closest('.fc-daygrid-day')
   if (!harness || !dayEl) return            // week뷰, +more 팝오버 등은 제외
   const segW = harness.offsetWidth          // 세그먼트(바) 전체 너비 px
   if (!segW) return
+
+  // 개인휴가 바: 일부(P)는 하루 근무의 뒤쪽 비율만큼만 채움 (A는 전체 폭)
+  if (p.holiday) {
+    const s = p.span
+    if (s?.[0] > 0 && dayEl.offsetWidth) {
+      arg.el.style.marginLeft = `${(s[0] * dayEl.offsetWidth / segW * 100).toFixed(3)}%`
+    }
+    return
+  }
+  if (!p.daily) return
 
   const startKey = fmtYMD(arg.event.start)
   let endKey = startKey
@@ -54,6 +63,31 @@ function trimBarToWork(arg) {
     if (f1 != null && f1 < 1 && endEl?.offsetWidth) {
       arg.el.style.marginRight = `${((1 - f1) * endEl.offsetWidth / segW * 100).toFixed(3)}%`
     }
+  }
+
+  // 휴일(비작업일: daily 없음 또는 free) 칸과 겹치는 구간은 바탕색을 연하게
+  const tr = dayEl.parentElement
+  const light = []
+  const elRect = arg.el.getBoundingClientRect()   // 여백 적용 후 실제 바 위치
+  if (tr && elRect.width) {
+    for (const td of tr.querySelectorAll('td.fc-daygrid-day')) {
+      const r = td.getBoundingClientRect()
+      const x0 = Math.max(0, r.left - elRect.left)
+      const x1 = Math.min(elRect.width, r.right - elRect.left)
+      if (x1 - x0 <= 0) continue
+      const dd = p.daily[td.dataset.date]
+      if (!dd || dd.free) light.push([x0 / elRect.width, x1 / elRect.width])
+    }
+  }
+  if (light.length) {
+    const parts = []
+    for (const [a, b] of light) {
+      parts.push(`transparent ${(a * 100).toFixed(1)}%`)
+      parts.push(`rgba(255,255,255,.55) ${(a * 100).toFixed(1)}%`)
+      parts.push(`rgba(255,255,255,.55) ${(b * 100).toFixed(1)}%`)
+      parts.push(`transparent ${(b * 100).toFixed(1)}%`)
+    }
+    arg.el.style.backgroundImage = `linear-gradient(to right, ${parts.join(', ')})`
   }
 }
 

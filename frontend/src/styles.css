@@ -97,7 +97,6 @@ table.grid td.clickable:hover { background: #eff6ff; }
 /* 작업자 개인 휴가 이벤트 */
 .fc .holiday-event {
   border-style: dashed;
-  font-size: 11px;
 }
 .fc .holiday-event .fc-event-main { padding: 0 4px; }
 .lg-note { color: #6b7280; }

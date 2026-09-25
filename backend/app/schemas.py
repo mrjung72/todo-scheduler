@@ -145,6 +145,8 @@ class UserHolidayOut(UserHolidayBase):
     dateid: str
     work_userid: str
     user_name: Optional[str] = None
+    # 하루 근무시간 대비 휴가 구간 비율 [시작, 끝] (A=전체, P=뒤쪽)
+    span: Optional[list] = None
 
 
 # ---------- work_schedule ----------
