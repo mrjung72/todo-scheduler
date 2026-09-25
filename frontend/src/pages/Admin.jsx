@@ -180,6 +180,7 @@ function TasksTab() {
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
   const [form, setForm] = useState(empty)
+  const [q, setQ] = useState('')
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
   useEffect(() => {
     load()
@@ -202,6 +203,15 @@ function TasksTab() {
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
 
+  const filtered = !q.trim() ? rows : rows.filter(t => {
+    const kw = q.trim().toLowerCase()
+    return [
+      t.task_name, t.task_csrid, t.task_req_remark, t.site_name, t.siteid,
+      t.req_userid, t.req_user_name, t.itos_userid, t.itos_user_name,
+      t.work_userid, t.work_user_name, STAT_LABEL[t.task_stat],
+    ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
+  })
+
   return (
     <div>
       <form className="newtask" onSubmit={add}>
@@ -217,13 +227,17 @@ function TasksTab() {
           onChange={e => setForm({ ...form, work_hours_estimated: +e.target.value })} />
         <button type="submit">추가</button>
       </form>
+      <div className="toolbar">
+        <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
+          onChange={e => setQ(e.target.value)} />
+      </div>
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>작업명</th><th>사이트</th><th>우선순위</th><th>예상(h)</th><th>실제(h)</th>
           <th>상태</th><th>CSR</th><th>현업</th><th>IT</th><th>요청내용</th><th></th>
         </tr></thead>
         <tbody>
-          {rows.map(t => (
+          {filtered.map(t => (
             <tr key={t.taskid}>
               <td>{t.taskid}</td>
               <td><EditableCell value={t.task_name} onSave={v => save(t.taskid, { task_name: v })} /></td>
@@ -417,17 +431,26 @@ function SchedulesTab() {
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [users, setUsers] = useState([])
+  const [editStart, setEditStart] = useState({})
+  const [msg, setMsg] = useState('')
+  const [q, setQ] = useState('')
   const empty = { taskid: '', work_userid: '', work_stat: 'W', work_remark: '' }
   const [form, setForm] = useState(empty)
 
-  const load = useCallback(() => api.get('/schedules').then(r => setRows(r.data)), [])
+  const load = useCallback(() => {
+    api.get('/schedules').then(r => setRows(r.data))
+    api.get('/tasks').then(r => setTasks(r.data))
+  }, [])
   useEffect(() => {
     load()
-    api.get('/tasks').then(r => setTasks(r.data))
     api.get('/users').then(r => setUsers(r.data))
   }, [load])
 
-  const save = (id, patch) => api.put(`/schedules/${id}`, patch).then(load)
+  const taskOf = id => tasks.find(t => t.taskid === id)
+
+  const saveSched = (id, patch) => api.put(`/schedules/${id}`, patch).then(load)
+  const saveTask = (taskid, patch) => api.put(`/tasks/${taskid}`, patch).then(load)
+
   const add = async e => {
     e.preventDefault()
     await api.post('/schedules', { ...form, taskid: +form.taskid })
@@ -436,14 +459,49 @@ function SchedulesTab() {
   const del = id => window.confirm(`스케줄 #${id} 삭제?`) &&
     api.delete(`/schedules/${id}`).then(load)
 
-  const taskName = id => tasks.find(t => t.taskid === id)?.task_name ?? id
+  const recalc = async () => {
+    const { data } = await api.post('/tasks/recalculate')
+    setMsg(`재계산 완료: ${data.updated}건 갱신 (대기중 작업만)`)
+    load()
+  }
+
+  const setStart = async (workschid) => {
+    const v = editStart[workschid]
+    if (!v) return
+    await api.patch(`/schedules/${workschid}/start`, {
+      start_datetime: new Date(v).toISOString(),
+    })
+    setEditStart(s => ({ ...s, [workschid]: '' }))
+    load()
+  }
+  const unfix = async (workschid) => {
+    await api.patch(`/schedules/${workschid}/unfix`)
+    load()
+  }
+
   const uopt = [{ value: '', label: '-' },
     ...users.map(u => ({ value: u.userid, label: u.user_name }))]
   const topt = [{ value: '', label: '-' },
     ...tasks.map(t => ({ value: t.taskid, label: `#${t.taskid} ${t.task_name}` }))]
+  const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
+
+  const userName = id => users.find(u => u.userid === id)?.user_name ?? ''
+  const filtered = !q.trim() ? rows : rows.filter(s => {
+    const t = taskOf(s.taskid)
+    const kw = q.trim().toLowerCase()
+    return [
+      t?.task_name, s.work_userid, userName(s.work_userid),
+      s.work_remark, STAT_LABEL[s.work_stat],
+    ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
+  })
 
   return (
     <div>
+      <div className="toolbar">
+        {msg && <span className="msg">{msg}</span>}
+        <button className="primary" style={{ marginLeft: 'auto' }}
+          onClick={recalc}>재적용(재계산)</button>
+      </div>
       <form className="newtask" onSubmit={add}>
         <select required value={form.taskid}
           onChange={e => setForm({ ...form, taskid: e.target.value })}>
@@ -459,34 +517,63 @@ function SchedulesTab() {
           onChange={e => setForm({ ...form, work_remark: e.target.value })} />
         <button type="submit">추가</button>
       </form>
+      <div className="toolbar">
+        <input placeholder="검색 (작업명/작업자/내용/상태)" value={q}
+          onChange={e => setQ(e.target.value)} />
+      </div>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>작업</th><th>작업자</th><th>상태</th><th>작업내용</th>
-          <th>시작일시</th><th>종료(예상)</th><th>종료(실제)</th><th>시작고정</th><th></th>
+          <th>ID</th><th>작업</th><th>우선순위</th><th>예상(h)</th><th>작업자</th>
+          <th>상태</th><th>작업내용</th>
+          <th>시작일시</th><th>종료(예상)</th><th>종료(실제)</th>
+          <th>시작일시 설정</th><th></th>
         </tr></thead>
         <tbody>
-          {rows.map(s => (
-            <tr key={s.workschid}>
-              <td>{s.workschid}</td>
-              <td><EditableCell value={s.taskid} onSave={v => save(s.workschid, { taskid: v })}
-                options={topt} /></td>
-              <td><EditableCell value={s.work_userid} onSave={v => save(s.workschid, { work_userid: v })}
-                options={uopt} /></td>
-              <td><EditableCell value={s.work_stat} onSave={v => save(s.workschid, { work_stat: v })}
-                options={Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))} /></td>
-              <td><EditableCell value={s.work_remark}
-                onSave={v => save(s.workschid, { work_remark: v })} /></td>
-              <td>{fmtDT(s.start_datetime)}</td>
-              <td>{fmtDT(s.end_datetime_estimated)}</td>
-              <td>{fmtDT(s.end_datetime_real)}</td>
-              <td>{s.start_fixed ? '고정' : '자동'}</td>
-              <td><button className="danger" onClick={() => del(s.workschid)}>삭제</button></td>
-            </tr>
-          ))}
+          {filtered.map(s => {
+            const t = taskOf(s.taskid)
+            return (
+              <tr key={s.workschid}>
+                <td>{s.workschid}</td>
+                <td><EditableCell value={s.taskid} onSave={v => saveSched(s.workschid, { taskid: v })}
+                  options={topt} /></td>
+                <td><EditableCell type="number" value={t?.priority ?? ''}
+                  onSave={v => t && saveTask(t.taskid, { priority: v })} /></td>
+                <td><EditableCell type="number" value={t?.work_hours_estimated ?? ''}
+                  onSave={v => t && saveTask(t.taskid, { work_hours_estimated: v })} /></td>
+                <td><EditableCell value={s.work_userid}
+                  onSave={v => saveSched(s.workschid, { work_userid: v })}
+                  options={uopt} /></td>
+                <td><EditableCell value={s.work_stat}
+                  onSave={v => saveSched(s.workschid, { work_stat: v })}
+                  options={statOpt} /></td>
+                <td><EditableCell value={s.work_remark}
+                  onSave={v => saveSched(s.workschid, { work_remark: v })} /></td>
+                <td>
+                  {fmtDT(s.start_datetime)}
+                  {s.start_fixed ? <span className="badge">고정</span> : null}
+                </td>
+                <td>{fmtDT(s.end_datetime_estimated)}</td>
+                <td>{fmtDT(s.end_datetime_real)}</td>
+                <td>
+                  <span className="startset">
+                    <input type="datetime-local"
+                      value={editStart[s.workschid] ?? ''}
+                      onChange={e => setEditStart(st => ({ ...st, [s.workschid]: e.target.value }))} />
+                    <button onClick={() => setStart(s.workschid)}>설정</button>
+                    {s.start_fixed ? <button onClick={() => unfix(s.workschid)}>해제</button> : null}
+                  </span>
+                </td>
+                <td><button className="danger" onClick={() => del(s.workschid)}>삭제</button></td>
+              </tr>
+            )
+          })}
+          {filtered.length === 0 && <tr><td colSpan="12" className="empty">스케줄이 없습니다</td></tr>}
         </tbody>
       </table>
       <p className="hint">
-        시작일시 수동 설정은 [작업목록] 화면의 "시작일시 설정" 컬럼에서 합니다.
+        우선순위·예상시간·작업자 수정 후 [재적용]을 누르면 대기중(W) 작업의
+        시작/종료일시가 작업자별 우선순위 순으로 재계산됩니다.
+        시작일시를 수동 설정하면 "고정"되어 재계산 시에도 시작일이 유지됩니다.
       </p>
     </div>
   )
