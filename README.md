@@ -44,6 +44,20 @@ npm run dev
 - **관리자**: 사용자/사이트/작업/달력/작업스케줄 CRUD.
   달력 탭에서 연도별 날짜 일괄 생성, 일자별 W(근무일)/H(휴일)/V(휴가) 지정.
 
+## 배포 패키지 생성
+
+```bat
+build-deploy.bat
+```
+
+- 프론트 `npm run build` → `deploy\todo-scheduler\` 에 `app/` + `static/`(빌드 결과물) + `requirements.txt` + `.env.example` + `run.bat` + `wheels/` 조립
+- `wheels/`: `pip download`으로 받은 전체 의존성 wheel → **폐쇄망(오프라인) 설치 가능**
+- `backend/app/__init__.py`의 `__version__`을 읽어 `deploy\todo-scheduler-{버전}.zip` 생성
+- 배포 대상 서버: 압축 해제 → `run.bat`
+  - 최초 실행 시 venv 생성 + `pip install --no-index --find-links wheels` (오프라인 설치, 실패 시 PyPI 재시도)
+  - 필요 조건: 대상 서버에 Python 3.14 x64 설치 (`py -3` 런처 또는 PATH의 python, WindowsApps 스텁 제외. `PYEXE` 환경변수로 경로 직접 지정 가능)
+- 운영 모드에서는 uvicorn 하나가 API + React 정적 파일을 같이 서빙 (SPA 라우팅 fallback 포함)
+
 ## 환경변수
 
 `backend/.env` 파일(또는 OS 환경변수)로 하루 근무시간 구간 설정 — `backend/.env.example` 참고.

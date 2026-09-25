@@ -1,6 +1,9 @@
+import os
 from datetime import date, timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .database import Base, engine, SessionLocal
@@ -74,7 +77,7 @@ def startup():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": __version__}
 
 
 @app.get("/api/config")
@@ -89,3 +92,20 @@ def config():
             for s, e in DAY_SEGMENTS
         ],
     }
+
+
+# --- 프로덕션: 빌드된 프론트엔드 정적 서빙 (backend/static) ---
+class SPAStaticFiles(StaticFiles):
+    """존재하지 않는 경로는 index.html 로 fallback (React Router용)."""
+    async def get_response(self, path, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as ex:
+            if ex.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+
+
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+if os.path.isdir(STATIC_DIR):
+    app.mount("/", SPAStaticFiles(directory=STATIC_DIR, html=True), name="static")

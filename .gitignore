@@ -15,6 +15,10 @@ backend/*.db
 node_modules/
 frontend/dist/
 
+# Deploy artifacts
+deploy/
+backend/static/
+
 # OS / IDE
 .DS_Store
 Thumbs.db
