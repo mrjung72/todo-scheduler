@@ -79,6 +79,15 @@ table.grid td.clickable:hover { background: #eff6ff; }
   display: flex; flex-direction: column;
 }
 .calendar-wrap .fc { flex: 1; min-height: 0; }
+/* 월간 달력: 토/일 칸은 절반 너비, 남은 너비는 평일에 균등 배분
+   (colgroup이 비어 있어 col 선택자가 안 먹힘 -> 요일 클래스로 지정) */
+.fc .fc-daygrid .fc-day-sun,
+.fc .fc-daygrid .fc-day-sat { width: 8.334%; }
+.fc .fc-daygrid .fc-day-mon,
+.fc .fc-daygrid .fc-day-tue,
+.fc .fc-daygrid .fc-day-wed,
+.fc .fc-daygrid .fc-day-thu,
+.fc .fc-daygrid .fc-day-fri { width: 16.666%; }
 .legend { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; font-size: 12px; }
 .lg { padding: 2px 8px; border-radius: 3px; }
 .lg-h { background: rgba(229,57,53,.18); }
@@ -95,8 +104,11 @@ table.grid td.clickable:hover { background: #eff6ff; }
 
 /* 작업 이벤트를 화살표 느낌으로 */
 .fc .arrow-event .fc-event-main {
-  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
   padding-right: 12px;
+}
+/* 마지막 세그먼트에만 화살표 꼬리 (배경 그라디언트까지 함께 잘림) */
+.fc .arrow-event.fc-event-end {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
 }
 .fc .fc-daygrid-block-event .fc-event-main { padding: 3px 6px; }
 .fc .fc-daygrid-day-events { font-size: 15px; }

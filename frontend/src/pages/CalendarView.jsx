@@ -5,6 +5,51 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT } from '../api'
 
+const p2 = n => String(n).padStart(2, '0')
+const fmtYMD = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+
+// 작업바 길이 자체를 시작일·종료일의 작업시간 비율에 맞게 줄임
+// (시작일 앞쪽 / 종료일 뒤쪽의 비작업 구간만큼 바를 안쪽으로 당김)
+// 이벤트 extendedProps.daily = {date: {hours, spans:[[f0,f1]..]}}
+//   f0/f1 = 그날 근무시간(점심 등 공백 제외한 실제 근무 합계) 기준 위치 비율
+//   하루의 spans는 연속 구간이므로 첫 span의 f0, 마지막 span의 f1이 바의 양끝
+function trimBarToWork(arg) {
+  const p = arg.event.extendedProps || {}
+  if (p.holiday || !p.daily) return
+  const harness = arg.el.closest('.fc-daygrid-event-harness')
+  const dayEl = arg.el.closest('.fc-daygrid-day')
+  if (!harness || !dayEl) return            // week뷰, +more 팝오버 등은 제외
+  const segW = harness.offsetWidth          // 세그먼트(바) 전체 너비 px
+  if (!segW) return
+
+  const startKey = fmtYMD(arg.event.start)
+  let endKey = startKey
+  if (arg.event.end) {
+    const ed = new Date(arg.event.end)
+    if (ed.getHours() === 0 && ed.getMinutes() === 0) ed.setDate(ed.getDate() - 1)
+    endKey = fmtYMD(ed)
+  }
+
+  // margin % 기준은 harness 너비. 토/일 칸이 좁으므로 칸별 실제 px 너비를 %로 환산
+  // 시작일이 있는 세그먼트: 앞쪽 비작업 비율만큼 왼쪽 여백
+  if (arg.isStart) {
+    const f0 = p.daily[startKey]?.spans?.[0]?.[0]
+    if (f0 > 0 && dayEl.offsetWidth) {   // isStart 세그먼트의 첫 칸 = 시작일
+      arg.el.style.marginLeft = `${(f0 * dayEl.offsetWidth / segW * 100).toFixed(3)}%`
+    }
+  }
+  // 종료일이 있는 세그먼트: 뒤쪽 비작업 비율만큼 오른쪽 여백
+  if (arg.isEnd) {
+    const f1 = p.daily[endKey]?.spans?.at(-1)?.[1]
+    // 종료일 칸 = 같은 주(같은 tr) 안의 해당 날짜 td
+    const endEl = dayEl.parentElement
+      ?.querySelector(`td.fc-daygrid-day[data-date="${endKey}"]`)
+    if (f1 != null && f1 < 1 && endEl?.offsetWidth) {
+      arg.el.style.marginRight = `${((1 - f1) * endEl.offsetWidth / segW * 100).toFixed(3)}%`
+    }
+  }
+}
+
 // Date 객체를 로컬 시각 'YYYY-MM-DD HH:mm'으로 포맷 (toISOString은 UTC라 9시간 밀림)
 const fmtLocal = d => {
   if (!d) return ''
@@ -202,7 +247,7 @@ export default function CalendarView() {
       <div className="legend">
         <span className="lg lg-h">휴일</span>
         <span className="lg lg-uh">개인휴가</span>
-        <span className="lg-note">작업 색상 = 작업별 자동 배정 / 클릭 시 상세</span>
+        <span className="lg-note">작업 색상 = 작업별 자동 배정 / 시작일·종료일 바 길이 = 당일 작업시간 / 클릭 시 상세</span>
       </div>
       <FullCalendar
         ref={calRef}
@@ -219,6 +264,7 @@ export default function CalendarView() {
         events={[...filtered, ...dayEvents, ...holEvents]}
         eventClick={onEventClick}
         dateClick={onDateClick}
+        eventDidMount={trimBarToWork}
         eventContent={(arg) => {
           if (arg.event.extendedProps.holiday) return arg.event.title
           const w = arg.event.extendedProps.work_user_name

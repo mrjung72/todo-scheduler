@@ -16,6 +16,36 @@ from datetime import timedelta
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
 
+def _daily_breakdown(start, end, cal, hol, uid):
+    """시작~종료 구간을 일별로 분해.
+    {date: {"hours": 작업시간, "spans": [[시작비율, 끝비율], ...]}} 반환.
+    spans 비율은 그날 근무시간(구간별 실제 근무 합계) 기준 0~1.
+    점심 등 구간 사이 공백은 제외되므로 채움이 연속적으로 이어진다."""
+    result = {}
+    d = start.date()
+    while d <= end.date():
+        segs = worker_segments(d, cal, hol, uid)
+        if segs:
+            daylen = sum((e - s).total_seconds() for s, e in segs) or 1
+            hours, spans = 0.0, []
+            offset = 0.0  # 이전 근무구간들의 누적 길이(초)
+            for s, e in segs:
+                seg_dur = (e - s).total_seconds()
+                cs, ce = max(s, start), min(e, end)
+                if cs < ce:
+                    hours += (ce - cs).total_seconds() / 3600.0
+                    spans.append([
+                        round((offset + (cs - s).total_seconds()) / daylen, 3),
+                        round((offset + (ce - s).total_seconds()) / daylen, 3),
+                    ])
+                offset += seg_dur
+            if hours > 0:
+                result[d.strftime("%Y-%m-%d")] = {
+                    "hours": round(hours, 1), "spans": spans}
+        d += timedelta(days=1)
+    return result
+
+
 @router.get("", response_model=list[ScheduleOut])
 def list_schedules(
     taskid: int = Query(None),
@@ -42,6 +72,8 @@ def calendar_events(db: Session = Depends(get_db)):
         .filter(WorkSchedule.work_stat.in_(["W", "P"]))
         .all()
     )
+    cal = get_calendar_map(db)
+    hol = get_holiday_map(db)
     events = []
     for sched, task, work_user_name, site_name in rows:
         if not sched.start_datetime or not sched.end_datetime_estimated:
@@ -62,6 +94,10 @@ def calendar_events(db: Session = Depends(get_db)):
                 "task_stat": task.task_stat,
                 "work_hours_estimated": task.work_hours_estimated,
                 "start_fixed": sched.start_fixed,
+                # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도
+                "daily": _daily_breakdown(
+                    sched.start_datetime, sched.end_datetime_estimated,
+                    cal, hol, sched.work_userid or ""),
             },
         })
     return events
@@ -78,20 +114,9 @@ def daily_hours(workschid: int, db: Session = Depends(get_db)):
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
     uid = sched.work_userid or ""
-    start, end = sched.start_datetime, sched.end_datetime_estimated
-
-    result = []
-    d = start.date()
-    while d <= end.date():
-        hours = 0.0
-        for s, e in worker_segments(d, cal, hol, uid):
-            seg_s, seg_e = max(s, start), min(e, end)
-            if seg_s < seg_e:
-                hours += (seg_e - seg_s).total_seconds() / 3600.0
-        if hours > 0:
-            result.append({"date": d.strftime("%Y-%m-%d"), "hours": round(hours, 1)})
-        d += timedelta(days=1)
-    return result
+    bd = _daily_breakdown(
+        sched.start_datetime, sched.end_datetime_estimated, cal, hol, uid)
+    return [{"date": k, "hours": v["hours"]} for k, v in bd.items()]
 
 
 @router.post("", response_model=ScheduleOut, status_code=201)
