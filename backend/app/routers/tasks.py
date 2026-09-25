@@ -5,7 +5,10 @@ from sqlalchemy import or_, func, select
 from ..database import get_db
 from ..models import Task, User, Site, WorkSchedule
 from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail
-from ..scheduler import recalculate
+from ..scheduler import (
+    recalculate, get_calendar_map, get_holiday_map,
+    add_work_hours, workday_cal,
+)
 from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -172,6 +175,25 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
             WorkSchedule.taskid == taskid,
             WorkSchedule.work_stat == "W",
         ).update({WorkSchedule.work_userid: obj.work_userid})
+    # 예상/실제 작업시간 변경 시 시작일시가 잡힌 스케줄의 종료일시 재계산
+    if "work_hours_estimated" in data or "work_hours_real" in data:
+        cal = get_calendar_map(db)
+        hol = get_holiday_map(db)
+        for sched in db.query(WorkSchedule).filter(
+                WorkSchedule.taskid == taskid).all():
+            if not sched.start_datetime:
+                continue
+            uid = sched.work_userid or ""
+            # 고정 시작일이 휴일이면 그날은 경과시간 그대로 적용
+            cal_f = workday_cal(cal, sched.start_datetime.date())
+            sched.end_datetime_estimated = add_work_hours(
+                sched.start_datetime, obj.work_hours_estimated or 0,
+                cal_f, hol, uid)
+            if obj.work_hours_real:
+                sched.end_datetime_real = add_work_hours(
+                    sched.start_datetime, obj.work_hours_real,
+                    cal_f, hol, uid)
+            obj.task_end_date = sched.end_datetime_estimated
     db.commit()
     db.refresh(obj)
     return obj
