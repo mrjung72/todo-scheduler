@@ -125,10 +125,18 @@ function UsersTab() {
                 onSave={v => save(u.userid, { default_siteid: v || null })}
                 options={[{ value: '', label: '-' },
                   ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]} /></td>
-              <td><button onClick={() => {
-                const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
-                if (pw) save(u.userid, { password: pw })
-              }}>변경</button></td>
+              <td className="c">
+                <button onClick={() => {
+                  const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
+                  if (pw) save(u.userid, { password: pw })
+                }}>변경</button>
+                <button onClick={() =>
+                  window.confirm(`${u.user_name || u.userid} 비밀번호를 초기값(1234)으로 초기화?`) &&
+                  api.post(`/users/${u.userid}/password-reset`)
+                    .then(() => alert('비밀번호가 초기화되었습니다 (1234)'))
+                    .catch(e => alert(e.response?.data?.detail || '초기화 실패'))
+                }>초기화</button>
+              </td>
               <td className="c"><EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
                 options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
               <td><button className="danger" onClick={() => del(u.userid)}>삭제</button></td>

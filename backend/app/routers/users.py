@@ -5,7 +5,9 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..models import User, Site
 from ..schemas import UserCreate, UserUpdate, UserOut
-from ..security import hash_password, verify_password, get_current_user
+from ..security import (
+    hash_password, verify_password, get_current_user, require_admin,
+)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -70,6 +72,17 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(obj)
     return obj
+
+
+@router.post("/{userid}/password-reset", status_code=204)
+def reset_password(userid: str, db: Session = Depends(get_db),
+                   me: User = Depends(require_admin)):
+    """관리자: 사용자 비밀번호를 초기값(1234)으로 초기화."""
+    obj = db.get(User, userid)
+    if not obj:
+        raise HTTPException(404, "사용자를 찾을 수 없습니다")
+    obj.password = hash_password("1234")
+    db.commit()
 
 
 @router.delete("/{userid}", status_code=204)
