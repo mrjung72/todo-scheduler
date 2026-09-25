@@ -260,17 +260,17 @@ function TasksTab() {
       </div>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>작업명</th><th>사이트</th><th>우선순위</th><th>예상작업시간(h)</th><th>실제작업시간(h)</th>
-          <th>상태</th><th>CSR</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th><th>요청내용</th><th></th>
+          <th>ID</th><th>사이트</th><th>작업명</th><th>우선<br/>순위</th><th>예상 작업<br/>시간(H)</th><th>실제 작업<br/>시간(H)</th>
+          <th>상태</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th><th>요청내용</th><th></th>
         </tr></thead>
         <tbody>
           {filtered.map(t => (
             <tr key={t.taskid}>
               <td className="r">{t.taskid}</td>
-              <td><EditableCell value={t.task_name} disabled={!can(t)}
-                onSave={v => save(t.taskid, { task_name: v })} /></td>
               <td><EditableCell value={t.siteid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { siteid: v })} options={sopt} /></td>
+              <td><EditableCell value={t.task_name} disabled={!can(t)}
+                onSave={v => save(t.taskid, { task_name: v })} /></td>
               <td className="r"><EditableCell type="number" value={t.priority} disabled={!can(t)}
                 onSave={v => save(t.taskid, { priority: v })} /></td>
               <td className="r"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t)}
@@ -477,7 +477,7 @@ function SchedulesTab() {
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [users, setUsers] = useState([])
-  const [editStart, setEditStart] = useState({})
+  const [startForm, setStartForm] = useState(null)  // {workschid, start, fixed} 시작일시 팝업
   const [msg, setMsg] = useState('')
   const [q, setQ] = useState('')
   const admin = isAdmin()
@@ -515,18 +515,19 @@ function SchedulesTab() {
     load()
   }
 
-  const setStart = async (workschid) => {
-    const v = editStart[workschid]
-    if (!v) return
-    await api.patch(`/schedules/${workschid}/start`, {
+  const saveStart = async e => {
+    e.preventDefault()
+    if (!startForm?.start) return
+    await api.patch(`/schedules/${startForm.workschid}/start`, {
       // 로컬 naive 시각 그대로 전송 (toISOString은 UTC로 밀림)
-      start_datetime: v.length === 16 ? v + ':00' : v,
+      start_datetime: startForm.start.length === 16 ? startForm.start + ':00' : startForm.start,
     })
-    setEditStart(s => ({ ...s, [workschid]: '' }))
+    setStartForm(null)
     load()
   }
-  const unfix = async (workschid) => {
-    await api.patch(`/schedules/${workschid}/unfix`)
+  const unfixStart = async () => {
+    await api.patch(`/schedules/${startForm.workschid}/unfix`)
+    setStartForm(null)
     load()
   }
 
@@ -548,7 +549,7 @@ function SchedulesTab() {
     const t = taskOf(s.taskid)
     const kw = q.trim().toLowerCase()
     return [
-      t?.task_name, s.work_userid, userName(s.work_userid),
+      t?.task_name, t?.site_name, t?.siteid, s.work_userid, userName(s.work_userid),
       s.work_remark, STAT_LABEL[s.work_stat],
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(s => admin || s.work_userid === myId())  // 비관리자: 본인 스케줄만
@@ -578,15 +579,15 @@ function SchedulesTab() {
         <button type="submit">추가</button>
       </form>
       <div className="toolbar">
-        <input placeholder="검색 (작업명/작업자/내용/상태)" value={q}
+        <input placeholder="검색 (작업명/사이트/작업자/내용/상태)" value={q}
           onChange={e => setQ(e.target.value)} />
       </div>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>작업</th><th>우선순위</th><th>예상(h)</th><th>작업자</th>
+          <th>ID</th><th>사이트</th><th>우선<br/>순위</th><th>작업</th><th>예상 작업<br/>시간(Hour)</th><th>작업자</th>
           <th>상태</th><th>작업내용</th>
-          <th>시작일시</th><th>종료(예상)</th><th>종료(실제)</th>
-          <th>시작일시 설정</th><th></th>
+          <th>시작일시</th><th>종료일시<br/>(예상)</th><th>종료일시<br/>(실제)</th>
+          <th></th>
         </tr></thead>
         <tbody>
           {filtered.map(s => {
@@ -594,11 +595,12 @@ function SchedulesTab() {
             return (
               <tr key={s.workschid}>
                 <td className="r">{s.workschid}</td>
+                <td>{t?.site_name || t?.siteid || '-'}</td>
+                <td className="r"><EditableCell type="number" value={t?.priority ?? ''} disabled={!can(s)}
+                  onSave={v => t && saveTask(t.taskid, { priority: v })} /></td>
                 <td><EditableCell value={s.taskid} disabled={!admin}
                   onSave={v => saveSched(s.workschid, { taskid: v })}
                   options={topt} /></td>
-                <td className="r"><EditableCell type="number" value={t?.priority ?? ''} disabled={!can(s)}
-                  onSave={v => t && saveTask(t.taskid, { priority: v })} /></td>
                 <td className="r"><EditableCell type="number" value={t?.work_hours_estimated ?? ''} disabled={!can(s)}
                   onSave={v => t && saveTask(t.taskid, { work_hours_estimated: v })} /></td>
                 <td className="c"><EditableCell value={s.work_userid} disabled={!admin}
@@ -609,23 +611,18 @@ function SchedulesTab() {
                   options={statOpt} /></td>
                 <td><EditableCell value={s.work_remark} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_remark: v })} /></td>
-                <td className="c">
-                  {fmtDT(s.start_datetime)}
+                <td className={`c${can(s) ? ' clickable' : ''}`}
+                  title={can(s) ? '클릭하면 시작일시를 수정합니다' : undefined}
+                  onClick={() => can(s) && setStartForm({
+                    workschid: s.workschid,
+                    start: s.start_datetime ? s.start_datetime.slice(0, 16) : '',
+                    fixed: !!s.start_fixed,
+                  })}>
+                  {fmtDT(s.start_datetime) || '-'}
                   {s.start_fixed ? <span className="badge">고정</span> : null}
                 </td>
                 <td className="c">{fmtDT(s.end_datetime_estimated)}</td>
                 <td className="c">{fmtDT(s.end_datetime_real)}</td>
-                <td>
-                  {can(s) && (
-                    <span className="startset">
-                      <input type="datetime-local"
-                        value={editStart[s.workschid] ?? ''}
-                        onChange={e => setEditStart(st => ({ ...st, [s.workschid]: e.target.value }))} />
-                      <button onClick={() => setStart(s.workschid)}>설정</button>
-                      {s.start_fixed ? <button onClick={() => unfix(s.workschid)}>해제</button> : null}
-                    </span>
-                  )}
-                </td>
                 <td>{['W', 'C'].includes(s.work_stat) && can(s) &&
                   <button className="danger" onClick={() => del(s.workschid)}>삭제</button>}</td>
               </tr>
@@ -637,8 +634,27 @@ function SchedulesTab() {
       <p className="hint">
         우선순위·예상시간·작업자 수정 후 [재적용]을 누르면 대기중(W) 작업의
         시작/종료일시가 작업자별 우선순위 순으로 재계산됩니다.
-        시작일시를 수동 설정하면 "고정"되어 재계산 시에도 시작일이 유지됩니다.
+        시작일시 셀을 클릭하면 수동 설정(고정)할 수 있습니다.
       </p>
+      {startForm && (
+        <div className="popup" onClick={() => setStartForm(null)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <h3>시작일시 설정</h3>
+            <form className="holiday-form" onSubmit={saveStart}>
+              <label>시작일시
+                <input type="datetime-local" required value={startForm.start}
+                  onChange={e => setStartForm({ ...startForm, start: e.target.value })} />
+              </label>
+              <div className="popup-btns">
+                <button type="submit" className="primary">저장</button>
+                {startForm.fixed &&
+                  <button type="button" onClick={unfixStart}>고정 해제</button>}
+                <button type="button" onClick={() => setStartForm(null)}>취소</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

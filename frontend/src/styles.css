@@ -64,8 +64,8 @@ tr.dayoff td { background: #fef2f2; }
   display: inline-block; margin-left: 4px; padding: 0 5px; font-size: 11px;
   background: #fef3c7; color: #92400e; border-radius: 3px; border: 1px solid #fcd34d;
 }
-.startset { display: inline-flex; gap: 4px; align-items: center; }
-.startset input { width: 190px; }
+table.grid td.clickable { cursor: pointer; }
+table.grid td.clickable:hover { background: #eff6ff; }
 
 .tabs { display: flex; gap: 4px; margin-bottom: 14px; }
 .tab { padding: 7px 16px; border: 1px solid #d1d5db; border-bottom: none; border-radius: 6px 6px 0 0; }
