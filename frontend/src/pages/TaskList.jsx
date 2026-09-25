@@ -26,6 +26,38 @@ export default function TaskList() {
     api.get('/sites').then(r => setSites(r.data))
   }, [])
 
+  // 현재 조회 결과를 CSV(BOM 포함, 엑셀에서 바로 열림)로 다운로드
+  const downloadCsv = () => {
+    const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`
+    const header = ['사이트', '우선순위', 'CSR번호', '작업명', '예상 작업시간(Hour)',
+      '현업담당자', 'IT담당자', '작업자', '시작일시', '종료일시(예상)', '상태']
+    const lines = tasks.map(t => [
+      t.site_name || t.siteid || '', t.priority, t.task_csrid || '', t.task_name,
+      t.work_hours_estimated, t.req_user_name || t.req_userid || '',
+      t.itos_user_name || t.itos_userid || '',
+      t.work_user_name || t.work_userid || '',
+      fmtDT(t.start_datetime), fmtDT(t.end_datetime_estimated),
+      STAT_LABEL[t.task_stat] || t.task_stat,
+    ].map(esc).join(','))
+    const csv = '\uFEFF' + [header.map(esc).join(','), ...lines].join('\r\n')
+    const now = new Date()
+    const p2 = n => String(n).padStart(2, '0')
+    const stamp = `${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}` +
+      `_${p2(now.getHours())}${p2(now.getMinutes())}${p2(now.getSeconds())}`
+    const conds = [
+      siteFilter &&
+        (sites.find(s => s.siteid === siteFilter)?.site_name || siteFilter),
+      q.trim(),
+      statFilter && (STAT_LABEL[statFilter] || statFilter),
+    ].filter(Boolean).join('_')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    a.download = `작업목록${conds ? `_${conds}` : ''}_${stamp}.csv`
+      .replace(/[\\/:*?"<>|]/g, '_')
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   return (
     <div>
       <div className="toolbar">
@@ -44,6 +76,7 @@ export default function TaskList() {
           {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <button onClick={load}>검색</button>
+        <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>
       </div>
 
       <table className="grid">

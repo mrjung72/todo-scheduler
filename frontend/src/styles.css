@@ -36,6 +36,12 @@ button { cursor: pointer; background: #fff; }
 button:hover { background: #f3f4f6; }
 button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
 button.primary:hover { background: #1d4ed8; }
+button.excel {
+  margin-left: auto; background: #059669; color: #fff;
+  border-color: #059669; font-weight: 600;
+}
+button.excel:hover { background: #047857; }
+button.excel:disabled { background: #9ca3af; border-color: #9ca3af; }
 button.danger { color: #dc2626; }
 input.num { width: 64px; }
 
