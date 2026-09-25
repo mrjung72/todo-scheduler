@@ -161,7 +161,9 @@ export default function CalendarView() {
       {selected && (
         <div className="popup" onClick={() => setSelected(null)}>
           <div className="popup-body" onClick={e => e.stopPropagation()}>
-            <h3>
+            <h3 className="popup-title" style={{
+              background: selected.holiday ? '#fb8c00' : taskColor(selected.taskid),
+            }}>
               {selected.start
                 ? `${selected.start.getMonth() + 1}/${selected.start.getDate()} `
                 : ''}
