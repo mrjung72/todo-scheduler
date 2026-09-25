@@ -26,7 +26,11 @@ export default function CalendarView() {
   const [holEvents, setHolEvents] = useState([])
   const [selected, setSelected] = useState(null)
   const [users, setUsers] = useState([])
+  const [sites, setSites] = useState([])
   const [dayMap, setDayMap] = useState({})
+  const [siteFilter, setSiteFilter] = useState('')
+  const [q, setQ] = useState('')
+  const [statFilter, setStatFilter] = useState('')
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
     holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
   const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
@@ -72,6 +76,7 @@ export default function CalendarView() {
   useEffect(() => {
     load()
     api.get('/users').then(r => setUsers(r.data))
+    api.get('/sites').then(r => setSites(r.data))
   }, [load])
 
   const onDateClick = (info) => {
@@ -165,8 +170,34 @@ export default function CalendarView() {
     }
   }
 
+  const kw = q.trim().toLowerCase()
+  const filtered = events.filter(e => {
+    const p = e.extendedProps || {}
+    if (siteFilter && p.siteid !== siteFilter) return false
+    if (statFilter && (p.work_stat || p.task_stat) !== statFilter) return false
+    if (kw && ![e.title, p.work_user_name, p.work_userid, p.site_name]
+      .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
+    return true
+  })
+
   return (
     <div className="calendar-wrap">
+      <div className="toolbar">
+        <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <input
+          placeholder="검색어 (작업명/작업자/사이트)"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+        />
+        <select value={statFilter} onChange={e => setStatFilter(e.target.value)}>
+          <option value="">상태(전체)</option>
+          {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <button onClick={load}>검색</button>
+      </div>
       <div className="legend">
         <span className="lg lg-h">휴일</span>
         <span className="lg lg-uh">개인휴가</span>
@@ -184,7 +215,7 @@ export default function CalendarView() {
         locale="ko"
         height="100%"
         fixedWeekCount={false}
-        events={[...events, ...dayEvents, ...holEvents]}
+        events={[...filtered, ...dayEvents, ...holEvents]}
         eventClick={onEventClick}
         dateClick={onDateClick}
         eventContent={(arg) => {
