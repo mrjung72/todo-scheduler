@@ -384,8 +384,7 @@ const HOL_CAT_LABEL = { A: '종일', P: '일부' }
 
 function HolidaysTab() {
   const today = new Date()
-  const [month, setMonth] = useState(
-    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
+  const [year, setYear] = useState(today.getFullYear())
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
   const [filterUser, setFilterUser] = useState('')
@@ -396,14 +395,15 @@ function HolidaysTab() {
   const [form, setForm] = useState(empty)
 
   const load = useCallback(() => {
+    if (!(year >= 1000 && year <= 9999)) return
     const params = {
-      start: month.replace('-', '') + '01',
-      end: month.replace('-', '') + '31',
+      start: `${year}0101`,
+      end: `${year}1231`,
     }
     const uid = admin ? filterUser : myId()   // 비관리자: 본인 휴가만 조회
     if (uid) params.work_userid = uid
     api.get('/user-holidays', { params }).then(r => setRows(r.data))
-  }, [month, filterUser, admin])
+  }, [year, filterUser, admin])
   useEffect(() => {
     load()
     api.get('/users').then(r => setUsers(r.data))
@@ -429,7 +429,8 @@ function HolidaysTab() {
 
   const catOptions = Object.entries(HOL_CAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const userOptions = [{ value: '', label: '작업자(전체)' },
-    ...users.map(u => ({ value: u.userid, label: u.user_name }))]
+    ...users.filter(u => u.user_grade === 1)
+      .map(u => ({ value: u.userid, label: u.user_name }))]
 
   return (
     <div>
@@ -440,7 +441,8 @@ function HolidaysTab() {
           <select required value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자 선택</option>
-            {users.map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+            {users.filter(u => u.user_grade === 1)
+              .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
           </select>
         )}
         <select value={form.holiday_category}
@@ -457,7 +459,9 @@ function HolidaysTab() {
         <button type="submit">추가</button>
       </form>
       <div className="toolbar">
-        <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
+        <input type="number" className="num" value={year}
+          onChange={e => setYear(+e.target.value)} style={{ width: 90 }} />
+        <span className="hint">년</span>
         {admin && (
           <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
             {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
