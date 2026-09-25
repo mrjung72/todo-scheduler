@@ -481,8 +481,15 @@ function SchedulesTab() {
     load()
   }
 
-  const uopt = [{ value: '', label: '-' },
-    ...users.map(u => ({ value: u.userid, label: u.user_name }))]
+  // 작업자는 개발자(등급 1)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
+  // 값이 깨지지 않도록 해당 작업자만 선택지에 포함
+  const devOpt = users.filter(u => u.user_grade === 1)
+    .map(u => ({ value: u.userid, label: u.user_name }))
+  const woptFor = cur =>
+    [{ value: '', label: '-' }, ...devOpt,
+      ...(cur && !devOpt.some(o => o.value === cur)
+        ? [{ value: cur, label: userName(cur) || cur }] : [])]
+  const uopt = [{ value: '', label: '-' }, ...devOpt]
   const topt = [{ value: '', label: '-' },
     ...tasks.map(t => ({ value: t.taskid, label: `#${t.taskid} ${t.task_name}` }))]
   const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
@@ -544,7 +551,7 @@ function SchedulesTab() {
                   onSave={v => t && saveTask(t.taskid, { work_hours_estimated: v })} /></td>
                 <td><EditableCell value={s.work_userid}
                   onSave={v => saveSched(s.workschid, { work_userid: v })}
-                  options={uopt} /></td>
+                  options={woptFor(s.work_userid)} /></td>
                 <td><EditableCell value={s.work_stat}
                   onSave={v => saveSched(s.workschid, { work_stat: v })}
                   options={statOpt} /></td>

@@ -31,7 +31,7 @@ CREATE TABLE users (
 	job_title TEXT,            -- 직급
 	user_tel TEXT,             -- 연락처(전화번호)
 	user_email TEXT,           -- 이메일
-	user_grade INTEGER,        -- 사용자등급(0-관리자(개발자), 1-IT업무담당자, 2-현업담당자, 3-기타사용자)
+	user_grade INTEGER,        -- 사용자등급(0-관리자, 1-개발자, 2-IT업무담당자, 3-현업담당자, 9-기타사용자)
 	user_stat TEXT,            -- 사용자상태(Y/N)
 	create_date datetime       -- 등록일자
 );
