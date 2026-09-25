@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# SQLite DB
+backend/*.db
+*.db-journal
+
+# Node / Vite
+node_modules/
+frontend/dist/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

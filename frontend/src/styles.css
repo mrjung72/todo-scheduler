@@ -1,0 +1,90 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; background: #f5f6f8; color: #222; }
+
+.app { min-height: 100vh; }
+.topbar {
+  display: flex; align-items: center; gap: 24px;
+  background: #1f2937; color: #fff; padding: 0 20px; height: 52px;
+}
+.logo { font-weight: 700; font-size: 17px; }
+.topbar nav { display: flex; gap: 4px; }
+.topbar a {
+  color: #cbd5e1; text-decoration: none; padding: 15px 14px; font-size: 14px;
+}
+.topbar a.active { color: #fff; border-bottom: 3px solid #3b82f6; }
+.topbar a:hover { color: #fff; }
+
+main { padding: 16px 20px; }
+
+.toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.msg { color: #047857; font-size: 13px; }
+.hint { color: #6b7280; font-size: 12px; }
+
+input, select, button {
+  font-size: 13px; padding: 5px 8px; border: 1px solid #d1d5db;
+  border-radius: 4px; background: #fff;
+}
+button { cursor: pointer; background: #fff; }
+button:hover { background: #f3f4f6; }
+button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+button.primary:hover { background: #1d4ed8; }
+button.danger { color: #dc2626; }
+input.num { width: 64px; }
+
+.newtask {
+  display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+  background: #fff; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px;
+}
+.newtask input { min-width: 120px; }
+
+table.grid { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+table.grid th, table.grid td {
+  border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; white-space: nowrap;
+}
+table.grid th { background: #f1f5f9; font-weight: 600; }
+table.grid td input, table.grid td select { width: 100%; border: 1px solid transparent; background: transparent; }
+table.grid td input:hover, table.grid td select:hover { border-color: #d1d5db; }
+table.grid td input:focus, table.grid td select:focus { border-color: #3b82f6; outline: none; }
+table.grid .num { width: 60px; }
+tr.dayoff td { background: #fef2f2; }
+.empty { text-align: center; color: #9ca3af; padding: 24px !important; }
+
+.badge {
+  display: inline-block; margin-left: 4px; padding: 0 5px; font-size: 11px;
+  background: #fef3c7; color: #92400e; border-radius: 3px; border: 1px solid #fcd34d;
+}
+.startset { display: inline-flex; gap: 4px; align-items: center; }
+.startset input { width: 190px; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+.tab { padding: 7px 16px; border: 1px solid #d1d5db; border-bottom: none; border-radius: 6px 6px 0 0; }
+.tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+/* 달력 */
+.calendar-wrap { background: #fff; padding: 14px; border-radius: 8px; border: 1px solid #e5e7eb; }
+.legend { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; font-size: 12px; }
+.lg { padding: 2px 8px; border-radius: 3px; }
+.lg-h { background: rgba(229,57,53,.18); }
+.lg-v { background: rgba(251,140,0,.25); }
+.lg-note { color: #6b7280; }
+
+/* 작업 이벤트를 화살표 느낌으로 */
+.fc .arrow-event .fc-event-main {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+  padding-right: 12px;
+}
+.fc .fc-daygrid-block-event .fc-event-main { padding: 1px 4px; }
+.fc .fc-daygrid-day-events { font-size: 12px; }
+.fc-event { cursor: pointer; }
+
+/* 상세 팝업 */
+.popup {
+  position: fixed; inset: 0; background: rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.popup-body {
+  background: #fff; padding: 20px 24px; border-radius: 8px; min-width: 320px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+}
+.popup-body h3 { margin-top: 0; }
+.popup-body p { margin: 6px 0; font-size: 14px; }

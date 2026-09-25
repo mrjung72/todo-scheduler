@@ -1,0 +1,69 @@
+from datetime import datetime
+from sqlalchemy import Column, Integer, REAL, Text, DateTime, ForeignKey
+from .database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+    userid = Column(Text, primary_key=True)
+    user_name = Column(Text, nullable=False)
+    dept_name = Column(Text)
+    job_title = Column(Text)
+    user_tel = Column(Text)
+    user_email = Column(Text)
+    user_grade = Column(Integer)          # 0-관리자, 1-IT업무담당자, 2-현업담당자, 3-기타
+    user_stat = Column(Text, default="Y")
+    create_date = Column(DateTime, default=datetime.now)
+
+
+class Site(Base):
+    __tablename__ = "sites"
+    siteid = Column(Text, primary_key=True)
+    site_name = Column(Text, nullable=False)
+    site_stat = Column(Text, default="Y")
+    site_remark = Column(Text)
+    itos_userid = Column(Text)
+    create_date = Column(DateTime, default=datetime.now)
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+    taskid = Column(Integer, primary_key=True, autoincrement=True)
+    task_name = Column(Text, nullable=False)
+    siteid = Column(Text, ForeignKey("sites.siteid"))
+    priority = Column(Integer, default=0)
+    work_hours_estimated = Column(REAL, default=0)
+    work_hours_real = Column(REAL, default=0)
+    task_stat = Column(Text, default="W")  # W-대기중, P-작업중, F-완료, C-취소
+    task_csrid = Column(Text)
+    task_req_remark = Column(Text)
+    task_req_filepath = Column(Text)
+    req_userid = Column(Text)
+    itos_userid = Column(Text)
+    task_start_date = Column(DateTime)
+    task_end_date = Column(DateTime)
+    create_date = Column(DateTime, default=datetime.now)
+
+
+class CalendarDefine(Base):
+    __tablename__ = "calendar_define"
+    dateid = Column(Text, primary_key=True)   # yyyymmdd
+    date_name = Column(Text, nullable=False)  # yyyy-mm-dd
+    date_stat = Column(Text, default="W")     # W-근무일, H-휴일, V-휴가
+    holiday_remark = Column(Text)
+
+
+class WorkSchedule(Base):
+    __tablename__ = "work_schedule"
+    workschid = Column(Integer, primary_key=True, autoincrement=True)
+    taskid = Column(Integer, ForeignKey("tasks.taskid"))
+    work_stat = Column(Text, default="W")     # W-대기중, P-작업중, F-완료, C-취소
+    work_remark = Column(Text)
+    work_filepath = Column(Text)
+    work_userid = Column(Text)
+    start_datetime = Column(DateTime)
+    end_datetime_estimated = Column(DateTime)
+    end_datetime_real = Column(DateTime)
+    # 시작일시 수동 고정 여부 (1이면 재계산 시에도 start_datetime 유지)
+    start_fixed = Column(Integer, default=0)
+    create_date = Column(DateTime, default=datetime.now)
