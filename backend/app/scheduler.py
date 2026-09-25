@@ -140,15 +140,15 @@ def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None, u
 
 
 def recalculate(db: Session) -> int:
-    """전체 작업스케줄 재계산. 갱신된 스케줄 수를 반환."""
+    """대기중(W) 작업의 스케줄 재계산. 갱신된 스케줄 수를 반환."""
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
 
     rows = (
         db.query(WorkSchedule, Task)
         .join(Task, WorkSchedule.taskid == Task.taskid)
-        .filter(Task.task_stat.in_(["W", "P"]))
-        .filter(WorkSchedule.work_stat.in_(["W", "P"]))
+        .filter(Task.task_stat == "W")          # 대기중 작업만 재계산
+        .filter(WorkSchedule.work_stat == "W")
         .all()
     )
 

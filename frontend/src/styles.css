@@ -92,9 +92,19 @@ tr.dayoff td { background: #fef2f2; }
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
   padding-right: 12px;
 }
-.fc .fc-daygrid-block-event .fc-event-main { padding: 1px 4px; }
-.fc .fc-daygrid-day-events { font-size: 12px; }
+.fc .fc-daygrid-block-event .fc-event-main { padding: 3px 6px; }
+.fc .fc-daygrid-day-events { font-size: 15px; }
+.fc .fc-timegrid-event .fc-event-main { font-size: 14px; }
 .fc-event { cursor: pointer; }
+
+/* 작업 바 안 작업자명 + 작업명 */
+.ev-line { display: flex; align-items: baseline; overflow: hidden; white-space: nowrap; }
+.ev-worker { font-weight: 700; margin-right: 5px; flex-shrink: 0; }
+.ev-title { overflow: hidden; text-overflow: ellipsis; }
+.ev-stat {
+  margin-left: auto; flex-shrink: 0; font-size: 10px; padding: 0 4px;
+  border-radius: 3px; background: rgba(255,255,255,.3); line-height: 1.5;
+}
 
 /* 상세 팝업 */
 .popup {

@@ -3,7 +3,7 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import api, { taskColor, DAY_STAT_LABEL, fmtDT } from '../api'
+import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT } from '../api'
 
 export default function CalendarView() {
   const [events, setEvents] = useState([])
@@ -81,6 +81,20 @@ export default function CalendarView() {
         fixedWeekCount={false}
         events={[...events, ...dayEvents, ...holEvents]}
         eventClick={onEventClick}
+        eventContent={(arg) => {
+          if (arg.event.extendedProps.holiday) return arg.event.title
+          const w = arg.event.extendedProps.work_user_name
+            || arg.event.extendedProps.work_userid || ''
+          const stat = STAT_LABEL[arg.event.extendedProps.work_stat
+            || arg.event.extendedProps.task_stat] || ''
+          return (
+            <div className="ev-line">
+              {w && <span className="ev-worker">{w}</span>}
+              <span className="ev-title">{arg.event.title}</span>
+              {stat && <span className="ev-stat">{stat}</span>}
+            </div>
+          )
+        }}
         eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
         dayMaxEventRows={6}
         datesSet={load}
@@ -88,7 +102,12 @@ export default function CalendarView() {
       {selected && (
         <div className="popup" onClick={() => setSelected(null)}>
           <div className="popup-body" onClick={e => e.stopPropagation()}>
-            <h3>{selected.title}</h3>
+            <h3>
+              {selected.start
+                ? `${selected.start.getMonth() + 1}/${selected.start.getDate()} `
+                : ''}
+              {selected.title}
+            </h3>
             {selected.holiday ? (
               <>
                 <p><b>작업자</b> {selected.user_name || selected.work_userid}</p>
@@ -100,7 +119,8 @@ export default function CalendarView() {
                 <p><b>사이트</b> {selected.site_name || selected.siteid || '-'}</p>
                 <p><b>작업자</b> {selected.work_user_name || selected.work_userid || '-'}</p>
                 <p><b>우선순위</b> {selected.priority}</p>
-                <p><b>예상시간</b> {selected.work_hours_estimated}h</p>
+                <p><b>예상시간</b> {selected.work_hours_estimated}h
+                  {selected.daily && ` (총 ${selected.daily.length}일)`}</p>
                 <p><b>시작</b> {fmtDT(selected.start?.toISOString?.() ?? selected.start)}</p>
                 <p><b>종료(예상)</b> {fmtDT(selected.end?.toISOString?.() ?? selected.end)}</p>
                 {selected.daily && selected.daily.length > 0 && (
