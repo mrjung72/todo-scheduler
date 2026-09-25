@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes, Navigate } from 'react-router-dom'
 import api from './api'
+import Home from './pages/Home'
 import TaskList from './pages/TaskList'
 import CalendarView from './pages/CalendarView'
 import Admin from './pages/Admin'
@@ -16,14 +17,34 @@ export default function App() {
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
   }, [])
 
+  const [wantLogin, setWantLogin] = useState(false)
+
   const logout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     setMe(null)
   }
 
+  // 비로그인: 홈 화면만 공개, [로그인] 버튼으로 로그인 화면 전환
   if (!me || !localStorage.getItem('token')) {
-    return <Login onLogin={setMe} />
+    if (wantLogin) return <Login onLogin={u => { setMe(u); setWantLogin(false) }} />
+    return (
+      <div className="app">
+        <header className="topbar">
+          <span className="logo">
+            TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
+          </span>
+          <button className="primary" style={{ marginLeft: 'auto' }}
+            onClick={() => setWantLogin(true)}>로그인</button>
+        </header>
+        <main>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -33,6 +54,7 @@ export default function App() {
           TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
         </span>
         <nav>
+          <NavLink to="/" end>홈</NavLink>
           <NavLink to="/tasks">작업목록</NavLink>
           <NavLink to="/calendar">달력</NavLink>
           {me.user_grade === 0 && <NavLink to="/admin">관리자</NavLink>}
@@ -50,7 +72,7 @@ export default function App() {
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<Navigate to="/tasks" replace />} />
+          <Route path="/" element={<Home />} />
           <Route path="/tasks" element={<TaskList />} />
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/admin" element={

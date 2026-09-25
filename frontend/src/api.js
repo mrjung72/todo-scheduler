@@ -9,9 +9,10 @@ api.interceptors.request.use(cfg => {
   return cfg
 })
 
-// 401 -> 세션 제거 후 로그인 화면으로
+// 401 -> 세션 제거 후 리로드 (로그인 상태였을 때만)
 api.interceptors.response.use(r => r, err => {
-  if (err.response?.status === 401 && err.config?.url !== '/auth/login') {
+  if (err.response?.status === 401 && err.config?.url !== '/auth/login'
+      && localStorage.getItem('token')) {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     location.reload()

@@ -150,3 +150,37 @@ tr.dayoff td { background: #fef2f2; }
 .login-err { color: #dc2626; font-size: 13px; }
 .me { margin-left: 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
 button.logout { padding: 3px 10px; font-size: 12px; }
+
+/* 메인(모바일 스타일) */
+.home-wrap { max-width: 480px; margin: 0 auto; }
+.home-search {
+  width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 24px;
+  border: 1px solid #e5e7eb; margin-bottom: 12px; outline: none;
+}
+.home-search:focus { border-color: #3b82f6; }
+.home-card {
+  background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); cursor: pointer;
+}
+.home-card.open { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.home-row { display: flex; align-items: center; gap: 10px; }
+.home-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.home-main { flex: 1; min-width: 0; }
+.home-title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-pri { color: #2563eb; margin-right: 4px; font-size: 13px; }
+.home-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.home-stat {
+  flex-shrink: 0; font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  background: #e5e7eb; color: #374151;
+}
+.home-stat.st-W { background: #dbeafe; color: #1d4ed8; }
+.home-stat.st-P { background: #fef3c7; color: #92400e; }
+.home-stat.st-F { background: #dcfce7; color: #15803d; }
+.home-stat.st-C { background: #f3f4f6; color: #9ca3af; }
+.home-detail {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid #f3f4f6;
+  font-size: 13px; display: flex; flex-direction: column; gap: 5px;
+}
+.home-detail div { display: flex; justify-content: space-between; gap: 12px; }
+.home-detail span { color: #6b7280; flex-shrink: 0; }
+.home-empty { text-align: center; color: #9ca3af; padding: 40px 0; }

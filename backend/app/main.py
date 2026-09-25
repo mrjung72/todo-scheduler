@@ -38,7 +38,10 @@ _AUTH_OPEN = {"/api/auth/login", "/api/health", "/api/config"}
 @app.middleware("http")
 async def auth_guard(request, call_next):
     path = request.url.path
-    if request.method == "OPTIONS" or not path.startswith("/api") or path in _AUTH_OPEN:
+    # GET /api/tasks 는 홈 화면 공개 조회용으로 토큰 없이 허용
+    if (request.method == "OPTIONS" or not path.startswith("/api")
+            or path in _AUTH_OPEN
+            or (request.method == "GET" and path == "/api/tasks")):
         return await call_next(request)
     token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     if not parse_token(token):
@@ -106,10 +109,6 @@ def startup():
     db = SessionLocal()
     try:
         migrate(db)
-        seed(db)
-    finally:
-        db.close()
-    try:
         seed(db)
     finally:
         db.close()
