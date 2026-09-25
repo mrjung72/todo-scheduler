@@ -6,6 +6,7 @@ from ..database import get_db
 from ..models import Task, User, Site, WorkSchedule
 from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail
 from ..scheduler import recalculate
+from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -109,28 +110,35 @@ def list_tasks(
 
 
 @router.post("/recalculate")
-def recalc(db: Session = Depends(get_db)):
-    """우선순위 기준으로 전체 작업의 시작/종료일시를 재계산.
+def recalc(db: Session = Depends(get_db),
+           me: User = Depends(get_current_user)):
+    """우선순위 기준으로 작업의 시작/종료일시를 재계산.
 
+    관리자는 전체, 개발자는 본인 작업만 대상으로 한다.
     스케줄이 없는 대기중 작업은 스케줄을 자동 생성해 함께 배치한다."""
-    updated, created = recalculate(db)
+    updated, created = recalculate(db, only_userid=None if me.user_grade == 0 else me.userid)
     return {"updated": updated, "created": created}
 
 
 @router.post("/auto-schedule/{taskid}", response_model=TaskDetail)
-def auto_schedule_one(taskid: int, db: Session = Depends(get_db)):
+def auto_schedule_one(taskid: int, db: Session = Depends(get_db),
+                      me: User = Depends(get_current_user)):
     """단일 작업 자동 스케줄 (해당 작업자 라인의 마지막에 배치)."""
     task = db.get(Task, taskid)
     if not task:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    recalculate(db)  # 단순화: 전체 재계산과 동일 로직 사용
+    recalculate(db, only_userid=None if me.user_grade == 0 else me.userid)
     row = _detail_query(db).filter(Task.taskid == taskid).first()
     return _to_detail(row)
 
 
 @router.post("", response_model=TaskOut, status_code=201)
-def create_task(body: TaskCreate, db: Session = Depends(get_db)):
-    task = Task(**body.model_dump())
+def create_task(body: TaskCreate, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
+    data = body.model_dump()
+    if me.user_grade != 0:
+        data["work_userid"] = me.userid  # 비관리자는 자기 작업만 등록 가능
+    task = Task(**data)
     db.add(task)
     db.flush()  # taskid 확보
     # 대표 작업스케줄 자동 생성 (작업자는 작업의 work_userid)
@@ -143,11 +151,15 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{taskid}", response_model=TaskOut)
-def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db)):
+def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
     obj = db.get(Task, taskid)
     if not obj:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
+    check_owner_or_admin(me, obj.work_userid)
     data = body.model_dump(exclude_unset=True)
+    if me.user_grade != 0 and "work_userid" in data and data["work_userid"] != me.userid:
+        raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
     for k, v in data.items():
         setattr(obj, k, v)
     # 작업자 변경 시 대기중 스케줄의 작업자도 함께 갱신
@@ -162,10 +174,12 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{taskid}", status_code=204)
-def delete_task(taskid: int, db: Session = Depends(get_db)):
+def delete_task(taskid: int, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
     obj = db.get(Task, taskid)
     if not obj:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
+    check_owner_or_admin(me, obj.work_userid)
     db.query(WorkSchedule).filter(WorkSchedule.taskid == taskid).delete()
     db.delete(obj)
     db.commit()

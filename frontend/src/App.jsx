@@ -57,7 +57,7 @@ export default function App() {
           <NavLink to="/" end>홈</NavLink>
           <NavLink to="/tasks">작업목록</NavLink>
           <NavLink to="/calendar">달력</NavLink>
-          {me.user_grade === 0 && <NavLink to="/admin">관리자</NavLink>}
+          {[0, 1].includes(me.user_grade) && <NavLink to="/admin">관리자</NavLink>}
         </nav>
         {cfg && (
           <span className="workhours" title={`WORK_SEGMENTS=${cfg.work_segments}`}>
@@ -76,7 +76,7 @@ export default function App() {
           <Route path="/tasks" element={<TaskList />} />
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/admin" element={
-            me.user_grade === 0 ? <Admin /> : <Navigate to="/tasks" replace />
+            [0, 1].includes(me.user_grade) ? <Admin /> : <Navigate to="/tasks" replace />
           } />
         </Routes>
       </main>

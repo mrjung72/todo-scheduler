@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..models import WorkSchedule, Task, User, Site
 from ..schemas import ScheduleCreate, ScheduleUpdate, ScheduleOut
+from ..security import get_current_user, check_owner_or_admin
 from ..scheduler import (
     get_calendar_map, get_holiday_map, next_work_start, add_work_hours,
     worker_segments,
@@ -94,8 +95,12 @@ def daily_hours(workschid: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ScheduleOut, status_code=201)
-def create_schedule(body: ScheduleCreate, db: Session = Depends(get_db)):
-    obj = WorkSchedule(**body.model_dump())
+def create_schedule(body: ScheduleCreate, db: Session = Depends(get_db),
+                    me: User = Depends(get_current_user)):
+    data = body.model_dump()
+    if me.user_grade != 0:
+        data["work_userid"] = me.userid  # 비관리자는 자기 스케줄만 생성 가능
+    obj = WorkSchedule(**data)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -107,11 +112,13 @@ class StartSet(BaseModel):
 
 
 @router.patch("/{workschid}/start", response_model=ScheduleOut)
-def set_start(workschid: int, body: StartSet, db: Session = Depends(get_db)):
+def set_start(workschid: int, body: StartSet, db: Session = Depends(get_db),
+              me: User = Depends(get_current_user)):
     """시작일시 수동 설정 -> start_fixed=1 로 고정하고 종료일시 재계산."""
     sched = db.get(WorkSchedule, workschid)
     if not sched:
         raise HTTPException(404, "스케줄을 찾을 수 없습니다")
+    check_owner_or_admin(me, sched.work_userid)
     task = db.get(Task, sched.taskid)
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
@@ -130,11 +137,13 @@ def set_start(workschid: int, body: StartSet, db: Session = Depends(get_db)):
 
 
 @router.patch("/{workschid}/unfix", response_model=ScheduleOut)
-def unfix_start(workschid: int, db: Session = Depends(get_db)):
+def unfix_start(workschid: int, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
     """수동 시작일시 고정 해제 -> 다음 재계산 시 자동 배치."""
     sched = db.get(WorkSchedule, workschid)
     if not sched:
         raise HTTPException(404, "스케줄을 찾을 수 없습니다")
+    check_owner_or_admin(me, sched.work_userid)
     sched.start_fixed = 0
     db.commit()
     db.refresh(sched)
@@ -142,11 +151,16 @@ def unfix_start(workschid: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{workschid}", response_model=ScheduleOut)
-def update_schedule(workschid: int, body: ScheduleUpdate, db: Session = Depends(get_db)):
+def update_schedule(workschid: int, body: ScheduleUpdate, db: Session = Depends(get_db),
+                    me: User = Depends(get_current_user)):
     obj = db.get(WorkSchedule, workschid)
     if not obj:
         raise HTTPException(404, "스케줄을 찾을 수 없습니다")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    check_owner_or_admin(me, obj.work_userid)
+    data = body.model_dump(exclude_unset=True)
+    if me.user_grade != 0 and "work_userid" in data and data["work_userid"] != me.userid:
+        raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
+    for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
@@ -154,9 +168,11 @@ def update_schedule(workschid: int, body: ScheduleUpdate, db: Session = Depends(
 
 
 @router.delete("/{workschid}", status_code=204)
-def delete_schedule(workschid: int, db: Session = Depends(get_db)):
+def delete_schedule(workschid: int, db: Session = Depends(get_db),
+                    me: User = Depends(get_current_user)):
     obj = db.get(WorkSchedule, workschid)
     if not obj:
         raise HTTPException(404, "스케줄을 찾을 수 없습니다")
+    check_owner_or_admin(me, obj.work_userid)
     db.delete(obj)
     db.commit()

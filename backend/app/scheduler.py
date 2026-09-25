@@ -139,9 +139,10 @@ def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None, u
         cur = next_work_start(datetime.combine(d + timedelta(days=1), time(0, 0)), cal, hol, userid)
 
 
-def recalculate(db: Session) -> tuple:
+def recalculate(db: Session, only_userid: str = None) -> tuple:
     """대기중(W) 작업의 스케줄 재계산. (갱신된 스케줄 수, 신규 생성 수) 반환.
 
+    only_userid 가 주어지면 해당 작업자의 스케줄/작업만 대상으로 한다.
     스케줄이 없는 대기중 작업은 work_userid=itos_userid 로 스케줄을 자동 생성한다.
     """
     cal = get_calendar_map(db)
@@ -150,7 +151,10 @@ def recalculate(db: Session) -> tuple:
     # 스케줄이 없는 대기중/작업중 작업 -> 스케줄 자동 생성 (작업자는 IT담당자 기본 배정)
     scheduled_taskids = {r[0] for r in db.query(WorkSchedule.taskid).all()}
     created = 0
-    for t in db.query(Task).filter(Task.task_stat.in_(["W", "P"])).all():
+    task_q = db.query(Task).filter(Task.task_stat.in_(["W", "P"]))
+    if only_userid:
+        task_q = task_q.filter(Task.work_userid == only_userid)
+    for t in task_q.all():
         if t.taskid not in scheduled_taskids:
             db.add(WorkSchedule(taskid=t.taskid, work_stat=t.task_stat,
                                 work_userid=t.work_userid or t.itos_userid))
@@ -163,8 +167,10 @@ def recalculate(db: Session) -> tuple:
         .join(Task, WorkSchedule.taskid == Task.taskid)
         .filter(Task.task_stat == "W")          # 대기중 작업만 재계산
         .filter(WorkSchedule.work_stat == "W")
-        .all()
     )
+    if only_userid:
+        rows = rows.filter(WorkSchedule.work_userid == only_userid)
+    rows = rows.all()
 
     # 작업자별 그룹화
     groups: dict = {}

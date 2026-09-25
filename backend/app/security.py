@@ -9,6 +9,12 @@ import hmac
 import os
 import time
 
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+
+from .database import get_db
+from .models import User
+
 _ITER = 100_000
 _TOKEN_TTL = 60 * 60 * 12          # 12시간
 _SECRET = os.getenv("SECRET_KEY", "todo-scheduler-secret")
@@ -49,3 +55,25 @@ def parse_token(token: str):
         return userid
     except Exception:
         return None
+
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """Authorization Bearer 토큰 -> 현재 User (권한 검사용 의존성)."""
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    uid = parse_token(token)
+    user = db.get(User, uid) if uid else None
+    if not user:
+        raise HTTPException(401, "로그인이 필요합니다")
+    return user
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if user.user_grade != 0:
+        raise HTTPException(403, "관리자 권한이 필요합니다")
+    return user
+
+
+def check_owner_or_admin(user: User, work_userid):
+    """비관리자는 자기 작업(work_userid == 본인)만 수정 가능."""
+    if user.user_grade != 0 and work_userid != user.userid:
+        raise HTTPException(403, "자신의 작업만 수정할 수 있습니다")

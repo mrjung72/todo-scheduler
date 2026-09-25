@@ -2,20 +2,26 @@ import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL } from '../api'
 
 const TABS = [
-  { key: 'users', label: '사용자' },
-  { key: 'sites', label: '사이트' },
+  { key: 'users', label: '사용자', adminOnly: true },
+  { key: 'sites', label: '사이트', adminOnly: true },
   { key: 'tasks', label: '작업' },
-  { key: 'calendar', label: '달력' },
+  { key: 'calendar', label: '달력', adminOnly: true },
   { key: 'holidays', label: '작업자휴가' },
   { key: 'schedules', label: '작업스케줄' },
 ]
 
+// 개발자(등급 1)도 접근 가능한 탭. 비관리자는 자기 작업만 수정 가능.
+const isAdmin = () => JSON.parse(localStorage.getItem('user') || 'null')?.user_grade === 0
+const myId = () => JSON.parse(localStorage.getItem('user') || 'null')?.userid
+
 export default function Admin() {
-  const [tab, setTab] = useState('users')
+  const admin = isAdmin()
+  const visibleTabs = admin ? TABS : TABS.filter(t => !t.adminOnly)
+  const [tab, setTab] = useState(admin ? 'users' : 'tasks')
   return (
     <div>
       <div className="tabs">
-        {TABS.map(t => (
+        {visibleTabs.map(t => (
           <button key={t.key} className={tab === t.key ? 'tab active' : 'tab'}
             onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
@@ -31,9 +37,13 @@ export default function Admin() {
 }
 
 /* ---------------- 공통 ---------------- */
-function EditableCell({ value, onSave, type = 'text', options }) {
+function EditableCell({ value, onSave, type = 'text', options, disabled }) {
   const [v, setV] = useState(value ?? '')
   useEffect(() => setV(value ?? ''), [value])
+  if (disabled) {
+    const label = options?.find(o => o.value === value)?.label
+    return <span>{label ?? value ?? ''}</span>
+  }
   if (options) {
     return (
       <select value={v} onChange={e => { setV(e.target.value); onSave(e.target.value) }}>
@@ -203,20 +213,24 @@ function TasksTab() {
   const del = id => window.confirm(`작업 #${id} 삭제?`) &&
     api.delete(`/tasks/${id}`).then(load)
 
+  const admin = isAdmin()
+  const can = t => admin || t.work_userid === myId()
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
+  const devOpt = admin ? uopt([1])
+    : uopt([1]).filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
 
-  const filtered = !q.trim() ? rows : rows.filter(t => {
+  const filtered = (!q.trim() ? rows : rows.filter(t => {
     const kw = q.trim().toLowerCase()
     return [
       t.task_name, t.task_csrid, t.task_req_remark, t.site_name, t.siteid,
       t.req_userid, t.req_user_name, t.itos_userid, t.itos_user_name,
       t.work_userid, t.work_user_name, STAT_LABEL[t.task_stat],
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
-  })
+  })).filter(t => admin || t.work_userid === myId())  // 비관리자: 본인 작업만
 
   return (
     <div>
@@ -231,11 +245,13 @@ function TasksTab() {
         <input type="number" className="num" step="0.5" placeholder="예상시간"
           value={form.work_hours_estimated}
           onChange={e => setForm({ ...form, work_hours_estimated: +e.target.value })} />
-        <select value={form.work_userid}
-          onChange={e => setForm({ ...form, work_userid: e.target.value })}>
-          <option value="">작업자(개발자)</option>
-          {uopt([1]).slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        {admin && (
+          <select value={form.work_userid}
+            onChange={e => setForm({ ...form, work_userid: e.target.value })}>
+            <option value="">작업자(개발자)</option>
+            {devOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        )}
         <button type="submit">추가</button>
       </form>
       <div className="toolbar">
@@ -251,25 +267,33 @@ function TasksTab() {
           {filtered.map(t => (
             <tr key={t.taskid}>
               <td>{t.taskid}</td>
-              <td><EditableCell value={t.task_name} onSave={v => save(t.taskid, { task_name: v })} /></td>
-              <td><EditableCell value={t.siteid} onSave={v => save(t.taskid, { siteid: v })} options={sopt} /></td>
-              <td><EditableCell type="number" value={t.priority} onSave={v => save(t.taskid, { priority: v })} /></td>
-              <td><EditableCell type="number" value={t.work_hours_estimated}
+              <td><EditableCell value={t.task_name} disabled={!can(t)}
+                onSave={v => save(t.taskid, { task_name: v })} /></td>
+              <td><EditableCell value={t.siteid} disabled={!can(t)}
+                onSave={v => save(t.taskid, { siteid: v })} options={sopt} /></td>
+              <td><EditableCell type="number" value={t.priority} disabled={!can(t)}
+                onSave={v => save(t.taskid, { priority: v })} /></td>
+              <td><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t)}
                 onSave={v => save(t.taskid, { work_hours_estimated: v })} /></td>
-              <td><EditableCell type="number" value={t.work_hours_real}
+              <td><EditableCell type="number" value={t.work_hours_real} disabled={!can(t)}
                 onSave={v => save(t.taskid, { work_hours_real: v })} /></td>
-              <td><EditableCell value={t.task_stat} onSave={v => save(t.taskid, { task_stat: v })}
+              <td><EditableCell value={t.task_stat} disabled={!can(t)}
+                onSave={v => save(t.taskid, { task_stat: v })}
                 options={Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))} /></td>
-              <td><EditableCell value={t.task_csrid} onSave={v => save(t.taskid, { task_csrid: v })} /></td>
-              <td><EditableCell value={t.req_userid} onSave={v => save(t.taskid, { req_userid: v })}
+              <td><EditableCell value={t.task_csrid} disabled={!can(t)}
+                onSave={v => save(t.taskid, { task_csrid: v })} /></td>
+              <td><EditableCell value={t.req_userid} disabled={!can(t)}
+                onSave={v => save(t.taskid, { req_userid: v })}
                 options={uopt([3, 9])} /></td>
-              <td><EditableCell value={t.itos_userid} onSave={v => save(t.taskid, { itos_userid: v })}
+              <td><EditableCell value={t.itos_userid} disabled={!can(t)}
+                onSave={v => save(t.taskid, { itos_userid: v })}
                 options={uopt([0, 2])} /></td>
-              <td><EditableCell value={t.work_userid} onSave={v => save(t.taskid, { work_userid: v })}
-                options={uopt([1])} /></td>
-              <td><EditableCell value={t.task_req_remark}
+              <td><EditableCell value={t.work_userid} disabled={!admin}
+                onSave={v => save(t.taskid, { work_userid: v })}
+                options={devOpt} /></td>
+              <td><EditableCell value={t.task_req_remark} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_req_remark: v })} /></td>
-              <td>{['W', 'C'].includes(t.task_stat) &&
+              <td>{['W', 'C'].includes(t.task_stat) && can(t) &&
                 <button className="danger" onClick={() => del(t.taskid)}>삭제</button>}</td>
             </tr>
           ))}
@@ -343,8 +367,10 @@ function HolidaysTab() {
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
   const [filterUser, setFilterUser] = useState('')
-  const empty = { date: '', work_userid: '', holiday_category: 'A',
-    holiday_hours: 4, holiday_remark: '' }
+  const admin = isAdmin()
+  const can = h => admin || h.work_userid === myId()
+  const empty = { date: '', work_userid: admin ? '' : (myId() || ''),
+    holiday_category: 'A', holiday_hours: 4, holiday_remark: '' }
   const [form, setForm] = useState(empty)
 
   const load = useCallback(() => {
@@ -352,9 +378,10 @@ function HolidaysTab() {
       start: month.replace('-', '') + '01',
       end: month.replace('-', '') + '31',
     }
-    if (filterUser) params.work_userid = filterUser
+    const uid = admin ? filterUser : myId()   // 비관리자: 본인 휴가만 조회
+    if (uid) params.work_userid = uid
     api.get('/user-holidays', { params }).then(r => setRows(r.data))
-  }, [month, filterUser])
+  }, [month, filterUser, admin])
   useEffect(() => {
     load()
     api.get('/users').then(r => setUsers(r.data))
@@ -387,11 +414,13 @@ function HolidaysTab() {
       <form className="newtask" onSubmit={add}>
         <input type="date" required value={form.date}
           onChange={e => setForm({ ...form, date: e.target.value })} />
-        <select required value={form.work_userid}
-          onChange={e => setForm({ ...form, work_userid: e.target.value })}>
-          <option value="">작업자 선택</option>
-          {users.map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-        </select>
+        {admin && (
+          <select required value={form.work_userid}
+            onChange={e => setForm({ ...form, work_userid: e.target.value })}>
+            <option value="">작업자 선택</option>
+            {users.map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+          </select>
+        )}
         <select value={form.holiday_category}
           onChange={e => setForm({ ...form, holiday_category: e.target.value })}>
           {catOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -407,9 +436,11 @@ function HolidaysTab() {
       </form>
       <div className="toolbar">
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
-        <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
-          {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        {admin && (
+          <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+            {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        )}
         <span className="hint">
           종일(A)은 해당일 근무 제외, 일부(P)는 휴가시간만큼 근무시간 차감(하루 뒤쪽부터).
           반영은 [작업목록]의 재적용 시 적용됩니다.
@@ -424,13 +455,14 @@ function HolidaysTab() {
             <tr key={`${h.dateid}-${h.work_userid}`}>
               <td>{h.dateid.slice(0,4)}-{h.dateid.slice(4,6)}-{h.dateid.slice(6,8)}</td>
               <td>{h.user_name || h.work_userid}</td>
-              <td><EditableCell value={h.holiday_category}
+              <td><EditableCell value={h.holiday_category} disabled={!can(h)}
                 onSave={v => save(h, { holiday_category: v })} options={catOptions} /></td>
-              <td><EditableCell type="number" value={h.holiday_hours}
+              <td><EditableCell type="number" value={h.holiday_hours} disabled={!can(h)}
                 onSave={v => save(h, { holiday_hours: v })} /></td>
-              <td><EditableCell value={h.holiday_remark}
+              <td><EditableCell value={h.holiday_remark} disabled={!can(h)}
                 onSave={v => save(h, { holiday_remark: v })} /></td>
-              <td><button className="danger" onClick={() => del(h)}>삭제</button></td>
+              <td>{can(h) &&
+                <button className="danger" onClick={() => del(h)}>삭제</button>}</td>
             </tr>
           ))}
           {rows.length === 0 && <tr><td colSpan="6" className="empty">등록된 휴가가 없습니다</td></tr>}
@@ -448,7 +480,10 @@ function SchedulesTab() {
   const [editStart, setEditStart] = useState({})
   const [msg, setMsg] = useState('')
   const [q, setQ] = useState('')
-  const empty = { taskid: '', work_userid: '', work_stat: 'W', work_remark: '' }
+  const admin = isAdmin()
+  const can = s => admin || s.work_userid === myId()
+  const empty = { taskid: '', work_userid: admin ? '' : (myId() || ''),
+    work_stat: 'W', work_remark: '' }
   const [form, setForm] = useState(empty)
 
   const load = useCallback(() => {
@@ -484,7 +519,8 @@ function SchedulesTab() {
     const v = editStart[workschid]
     if (!v) return
     await api.patch(`/schedules/${workschid}/start`, {
-      start_datetime: new Date(v).toISOString(),
+      // 로컬 naive 시각 그대로 전송 (toISOString은 UTC로 밀림)
+      start_datetime: v.length === 16 ? v + ':00' : v,
     })
     setEditStart(s => ({ ...s, [workschid]: '' }))
     load()
@@ -508,14 +544,14 @@ function SchedulesTab() {
   const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
 
   const userName = id => users.find(u => u.userid === id)?.user_name ?? ''
-  const filtered = !q.trim() ? rows : rows.filter(s => {
+  const filtered = (!q.trim() ? rows : rows.filter(s => {
     const t = taskOf(s.taskid)
     const kw = q.trim().toLowerCase()
     return [
       t?.task_name, s.work_userid, userName(s.work_userid),
       s.work_remark, STAT_LABEL[s.work_stat],
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
-  })
+  })).filter(s => admin || s.work_userid === myId())  // 비관리자: 본인 스케줄만
 
   return (
     <div>
@@ -530,11 +566,13 @@ function SchedulesTab() {
           <option value="">작업 선택</option>
           {topt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select value={form.work_userid}
-          onChange={e => setForm({ ...form, work_userid: e.target.value })}>
-          <option value="">작업자</option>
-          {uopt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        {admin && (
+          <select value={form.work_userid}
+            onChange={e => setForm({ ...form, work_userid: e.target.value })}>
+            <option value="">작업자</option>
+            {uopt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        )}
         <input placeholder="작업내용" value={form.work_remark}
           onChange={e => setForm({ ...form, work_remark: e.target.value })} />
         <button type="submit">추가</button>
@@ -556,19 +594,20 @@ function SchedulesTab() {
             return (
               <tr key={s.workschid}>
                 <td>{s.workschid}</td>
-                <td><EditableCell value={s.taskid} onSave={v => saveSched(s.workschid, { taskid: v })}
+                <td><EditableCell value={s.taskid} disabled={!admin}
+                  onSave={v => saveSched(s.workschid, { taskid: v })}
                   options={topt} /></td>
-                <td><EditableCell type="number" value={t?.priority ?? ''}
+                <td><EditableCell type="number" value={t?.priority ?? ''} disabled={!can(s)}
                   onSave={v => t && saveTask(t.taskid, { priority: v })} /></td>
-                <td><EditableCell type="number" value={t?.work_hours_estimated ?? ''}
+                <td><EditableCell type="number" value={t?.work_hours_estimated ?? ''} disabled={!can(s)}
                   onSave={v => t && saveTask(t.taskid, { work_hours_estimated: v })} /></td>
-                <td><EditableCell value={s.work_userid}
+                <td><EditableCell value={s.work_userid} disabled={!admin}
                   onSave={v => saveSched(s.workschid, { work_userid: v })}
                   options={woptFor(s.work_userid)} /></td>
-                <td><EditableCell value={s.work_stat}
+                <td><EditableCell value={s.work_stat} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_stat: v })}
                   options={statOpt} /></td>
-                <td><EditableCell value={s.work_remark}
+                <td><EditableCell value={s.work_remark} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_remark: v })} /></td>
                 <td>
                   {fmtDT(s.start_datetime)}
@@ -577,15 +616,17 @@ function SchedulesTab() {
                 <td>{fmtDT(s.end_datetime_estimated)}</td>
                 <td>{fmtDT(s.end_datetime_real)}</td>
                 <td>
-                  <span className="startset">
-                    <input type="datetime-local"
-                      value={editStart[s.workschid] ?? ''}
-                      onChange={e => setEditStart(st => ({ ...st, [s.workschid]: e.target.value }))} />
-                    <button onClick={() => setStart(s.workschid)}>설정</button>
-                    {s.start_fixed ? <button onClick={() => unfix(s.workschid)}>해제</button> : null}
-                  </span>
+                  {can(s) && (
+                    <span className="startset">
+                      <input type="datetime-local"
+                        value={editStart[s.workschid] ?? ''}
+                        onChange={e => setEditStart(st => ({ ...st, [s.workschid]: e.target.value }))} />
+                      <button onClick={() => setStart(s.workschid)}>설정</button>
+                      {s.start_fixed ? <button onClick={() => unfix(s.workschid)}>해제</button> : null}
+                    </span>
+                  )}
                 </td>
-                <td>{['W', 'C'].includes(s.work_stat) &&
+                <td>{['W', 'C'].includes(s.work_stat) && can(s) &&
                   <button className="danger" onClick={() => del(s.workschid)}>삭제</button>}</td>
               </tr>
             )
