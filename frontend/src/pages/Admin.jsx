@@ -331,7 +331,7 @@ function CalendarTab() {
         <input type="number" className="num" value={year}
           onChange={e => setYear(+e.target.value)} style={{ width: 90 }} />
         <button onClick={generate}>해당 연도 달력 생성</button>
-        <span className="hint">휴일(H)/휴가(V)로 지정된 날은 스케줄 계산에서 제외됩니다.</span>
+        <span className="hint">휴일(H)로 지정된 날은 스케줄 계산에서 제외됩니다.</span>
       </div>
       <table className="grid">
         <thead><tr><th>일자ID</th><th>일자</th><th>요일</th><th>상태</th><th>설명</th></tr></thead>

@@ -73,7 +73,7 @@ CREATE TABLE tasks (
 CREATE TABLE calendar_define (
     dateid TEXT PRIMARY KEY,       -- 일자ID (yyyymmdd)
     date_name TEXT NOT NULL,       -- 일자 라벨 (yyyy-mm-dd)
-	date_stat TEXT,                -- 일자상태(W-근무일, H-휴일, V-휴가)
+	date_stat TEXT,                -- 일자상태(W-근무일, H-휴일)
 	holiday_remark TEXT            -- 휴일 설명
 );
 

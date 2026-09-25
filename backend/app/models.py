@@ -51,7 +51,7 @@ class CalendarDefine(Base):
     __tablename__ = "calendar_define"
     dateid = Column(Text, primary_key=True)   # yyyymmdd
     date_name = Column(Text, nullable=False)  # yyyy-mm-dd
-    date_stat = Column(Text, default="W")     # W-근무일, H-휴일, V-휴가
+    date_stat = Column(Text, default="W")     # W-근무일, H-휴일
     holiday_remark = Column(Text)
 
 

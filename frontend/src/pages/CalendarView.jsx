@@ -52,7 +52,7 @@ export default function CalendarView() {
         start: `${d.dateid.slice(0, 4)}-${d.dateid.slice(4, 6)}-${d.dateid.slice(6, 8)}`,
         allDay: true,
         display: 'background',
-        color: d.date_stat === 'V' ? 'rgba(251,140,0,.25)' : 'rgba(229,57,53,.18)',
+        color: 'rgba(229,57,53,.18)',
         title: d.holiday_remark || DAY_STAT_LABEL[d.date_stat],
       }))
     )
@@ -83,7 +83,7 @@ export default function CalendarView() {
     const day = dayMap[date.replaceAll('-', '')]
     setHolForm({ date, ...emptyHol,
       work_userid: admin ? '' : me.userid,   // 개발자는 본인 고정
-      date_stat: day?.date_stat === 'W' ? 'H' : (day?.date_stat || 'H'),
+      date_stat: 'H',
       holiday_remark: day?.holiday_remark || '' })
   }
 
@@ -91,7 +91,7 @@ export default function CalendarView() {
     e.preventDefault()
     const dateid = holForm.date.replaceAll('-', '')
     if (holForm.kind === 'day') {
-      // 공통 휴일/휴가: calendar_define 에 없으면 생성, 있으면 갱신
+      // 공통 휴일: calendar_define 에 없으면 생성, 있으면 갱신
       if (dayMap[dateid]) {
         await api.put(`/calendar/${dateid}`, {
           date_stat: holForm.date_stat,
@@ -318,7 +318,7 @@ export default function CalendarView() {
                   <select value={holForm.kind}
                     onChange={e => setHolForm({ ...holForm, kind: e.target.value })}>
                     <option value="user">개인 휴가</option>
-                    <option value="day">공통 휴일/휴가</option>
+                    <option value="day">공통 휴일</option>
                   </select>
                 </label>
               )}

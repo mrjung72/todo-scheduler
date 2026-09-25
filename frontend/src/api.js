@@ -37,7 +37,6 @@ export const STAT_LABEL = {
 export const DAY_STAT_LABEL = {
   W: '근무일',
   H: '휴일',
-  V: '휴가',
 }
 
 export const GRADE_LABEL = {

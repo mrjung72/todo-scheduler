@@ -1,7 +1,7 @@
 """근무일 기준 작업 스케줄 자동계산 엔진.
 
 근무시간: 환경변수 WORK_SEGMENTS 로 설정 (기본 "09:00-12:00,13:00-18:00" = 하루 8시간)
-비근무일: 토/일 + calendar_define 에서 date_stat 이 'H'(휴일) 또는 'V'(휴가)인 날
+비근무일: 토/일 + calendar_define 에서 date_stat 이 'H'(휴일)인 날
 calendar_define 에 없는 날짜는 월~금=근무일, 토/일=휴일로 간주.
 작업자별 휴가: user_holiday 에 해당 작업자+일자가 있으면
   A(종일) -> 그날 근무 불가, P(일부) -> holiday_hours 만큼 하루 근무시간 차감(하루 뒤쪽부터 차감)
