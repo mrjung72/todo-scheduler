@@ -3,8 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import CalendarDefine
+from ..models import CalendarDefine, User
 from ..schemas import CalendarCreate, CalendarUpdate, CalendarOut
+from ..security import require_planner
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])
 
@@ -27,6 +28,7 @@ def list_calendar(
 def generate_calendar(
     year: int = Query(..., description="생성할 연도 (예: 2026)"),
     db: Session = Depends(get_db),
+    me: User = Depends(require_planner),
 ):
     """해당 연도 전체 날짜를 생성. 월~금=W, 토/일=H. 기존 행은 유지."""
     d = date(year, 1, 1)
@@ -49,7 +51,8 @@ def generate_calendar(
 
 
 @router.post("", response_model=CalendarOut, status_code=201)
-def create_calendar_day(body: CalendarCreate, db: Session = Depends(get_db)):
+def create_calendar_day(body: CalendarCreate, db: Session = Depends(get_db),
+                        me: User = Depends(require_planner)):
     if db.get(CalendarDefine, body.dateid):
         raise HTTPException(409, "이미 존재하는 일자입니다")
     obj = CalendarDefine(**body.model_dump())
@@ -60,7 +63,8 @@ def create_calendar_day(body: CalendarCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{dateid}", response_model=CalendarOut)
-def update_calendar_day(dateid: str, body: CalendarUpdate, db: Session = Depends(get_db)):
+def update_calendar_day(dateid: str, body: CalendarUpdate, db: Session = Depends(get_db),
+                        me: User = Depends(require_planner)):
     obj = db.get(CalendarDefine, dateid)
     if not obj:
         raise HTTPException(404, "일자를 찾을 수 없습니다")
@@ -72,7 +76,8 @@ def update_calendar_day(dateid: str, body: CalendarUpdate, db: Session = Depends
 
 
 @router.delete("/{dateid}", status_code=204)
-def delete_calendar_day(dateid: str, db: Session = Depends(get_db)):
+def delete_calendar_day(dateid: str, db: Session = Depends(get_db),
+                        me: User = Depends(require_planner)):
     obj = db.get(CalendarDefine, dateid)
     if not obj:
         raise HTTPException(404, "일자를 찾을 수 없습니다")

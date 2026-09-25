@@ -14,6 +14,13 @@ const fmtLocal = d => {
 }
 
 export default function CalendarView() {
+  const me = JSON.parse(localStorage.getItem('user') || 'null')
+  const admin = me?.user_grade === 0
+  // 휴일/휴가 등록: 관리자(0)·개발자(1)·IT담당자(2) (비관리자는 본인 휴가만)
+  const canReg = me && [0, 1, 2].includes(me.user_grade)
+  // 수정 가능: 관리자(0)는 전부, 개발자(1)는 본인 작업만
+  const canEdit = s => !s.holiday && me &&
+    (me.user_grade === 0 || (me.user_grade === 1 && s.work_userid === me.userid))
   const [events, setEvents] = useState([])
   const [dayEvents, setDayEvents] = useState([])
   const [holEvents, setHolEvents] = useState([])
@@ -70,10 +77,12 @@ export default function CalendarView() {
   const onDateClick = (info) => {
     // 이벤트(작업바/휴가바) 위 클릭은 eventClick이 처리 -> 여기선 건너뜀
     if (info.jsEvent.target.closest('.fc-daygrid-event-harness, .fc-event')) return
+    if (!canReg) return  // 관리자/개발자만 휴일·휴가 등록 가능
     setSelected(null)
     const date = info.dateStr.slice(0, 10)
     const day = dayMap[date.replaceAll('-', '')]
     setHolForm({ date, ...emptyHol,
+      work_userid: admin ? '' : me.userid,   // 개발자는 본인 고정
       date_stat: day?.date_stat === 'W' ? 'H' : (day?.date_stat || 'H'),
       holiday_remark: day?.holiday_remark || '' })
   }
@@ -292,7 +301,7 @@ export default function CalendarView() {
             )}
             {!editForm && (
               <div className="popup-btns">
-                {!selected.holiday && <button onClick={startEdit}>수정</button>}
+                {canEdit(selected) && <button onClick={startEdit}>수정</button>}
                 <button onClick={() => setSelected(null)}>닫기</button>
               </div>
             )}
@@ -304,22 +313,28 @@ export default function CalendarView() {
           <div className="popup-body" onClick={e => e.stopPropagation()}>
             <h3>{holForm.date.slice(5).replace('-', '/')} 휴일/휴가 등록</h3>
             <form className="holiday-form" onSubmit={saveHoliday}>
-              <label>등록구분
-                <select value={holForm.kind}
-                  onChange={e => setHolForm({ ...holForm, kind: e.target.value })}>
-                  <option value="user">개인 휴가</option>
-                  <option value="day">공통 휴일/휴가</option>
-                </select>
-              </label>
+              {canReg && (
+                <label>등록구분
+                  <select value={holForm.kind}
+                    onChange={e => setHolForm({ ...holForm, kind: e.target.value })}>
+                    <option value="user">개인 휴가</option>
+                    <option value="day">공통 휴일/휴가</option>
+                  </select>
+                </label>
+              )}
               {holForm.kind === 'user' ? (
                 <>
                   <label>작업자
-                    <select required value={holForm.work_userid}
-                      onChange={e => setHolForm({ ...holForm, work_userid: e.target.value })}>
-                      <option value="">선택</option>
-                      {users.filter(u => u.user_grade === 1)
-                        .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-                    </select>
+                    {admin ? (
+                      <select required value={holForm.work_userid}
+                        onChange={e => setHolForm({ ...holForm, work_userid: e.target.value })}>
+                        <option value="">선택</option>
+                        {users.filter(u => u.user_grade === 1)
+                          .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+                      </select>
+                    ) : (
+                      <span>{users.find(u => u.userid === me.userid)?.user_name || me.userid}</span>
+                    )}
                   </label>
                   <label>구분
                     <select value={holForm.holiday_category}
