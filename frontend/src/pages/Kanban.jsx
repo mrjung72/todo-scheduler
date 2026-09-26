@@ -106,7 +106,7 @@ export default function Kanban() {
                       <div className="kb-title">
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_csrid && <span className="kb-csr">{t.task_csrid}</span>}
-                        <button className="link" onClick={() => setSel(t)}>{t.task_name}</button>
+                        {t.task_name}
                       </div>
                       <div className="kb-sub">
                         {t.work_user_name || t.work_userid || '-'}
@@ -117,6 +117,8 @@ export default function Kanban() {
                         {t.start_datetime &&
                           <span>{fmtDT(t.start_datetime)}~{fmtDT(t.end_datetime_estimated)}</span>}
                       </div>
+                      <button className="kb-detail" title="작업 상세"
+                        onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>
                     </div>
                   ))}
                   {!byStat[st]?.length && <div className="kb-empty">없음</div>}

@@ -146,8 +146,13 @@ table.grid td.clickable:hover { background: #eff6ff; }
 }
 .kb-area.drop-over { outline: 2px dashed #3b82f6; outline-offset: -2px; }
 .kb-card {
+  position: relative;
   background: #fff; border-radius: 6px; padding: 8px 10px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.kb-detail {
+  position: absolute; right: 8px; bottom: 8px;
+  font-size: 11px; padding: 1px 8px; line-height: 1.6;
 }
 .kb-card[draggable="true"] { cursor: grab; }
 .kb-card[draggable="true"]:active { cursor: grabbing; }
