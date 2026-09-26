@@ -99,6 +99,7 @@ def calendar_events(db: Session = Depends(get_db)):
                 "work_stat": sched.work_stat,
                 "task_stat": task.task_stat,
                 "work_hours_estimated": task.work_hours_estimated,
+                "task_req_remark": task.task_req_remark,
                 "start_fixed": sched.start_fixed,
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도
                 # (시작일이 휴일이면 그 날짜도 작업가능일로 간주해 분해)

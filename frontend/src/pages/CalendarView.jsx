@@ -111,6 +111,8 @@ export default function CalendarView() {
   const [dayEvents, setDayEvents] = useState([])
   const [holEvents, setHolEvents] = useState([])
   const [selected, setSelected] = useState(null)
+  const [pview, setPview] = useState('info')      // info | req(작업요청상세) | his(이력)
+  const [his, setHis] = useState(null)            // 상태변경이력 캐시
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
   const [dayMap, setDayMap] = useState({})
@@ -250,6 +252,8 @@ export default function CalendarView() {
       workschid: info.event.id,
       start: info.event.start, end: info.event.end, daily: null }
     setEditForm(null)
+    setPview('info')
+    setHis(null)
     setSelected(props)
     if (!props.holiday) {
       const { data } = await api.get(`/schedules/${info.event.id}/daily`)
@@ -308,11 +312,13 @@ export default function CalendarView() {
           const stat = STAT_LABEL[arg.event.extendedProps.work_stat
             || arg.event.extendedProps.task_stat] || ''
           const csr = arg.event.extendedProps.task_csrid
+          const site = arg.event.extendedProps.site_name
           return (
             <div className="ev-line">
-              {w && <span className="ev-worker">{w}</span>}
+              {site && <span className="ev-site">{site}</span>}
               {csr && <span className="csr">{csr}</span>}
               <span className="ev-title">{arg.event.title}</span>
+              {w && <span className="ev-worker">{w}</span>}
               {stat && <span className="ev-stat">{stat}</span>}
             </div>
           )
@@ -381,6 +387,37 @@ export default function CalendarView() {
                 <p><b>구분</b> {selected.holiday_category === 'A' ? '종일' : `일부 (${selected.holiday_hours}h)`}</p>
                 {selected.holiday_remark && <p><b>설명</b> {selected.holiday_remark}</p>}
               </div>
+            ) : pview === 'req' ? (
+              <div className="popup-info">
+                <div className="req-detail">
+                  {selected.task_req_remark || '작업요청 내용이 없습니다'}
+                </div>
+              </div>
+            ) : pview === 'his' ? (
+              <div className="popup-info">
+                <div className="daily">
+                  <b>작업스케줄 이력</b>
+                  <table>
+                    <thead><tr>
+                      <th>등록일시</th><th>변경상태</th>
+                      <th className="r">작업기간</th><th>비고</th>
+                    </tr></thead>
+                    <tbody>
+                      {(his || []).map(h => (
+                        <tr key={h.workschhisid}>
+                          <td className="c">{fmtLocal(new Date(h.create_date))}</td>
+                          <td>{STAT_LABEL[h.work_stat] ?? h.work_stat}</td>
+                          <td className="r">{h.work_hours ? `${h.work_hours}h` : '-'}</td>
+                          <td>{h.remark || ''}</td>
+                        </tr>
+                      ))}
+                      {(!his || !his.length) && (
+                        <tr><td colSpan="4" className="empty">이력이 없습니다</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             ) : (
               <div className="popup-info">
                 <p><b>사이트</b> {selected.site_name || selected.siteid || '-'}</p>
@@ -418,7 +455,24 @@ export default function CalendarView() {
             )}
             {!editForm && (
               <div className="popup-btns">
-                {canEdit(selected) && <button onClick={startEdit}>수정</button>}
+                {!selected.holiday && (
+                  <button onClick={() => setPview(pview === 'req' ? 'info' : 'req')}>
+                    {pview === 'req' ? '작업정보' : '작업요청 상세'}
+                  </button>
+                )}
+                {!selected.holiday && (
+                  <button onClick={() => {
+                    setPview(pview === 'his' ? 'info' : 'his')
+                    if (pview !== 'his' && !his) {
+                      api.get(`/schedules/${selected.workschid}/his`)
+                        .then(r => setHis(r.data)).catch(console.error)
+                    }
+                  }}>
+                    {pview === 'his' ? '작업정보' : '스케줄이력'}
+                  </button>
+                )}
+                {canEdit(selected) && pview === 'info' &&
+                  <button onClick={startEdit}>수정</button>}
                 <button onClick={() => setSelected(null)}>닫기</button>
               </div>
             )}

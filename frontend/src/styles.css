@@ -189,11 +189,17 @@ table.grid td.clickable:hover { background: #eff6ff; }
 
 /* 작업 바 안 작업자명 + 작업명 */
 .ev-line { display: flex; align-items: baseline; overflow: hidden; white-space: nowrap; }
-.ev-worker { font-weight: 700; margin-right: 5px; flex-shrink: 0; }
+.ev-site { font-weight: 700; margin-right: 5px; flex-shrink: 0; }
+.ev-worker { margin-left: 5px; flex-shrink: 0; opacity: .85; }
 .ev-title { overflow: hidden; text-overflow: ellipsis; }
 .ev-stat {
   margin-left: auto; flex-shrink: 0; font-size: 10px; padding: 0 4px;
   border-radius: 3px; background: rgba(255,255,255,.3); line-height: 1.5;
+}
+/* 작업요청 상세 내용 (팝업) */
+.req-detail {
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 240px; overflow-y: auto; font-size: 13px; line-height: 1.6;
 }
 
 /* 상세 팝업 */
@@ -231,6 +237,9 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }
 .daily table { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .daily td { padding: 2px 0; }
+.daily th { padding: 2px 0; text-align: left; font-size: 12px; color: #64748b;
+  border-bottom: 1px solid #e5e7eb; }
+.daily th.r { text-align: right; }
 .daily td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .daily tr.sum td { border-top: 1px solid #e5e7eb; font-weight: 600; padding-top: 4px; }
 
