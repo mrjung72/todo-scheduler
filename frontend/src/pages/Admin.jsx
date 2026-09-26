@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL } from '../api'
 
 const TABS = [
@@ -58,6 +58,87 @@ function EditableCell({ value, onSave, type = 'text', options, disabled }) {
   )
 }
 
+/* ---------------- 엑셀 다운/업로드 공통 ---------------- */
+const csvEsc = v => `"${(v ?? '').toString().replaceAll('"', '""')}"`
+
+function downloadCsv(name, cols, rows) {
+  const csv = '﻿' + [
+    cols.map(c => csvEsc(c.label)).join(','),
+    ...rows.map(r => cols.map(c => csvEsc(c.get ? c.get(r) : r[c.field])).join(',')),
+  ].join('\r\n')
+  const now = new Date(), p2 = n => String(n).padStart(2, '0')
+  const stamp = `${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}` +
+    `_${p2(now.getHours())}${p2(now.getMinutes())}${p2(now.getSeconds())}`
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  a.download = `${name}_${stamp}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+// 따옴표 이스케이프/셀 내 개행을 지원하는 CSV 파서
+function parseCsv(text) {
+  const src = text.replace(/^﻿/, '')
+  const rows = [[]]
+  let cell = '', inQ = false
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (inQ) {
+      if (ch === '"' && src[i + 1] === '"') { cell += '"'; i++ }
+      else if (ch === '"') inQ = false
+      else cell += ch
+    } else if (ch === '"') inQ = true
+    else if (ch === ',') { rows[rows.length - 1].push(cell); cell = '' }
+    else if (ch === '\n') { rows[rows.length - 1].push(cell); rows.push([]); cell = '' }
+    else if (ch !== '\r') cell += ch
+  }
+  rows[rows.length - 1].push(cell)
+  return rows
+}
+
+// cols: [{label, field, get?}] — 헤더 라벨로 업로드 파일의 컬럼을 매칭
+function ExcelButtons({ name, cols, rows, onUpload, onDone }) {
+  const fileRef = useRef(null)
+  const onFile = async e => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const table = parseCsv(await f.text())
+    const map = (table[0] || []).map(h => cols.find(c => c.label === h.trim())?.field)
+    const objs = table.slice(1)
+      .filter(r => r.some(v => v.trim() !== ''))
+      .map(r => Object.fromEntries(
+        map.map((f, i) => [f, (r[i] ?? '').trim()]).filter(([f]) => f)))
+    if (!objs.length) { alert('업로드할 데이터가 없습니다'); return }
+    if (!window.confirm(`${objs.length}건 업로드 (키값 존재 시 수정, 없으면 신규등록). 계속?`)) return
+    let ok = 0, fail = 0
+    for (const o of objs) {
+      try { await onUpload(o); ok++ } catch { fail++ }
+    }
+    alert(`업로드 완료: 성공 ${ok}건${fail ? ` / 실패 ${fail}건` : ''}`)
+    onDone?.()
+  }
+  return (
+    <>
+      <button className="excel" onClick={() => downloadCsv(name, cols, rows)}
+        disabled={!rows.length}>엑셀 다운로드</button>
+      {onUpload && (
+        <>
+          <button onClick={() => fileRef.current?.click()}>엑셀 업로드</button>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onFile} />
+        </>
+      )}
+    </>
+  )
+}
+
+const revMap = m => Object.fromEntries(Object.entries(m).map(([k, l]) => [l, k]))
+// 'YYYY-MM-DD HH:mm' → ISO(초 포함). 형식이 맞지 않으면 null
+const dtOf = v => {
+  const s = (v || '').trim().replace(' ', 'T')
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) ? s.slice(0, 16) + ':00' : null
+}
+
 /* ---------------- 사용자 ---------------- */
 function UsersTab() {
   const empty = { userid: '', user_name: '', dept_name: '', job_title: '',
@@ -80,6 +161,40 @@ function UsersTab() {
   }
   const del = id => window.confirm(`사용자 ${id} 삭제?`) &&
     api.delete(`/users/${id}`).then(load)
+
+  const siteIdOf = v => !v ? null :
+    (sites.find(s => s.siteid === v)?.siteid ??
+      sites.find(s => s.site_name === v)?.siteid ?? v)
+  const revGrade = revMap(GRADE_LABEL)
+  const cols = [
+    { label: 'ID', field: 'userid' },
+    { label: '이름', field: 'user_name' },
+    { label: '부서', field: 'dept_name' },
+    { label: '직급', field: 'job_title' },
+    { label: '연락처', field: 'user_tel' },
+    { label: '이메일', field: 'user_email' },
+    { label: '등급', field: 'user_grade', get: u => GRADE_LABEL[u.user_grade] ?? u.user_grade },
+    { label: '기본사이트', field: 'default_siteid',
+      get: u => sites.find(s => s.siteid === u.default_siteid)?.site_name || u.default_siteid || '' },
+    { label: '상태', field: 'user_stat' },
+  ]
+  const upload = async o => {
+    if (!o.userid) throw new Error('ID 없음')
+    const body = {
+      user_name: o.user_name,
+      dept_name: o.dept_name || null,
+      job_title: o.job_title || null,
+      user_tel: o.user_tel || null,
+      user_email: o.user_email || null,
+      user_grade: o.user_grade === '' ? 9 : +(revGrade[o.user_grade] ?? o.user_grade),
+      user_stat: o.user_stat || 'Y',
+      default_siteid: siteIdOf(o.default_siteid),
+    }
+    const r = rows.some(u => u.userid === o.userid)
+      ? await api.put(`/users/${o.userid}`, body)
+      : await api.post('/users', { ...body, userid: o.userid })
+    return r
+  }
 
   return (
     <div>
@@ -105,6 +220,10 @@ function UsersTab() {
         </select>
         <button type="submit">추가</button>
       </form>
+      <div className="toolbar">
+        <ExcelButtons name="사용자" cols={cols} rows={rows}
+          onUpload={upload} onDone={load} />
+      </div>
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
@@ -166,6 +285,30 @@ function SitesTab() {
   const del = id => window.confirm(`사이트 ${id} 삭제?`) &&
     api.delete(`/sites/${id}`).then(load)
 
+  const userIdOf = v => !v ? null :
+    (users.find(u => u.userid === v)?.userid ??
+      users.find(u => u.user_name === v)?.userid ?? v)
+  const cols = [
+    { label: '사이트ID', field: 'siteid' },
+    { label: '사이트명', field: 'site_name' },
+    { label: '설명', field: 'site_remark' },
+    { label: 'IT담당자', field: 'itos_userid',
+      get: s => users.find(u => u.userid === s.itos_userid)?.user_name || s.itos_userid || '' },
+    { label: '상태', field: 'site_stat' },
+  ]
+  const upload = async o => {
+    if (!o.siteid) throw new Error('사이트ID 없음')
+    const body = {
+      site_name: o.site_name,
+      site_remark: o.site_remark || null,
+      itos_userid: userIdOf(o.itos_userid),
+      site_stat: o.site_stat || 'Y',
+    }
+    return rows.some(s => s.siteid === o.siteid)
+      ? api.put(`/sites/${o.siteid}`, body)
+      : api.post('/sites', { ...body, siteid: o.siteid })
+  }
+
   const itosOptions = [{ value: '', label: '-' },
     ...users.filter(u => [0, 2].includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
@@ -186,6 +329,10 @@ function SitesTab() {
         </select>
         <button type="submit">추가</button>
       </form>
+      <div className="toolbar">
+        <ExcelButtons name="사이트" cols={cols} rows={rows}
+          onUpload={upload} onDone={load} />
+      </div>
       <table className="grid">
         <thead><tr>
           <th>사이트ID</th><th>사이트명</th><th>설명</th><th>IT담당자</th><th>상태</th><th></th>
@@ -254,6 +401,47 @@ function TasksTab() {
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(t => admin || t.work_userid === myId())  // 비관리자: 본인 작업만
 
+  const siteIdOf = v => !v ? null :
+    (sites.find(s => s.siteid === v)?.siteid ??
+      sites.find(s => s.site_name === v)?.siteid ?? v)
+  const userIdOf = v => !v ? null :
+    (users.find(u => u.userid === v)?.userid ??
+      users.find(u => u.user_name === v)?.userid ?? v)
+  const revStat = revMap(STAT_LABEL)
+  const cols = [
+    { label: 'ID', field: 'taskid' },
+    { label: '사이트', field: 'siteid', get: t => t.site_name || t.siteid || '' },
+    { label: '작업명', field: 'task_name' },
+    { label: '우선순위', field: 'priority' },
+    { label: '예상 작업시간(H)', field: 'work_hours_estimated' },
+    { label: '실제 작업시간(H)', field: 'work_hours_real' },
+    { label: '상태', field: 'task_stat', get: t => STAT_LABEL[t.task_stat] ?? t.task_stat },
+    { label: 'CSR 번호', field: 'task_csrid' },
+    { label: '현업 담당자', field: 'req_userid', get: t => t.req_user_name || t.req_userid || '' },
+    { label: 'IT업무 담당자', field: 'itos_userid', get: t => t.itos_user_name || t.itos_userid || '' },
+    { label: '작업자', field: 'work_userid', get: t => t.work_user_name || t.work_userid || '' },
+    { label: '요청내용', field: 'task_req_remark' },
+  ]
+  const upload = async o => {
+    const body = {
+      task_name: o.task_name,
+      siteid: siteIdOf(o.siteid),
+      priority: +o.priority || 0,
+      work_hours_estimated: +o['work_hours_estimated'] || 0,
+      work_hours_real: +o.work_hours_real || 0,
+      task_stat: revStat[o.task_stat] ?? o.task_stat ?? 'W',
+      task_csrid: o.task_csrid || null,
+      task_req_remark: o.task_req_remark || null,
+      req_userid: userIdOf(o.req_userid),
+      itos_userid: userIdOf(o.itos_userid),
+      work_userid: userIdOf(o.work_userid),
+    }
+    const id = +o.taskid
+    return (Number.isInteger(id) && id > 0 && rows.some(t => t.taskid === id))
+      ? api.put(`/tasks/${id}`, body)
+      : api.post('/tasks', body)
+  }
+
   return (
     <div>
       <form className="newtask" onSubmit={add}>
@@ -279,6 +467,8 @@ function TasksTab() {
       <div className="toolbar">
         <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
           onChange={e => setQ(e.target.value)} />
+        <ExcelButtons name="작업" cols={cols} rows={filtered}
+          onUpload={admin ? upload : null} onDone={load} />
       </div>
       <table className="grid">
         <thead><tr>
@@ -580,12 +770,44 @@ function SchedulesTab() {
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(s => admin || s.work_userid === myId())  // 비관리자: 본인 스케줄만
 
+  const userIdOf = v => !v ? null :
+    (users.find(u => u.userid === v)?.userid ??
+      users.find(u => u.user_name === v)?.userid ?? v)
+  const revStat = revMap(STAT_LABEL)
+  const cols = [
+    { label: 'ID', field: 'workschid' },
+    { label: '작업ID', field: 'taskid' },
+    { label: '작업명', field: '_task_name', get: s => taskOf(s.taskid)?.task_name || '' },
+    { label: '작업자', field: 'work_userid', get: s => userName(s.work_userid) || s.work_userid || '' },
+    { label: '상태', field: 'work_stat', get: s => STAT_LABEL[s.work_stat] ?? s.work_stat },
+    { label: '작업내용', field: 'work_remark' },
+    { label: '시작일시', field: 'start_datetime', get: s => fmtDT(s.start_datetime) },
+    { label: '종료일시(예상)', field: 'end_datetime_estimated', get: s => fmtDT(s.end_datetime_estimated) },
+    { label: '종료일시(실제)', field: 'end_datetime_real', get: s => fmtDT(s.end_datetime_real) },
+  ]
+  const upload = async o => {
+    const body = {
+      work_userid: userIdOf(o.work_userid),
+      work_stat: revStat[o.work_stat] ?? o.work_stat ?? 'W',
+      work_remark: o.work_remark || null,
+      start_datetime: dtOf(o.start_datetime),
+      start_fixed: o.start_datetime ? 1 : 0,
+      end_datetime_estimated: dtOf(o.end_datetime_estimated),
+      end_datetime_real: dtOf(o.end_datetime_real),
+    }
+    const id = +o.workschid
+    return (Number.isInteger(id) && id > 0 && rows.some(s => s.workschid === id))
+      ? api.put(`/schedules/${id}`, body)
+      : api.post('/schedules', { ...body, taskid: +o.taskid })
+  }
+
   return (
     <div>
       <div className="toolbar">
         {msg && <span className="msg">{msg}</span>}
-        <button className="primary" style={{ marginLeft: 'auto' }}
-          onClick={recalc}>재적용(재계산)</button>
+        <ExcelButtons name="작업스케줄" cols={cols} rows={filtered}
+          onUpload={admin ? upload : null} onDone={load} />
+        <button className="primary" onClick={recalc}>재적용(재계산)</button>
       </div>
       <form className="newtask" onSubmit={add}>
         <select required value={form.taskid}
