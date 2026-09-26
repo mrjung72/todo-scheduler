@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL, NEXT_STAT } from '../api'
+import TaskDetailPopup from '../TaskDetailPopup'
 
 const TABS = [
   { key: 'users', label: '사용자', adminOnly: true },
@@ -419,6 +420,7 @@ function TasksTab() {
   const [sites, setSites] = useState([])
   const [form, setForm] = useState(empty)
   const [q, setQ] = useState('')
+  const [selTask, setSelTask] = useState(null)
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
   useEffect(() => {
     load()
@@ -564,12 +566,16 @@ function TasksTab() {
                 options={devOpt} /></td>
               <td><EditableCell value={t.task_req_remark} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_req_remark: v })} /></td>
-              <td>{['W', 'C', 'D'].includes(t.task_stat) && can(t) &&
-                <button className="danger" onClick={() => del(t.taskid)}>삭제</button>}</td>
+              <td>
+                <button onClick={() => setSelTask(t)}>상세</button>
+                {['W', 'C', 'D'].includes(t.task_stat) && can(t) &&
+                  <button className="danger" onClick={() => del(t.taskid)}>삭제</button>}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {selTask && <TaskDetailPopup task={selTask} onClose={() => setSelTask(null)} onChanged={load} />}
     </div>
   )
 }
@@ -755,6 +761,7 @@ function SchedulesTab() {
   const [tasks, setTasks] = useState([])
   const [users, setUsers] = useState([])
   const [startForm, setStartForm] = useState(null)  // {workschid, start, fixed} 시작일시 팝업
+  const [selTask, setSelTask] = useState(null)
   const [msg, setMsg] = useState('')
   const [q, setQ] = useState('')
   const admin = isAdmin()
@@ -945,8 +952,11 @@ function SchedulesTab() {
                 </td>
                 <td className="c">{fmtDT(s.end_datetime_estimated)}</td>
                 <td className="c">{fmtDT(s.end_datetime_real)}</td>
-                <td>{['W', 'C', 'D'].includes(s.work_stat) && can(s) &&
-                  <button className="danger" onClick={() => del(s.workschid)}>삭제</button>}</td>
+                <td>
+                  {t && <button onClick={() => setSelTask(t)}>상세</button>}
+                  {['W', 'C', 'D'].includes(s.work_stat) && can(s) &&
+                    <button className="danger" onClick={() => del(s.workschid)}>삭제</button>}
+                </td>
               </tr>
             )
           })}
@@ -977,6 +987,7 @@ function SchedulesTab() {
           </div>
         </div>
       )}
+      {selTask && <TaskDetailPopup task={selTask} onClose={() => setSelTask(null)} onChanged={load} />}
     </div>
   )
 }
@@ -984,12 +995,18 @@ function SchedulesTab() {
 /* ---------------- 작업스케줄 이력 ---------------- */
 function SchedHisTab() {
   const [rows, setRows] = useState([])
+  const [tasks, setTasks] = useState([])
   const [q, setQ] = useState('')
+  const [selTask, setSelTask] = useState(null)
   const load = useCallback(async () => {
     const { data } = await api.get('/schedules/his')
     setRows(data)
   }, [])
   useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
+  useEffect(() => {
+    api.get('/tasks').then(r => setTasks(r.data)).catch(console.error)
+  }, [])
+  const taskOf = id => tasks.find(t => t.taskid === id)
 
   const kw = q.trim().toLowerCase()
   const filtered = rows.filter(r => !kw ||
@@ -1026,7 +1043,10 @@ function SchedHisTab() {
             <tr key={r.workschhisid}>
               <td className="r">{r.workschhisid}</td>
               <td className="r">{r.workschid}</td>
-              <td>{r.task_name || `작업#${r.taskid}` || '-'}</td>
+              <td>{taskOf(r.taskid)
+                ? <button className="link" onClick={() => setSelTask(taskOf(r.taskid))}>
+                    {r.task_name || `작업#${r.taskid}`}</button>
+                : (r.task_name || `작업#${r.taskid}` || '-')}</td>
               <td>{r.work_userid || '-'}</td>
               <td className="c">{STAT_LABEL[r.work_stat] ?? r.work_stat}</td>
               <td className="r">{r.work_hours || 0}</td>
@@ -1042,6 +1062,7 @@ function SchedHisTab() {
         작업상태 변경 시마다 자동 기록됩니다. 작업기간은 작업중(P) 구간이
         종료(보류/완료 등)될 때 해당 P 이력행에 기록됩니다.
       </p>
+      {selTask && <TaskDetailPopup task={selTask} onClose={() => setSelTask(null)} onChanged={load} />}
     </div>
   )
 }
@@ -1053,6 +1074,7 @@ function AttachFilesTab() {
   const [tasks, setTasks] = useState([])
   const [scheds, setScheds] = useState([])
   const [q, setQ] = useState('')
+  const [selTask, setSelTask] = useState(null)
   const [form, setForm] = useState({ taskid: '', workschid: '' })
   const fileRef = useRef(null)
 
@@ -1176,7 +1198,10 @@ function AttachFilesTab() {
                   file_name: v, taskid: f.taskid,
                   workschid: f.workschid, task_filepath: f.task_filepath,
                 })} /></td>
-              <td>{f.task_name || (f.taskid ? `작업#${f.taskid}` : '-')}</td>
+              <td>{taskOf(f.taskid)
+                ? <button className="link" onClick={() => setSelTask(taskOf(f.taskid))}>
+                    {f.task_name || `작업#${f.taskid}`}</button>
+                : (f.task_name || (f.taskid ? `작업#${f.taskid}` : '-'))}</td>
               <td className="r">{f.workschid || '-'}</td>
               <td><EditableCell value={f.task_filepath} disabled={!canEdit(f)}
                 onSave={v => save(f.fileid, {
@@ -1200,6 +1225,7 @@ function AttachFilesTab() {
         [업로드]는 파일을 서버 uploads/ 폴더에 저장합니다.
         외부 경로만 등록하려면 엑셀 업로드(CSV)를 사용하세요.
       </p>
+      {selTask && <TaskDetailPopup task={selTask} onClose={() => setSelTask(null)} onChanged={load} />}
     </div>
   )
 }
