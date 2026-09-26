@@ -162,9 +162,6 @@ def set_start(workschid: int, body: StartSet, db: Session = Depends(get_db),
     sched.end_datetime_estimated = add_work_hours(
         sched.start_datetime, (task.work_hours_estimated or 0) if task else 0, cal, hol, uid
     )
-    if task:
-        task.task_start_date = sched.start_datetime
-        task.task_end_date = sched.end_datetime_estimated
     db.commit()
     db.refresh(sched)
     return sched
@@ -201,6 +198,10 @@ def update_schedule(workschid: int, body: ScheduleUpdate, db: Session = Depends(
         task = db.get(Task, obj.taskid)
         if task:
             task.task_stat = obj.work_stat
+            # 작업중/완료 전환 시에만 작업 테이블의 시작/종료일시 반영
+            if obj.work_stat in ("P", "F"):
+                task.task_start_date = obj.start_datetime
+                task.task_end_date = obj.end_datetime_real or obj.end_datetime_estimated
     db.commit()
     db.refresh(obj)
     return obj

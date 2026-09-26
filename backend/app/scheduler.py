@@ -235,10 +235,6 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
             if real_hours > 0:
                 sched.end_datetime_real = add_work_hours(start, real_hours, cal_f, hol, uid)
 
-            # tasks 테이블의 시작/완료일자도 동기화
-            task.task_start_date = sched.start_datetime
-            task.task_end_date = sched.end_datetime_estimated
-
             cursor = sched.end_datetime_estimated
             updated += 1
 

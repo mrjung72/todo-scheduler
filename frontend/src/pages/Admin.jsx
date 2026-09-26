@@ -64,6 +64,7 @@ const csvEsc = v => `"${(v ?? '').toString().replaceAll('"', '""')}"`
 function downloadCsv(name, cols, rows) {
   const csv = '﻿' + [
     cols.map(c => csvEsc(c.label)).join(','),
+    cols.map(c => csvEsc(c.field)).join(','),   // 테이블 컬럼명 라인
     ...rows.map(r => cols.map(c => csvEsc(c.get ? c.get(r) : r[c.field])).join(',')),
   ].join('\r\n')
   const now = new Date(), p2 = n => String(n).padStart(2, '0')
@@ -99,23 +100,49 @@ function parseCsv(text) {
 // cols: [{label, field, get?}] — 헤더 라벨로 업로드 파일의 컬럼을 매칭
 function ExcelButtons({ name, cols, rows, onUpload, onDone }) {
   const fileRef = useRef(null)
+  const [help, setHelp] = useState(false)
   const onFile = async e => {
     const f = e.target.files?.[0]
     e.target.value = ''
     if (!f) return
-    const table = parseCsv(await f.text())
-    const map = (table[0] || []).map(h => cols.find(c => c.label === h.trim())?.field)
-    const objs = table.slice(1)
+    if (!/\.csv$/i.test(f.name)) {
+      alert('엑셀 파일(.xlsx)은 지원하지 않습니다.\n' +
+        '엑셀에서 [다른 이름으로 저장] → "CSV UTF-8"로 저장한 뒤 업로드하세요.')
+      return
+    }
+    // 헤더 행은 한글 라벨 또는 테이블 컬럼명(field) 둘 다 인식
+    const matchRow = row => row.map(h =>
+      cols.find(c => c.label === h.trim() || c.field === h.trim())?.field)
+    // UTF-8로 먼저 읽고, 헤더가 하나도 안 맞으면 EUC-KR(엑셀 ANSI 저장)로 재시도
+    const buf = await f.arrayBuffer()
+    let table = parseCsv(new TextDecoder('utf-8').decode(buf))
+    let hi = table.findIndex(r => matchRow(r).some(Boolean))
+    if (hi < 0) {
+      table = parseCsv(new TextDecoder('euc-kr').decode(buf))
+      hi = table.findIndex(r => matchRow(r).some(Boolean))
+    }
+    if (hi < 0) {
+      alert('헤더가 이 화면의 다운로드 형식과 다릅니다.\n엑셀 다운로드한 파일을 수정해 업로드하세요.')
+      return
+    }
+    const map = matchRow(table[hi])
+    const objs = table.slice(hi + 1)
       .filter(r => r.some(v => v.trim() !== ''))
+      // 헤더 바로 아래의 컬럼명 라인은 데이터에서 제외
+      .filter(r => !r.every((v, i) => !map[i] || v.trim() === map[i]))
       .map(r => Object.fromEntries(
         map.map((f, i) => [f, (r[i] ?? '').trim()]).filter(([f]) => f)))
     if (!objs.length) { alert('업로드할 데이터가 없습니다'); return }
     if (!window.confirm(`${objs.length}건 업로드 (키값 존재 시 수정, 없으면 신규등록). 계속?`)) return
-    let ok = 0, fail = 0
+    let ok = 0
+    const fails = []
     for (const o of objs) {
-      try { await onUpload(o); ok++ } catch { fail++ }
+      try { await onUpload(o); ok++ }
+      catch (e) { fails.push(errMsg(e)) }
     }
-    alert(`업로드 완료: 성공 ${ok}건${fail ? ` / 실패 ${fail}건` : ''}`)
+    alert(`업로드 완료: 성공 ${ok}건` +
+      (fails.length ? ` / 실패 ${fails.length}건\n실패 사유:\n` +
+        [...new Set(fails)].slice(0, 5).join('\n') : ''))
     onDone?.()
   }
   return (
@@ -126,7 +153,27 @@ function ExcelButtons({ name, cols, rows, onUpload, onDone }) {
         <>
           <button onClick={() => fileRef.current?.click()}>엑셀 업로드</button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onFile} />
+          <button className="link" onClick={() => setHelp(true)}>업로드시 주의사항</button>
         </>
+      )}
+      {help && (
+        <div className="popup" onClick={() => setHelp(false)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <h3>업로드시 주의사항</h3>
+            <div className="popup-info">
+              <p><b>파일 형식</b> CSV 파일만 업로드 가능 (.xlsx 불가)</p>
+              <p><b>저장 방법</b> 엑셀에서 [다른 이름으로 저장] → "CSV UTF-8" 선택 권장
+                (ANSI 저장도 자동 인식되지만 한글 깨짐 방지를 위해 UTF-8 권장)</p>
+              <p><b>헤더</b> 엑셀 다운로드한 파일의 한글 라벨/컬럼명 행을 그대로 유지</p>
+              <p><b>키값</b> ID 컬럼 값이 있으면 수정, 없으면 신규등록 처리</p>
+              <p><b>ID 입력</b> 담당자·작업자·사이트는 "~ID" 컬럼에 ID값 입력
+                ((참조) 컬럼은 무시됨)</p>
+            </div>
+            <div className="popup-btns">
+              <button onClick={() => setHelp(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )
@@ -136,7 +183,8 @@ const revMap = m => Object.fromEntries(Object.entries(m).map(([k, l]) => [l, k])
 // API 오류 응답을 사용자 메시지로 변환
 const errMsg = e => {
   const d = e.response?.data?.detail
-  return typeof d === 'string' ? d : (d ? JSON.stringify(d) : '처리 중 오류가 발생했습니다')
+  if (typeof d === 'string') return d
+  return d ? JSON.stringify(d) : (e.message || '처리 중 오류가 발생했습니다')
 }
 // 'YYYY-MM-DD HH:mm' → ISO(초 포함). 형식이 맞지 않으면 null
 const dtOf = v => {
@@ -169,9 +217,6 @@ function UsersTab() {
   const del = id => window.confirm(`사용자 ${id} 삭제?`) &&
     api.delete(`/users/${id}`).then(load).catch(e => alert(errMsg(e)))
 
-  const siteIdOf = v => !v ? null :
-    (sites.find(s => s.siteid === v)?.siteid ??
-      sites.find(s => s.site_name === v)?.siteid ?? v)
   const revGrade = revMap(GRADE_LABEL)
   const cols = [
     { label: 'ID', field: 'userid' },
@@ -181,8 +226,7 @@ function UsersTab() {
     { label: '연락처', field: 'user_tel' },
     { label: '이메일', field: 'user_email' },
     { label: '등급', field: 'user_grade', get: u => GRADE_LABEL[u.user_grade] ?? u.user_grade },
-    { label: '기본사이트', field: 'default_siteid',
-      get: u => sites.find(s => s.siteid === u.default_siteid)?.site_name || u.default_siteid || '' },
+    { label: '기본사이트ID', field: 'default_siteid' },
     { label: '상태', field: 'user_stat' },
   ]
   const upload = async o => {
@@ -195,7 +239,7 @@ function UsersTab() {
       user_email: o.user_email || null,
       user_grade: o.user_grade === '' ? 9 : +(revGrade[o.user_grade] ?? o.user_grade),
       user_stat: o.user_stat || 'Y',
-      default_siteid: siteIdOf(o.default_siteid),
+      default_siteid: o.default_siteid || null,
     }
     const r = rows.some(u => u.userid === o.userid)
       ? await api.put(`/users/${o.userid}`, body)
@@ -294,15 +338,11 @@ function SitesTab() {
   const del = id => window.confirm(`사이트 ${id} 삭제?`) &&
     api.delete(`/sites/${id}`).then(load).catch(e => alert(errMsg(e)))
 
-  const userIdOf = v => !v ? null :
-    (users.find(u => u.userid === v)?.userid ??
-      users.find(u => u.user_name === v)?.userid ?? v)
   const cols = [
     { label: '사이트ID', field: 'siteid' },
     { label: '사이트명', field: 'site_name' },
     { label: '설명', field: 'site_remark' },
-    { label: 'IT담당자', field: 'itos_userid',
-      get: s => users.find(u => u.userid === s.itos_userid)?.user_name || s.itos_userid || '' },
+    { label: 'IT담당자ID', field: 'itos_userid' },
     { label: '상태', field: 'site_stat' },
   ]
   const upload = async o => {
@@ -310,7 +350,7 @@ function SitesTab() {
     const body = {
       site_name: o.site_name,
       site_remark: o.site_remark || null,
-      itos_userid: userIdOf(o.itos_userid),
+      itos_userid: o.itos_userid || null,
       site_stat: o.site_stat || 'Y',
     }
     return rows.some(s => s.siteid === o.siteid)
@@ -412,40 +452,45 @@ function TasksTab() {
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(t => admin || t.work_userid === myId())  // 비관리자: 본인 작업만
 
-  const siteIdOf = v => !v ? null :
-    (sites.find(s => s.siteid === v)?.siteid ??
-      sites.find(s => s.site_name === v)?.siteid ?? v)
-  const userIdOf = v => !v ? null :
-    (users.find(u => u.userid === v)?.userid ??
-      users.find(u => u.user_name === v)?.userid ?? v)
   const revStat = revMap(STAT_LABEL)
   const cols = [
     { label: 'ID', field: 'taskid' },
-    { label: '사이트', field: 'siteid', get: t => t.site_name || t.siteid || '' },
+    { label: '사이트ID', field: 'siteid' },
+    { label: '사이트(참조)', field: '_site_name', get: t => t.site_name || '' },
     { label: '작업명', field: 'task_name' },
     { label: '우선순위', field: 'priority' },
     { label: '예상 작업시간(H)', field: 'work_hours_estimated' },
     { label: '실제 작업시간(H)', field: 'work_hours_real' },
     { label: '상태', field: 'task_stat', get: t => STAT_LABEL[t.task_stat] ?? t.task_stat },
     { label: 'CSR 번호', field: 'task_csrid' },
-    { label: '현업 담당자', field: 'req_userid', get: t => t.req_user_name || t.req_userid || '' },
-    { label: 'IT업무 담당자', field: 'itos_userid', get: t => t.itos_user_name || t.itos_userid || '' },
-    { label: '작업자', field: 'work_userid', get: t => t.work_user_name || t.work_userid || '' },
-    { label: '요청내용', field: 'task_req_remark' },
+    { label: '현업 담당자(참조)', field: '_req_name', get: t => t.req_user_name || '' },
+    { label: '현업 담당자ID', field: 'req_userid' },
+    { label: 'IT업무 담당자(참조)', field: '_itos_name', get: t => t.itos_user_name || '' },
+    { label: 'IT업무 담당자ID', field: 'itos_userid' },
+    { label: '작업자(참조)', field: '_work_name', get: t => t.work_user_name || '' },
+    { label: '작업자ID', field: 'work_userid' },
+    { label: '작업요청내용', field: 'task_req_remark' },
+    { label: '작업요청첨부파일경로', field: 'task_req_filepath' },
+    { label: '작업시작일시', field: 'task_start_date', get: t => fmtDT(t.task_start_date) },
+    { label: '작업종료일시', field: 'task_end_date', get: t => fmtDT(t.task_end_date) },
+    { label: '생성일시', field: 'create_date', get: t => fmtDT(t.create_date) },
   ]
   const upload = async o => {
     const body = {
       task_name: o.task_name,
-      siteid: siteIdOf(o.siteid),
+      siteid: o.siteid || null,
       priority: +o.priority || 0,
       work_hours_estimated: +o['work_hours_estimated'] || 0,
       work_hours_real: +o.work_hours_real || 0,
       task_stat: revStat[o.task_stat] ?? o.task_stat ?? 'W',
       task_csrid: o.task_csrid || null,
       task_req_remark: o.task_req_remark || null,
-      req_userid: userIdOf(o.req_userid),
-      itos_userid: userIdOf(o.itos_userid),
-      work_userid: userIdOf(o.work_userid),
+      task_req_filepath: o.task_req_filepath || null,
+      task_start_date: dtOf(o.task_start_date),
+      task_end_date: dtOf(o.task_end_date),
+      req_userid: o.req_userid || null,
+      itos_userid: o.itos_userid || null,
+      work_userid: o.work_userid || null,
     }
     const id = +o.taskid
     return (Number.isInteger(id) && id > 0 && rows.some(t => t.taskid === id))
@@ -791,24 +836,31 @@ function SchedulesTab() {
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(s => admin || s.work_userid === myId())  // 비관리자: 본인 스케줄만
 
-  const userIdOf = v => !v ? null :
-    (users.find(u => u.userid === v)?.userid ??
-      users.find(u => u.user_name === v)?.userid ?? v)
   const revStat = revMap(STAT_LABEL)
   const cols = [
     { label: 'ID', field: 'workschid' },
     { label: '작업ID', field: 'taskid' },
-    { label: '작업명', field: '_task_name', get: s => taskOf(s.taskid)?.task_name || '' },
-    { label: '작업자', field: 'work_userid', get: s => userName(s.work_userid) || s.work_userid || '' },
+    { label: '작업명(참조)', field: '_task_name', get: s => taskOf(s.taskid)?.task_name || '' },
+    { label: '작업자ID', field: 'work_userid' },
+    { label: '작업자(참조)', field: '_work_name', get: s => userName(s.work_userid) || '' },
     { label: '상태', field: 'work_stat', get: s => STAT_LABEL[s.work_stat] ?? s.work_stat },
     { label: '작업내용', field: 'work_remark' },
     { label: '시작일시', field: 'start_datetime', get: s => fmtDT(s.start_datetime) },
     { label: '종료일시(예상)', field: 'end_datetime_estimated', get: s => fmtDT(s.end_datetime_estimated) },
     { label: '종료일시(실제)', field: 'end_datetime_real', get: s => fmtDT(s.end_datetime_real) },
+    { label: '작업요청내용(참조)', field: '_req_remark',
+      get: s => taskOf(s.taskid)?.task_req_remark || '' },
+    { label: '작업요청첨부파일경로(참조)', field: '_req_filepath',
+      get: s => taskOf(s.taskid)?.task_req_filepath || '' },
+    { label: '작업시작일시(참조)', field: '_task_start',
+      get: s => fmtDT(taskOf(s.taskid)?.task_start_date) },
+    { label: '작업종료일시(참조)', field: '_task_end',
+      get: s => fmtDT(taskOf(s.taskid)?.task_end_date) },
+    { label: '생성일시', field: 'create_date', get: s => fmtDT(s.create_date) },
   ]
   const upload = async o => {
     const body = {
-      work_userid: userIdOf(o.work_userid),
+      work_userid: o.work_userid || null,
       work_stat: revStat[o.work_stat] ?? o.work_stat ?? 'W',
       work_remark: o.work_remark || null,
       start_datetime: dtOf(o.start_datetime),

@@ -174,6 +174,14 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         db.query(WorkSchedule).filter(
             WorkSchedule.taskid == taskid,
         ).update({WorkSchedule.work_stat: obj.task_stat})
+        # 작업중/완료 전환 시에만 작업 시작/종료일시 반영 (대표 스케줄 기준)
+        if obj.task_stat in ("P", "F"):
+            rep = db.query(WorkSchedule).filter(
+                WorkSchedule.taskid == taskid,
+            ).order_by(WorkSchedule.workschid).first()
+            if rep:
+                obj.task_start_date = rep.start_datetime
+                obj.task_end_date = rep.end_datetime_real or rep.end_datetime_estimated
     # 작업자 변경 시 대기중 스케줄의 작업자도 함께 갱신
     if "work_userid" in data:
         db.query(WorkSchedule).filter(
@@ -198,7 +206,6 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
                 sched.end_datetime_real = add_work_hours(
                     sched.start_datetime, obj.work_hours_real,
                     cal_f, hol, uid)
-            obj.task_end_date = sched.end_datetime_estimated
     db.commit()
     db.refresh(obj)
     return obj

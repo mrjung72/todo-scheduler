@@ -43,6 +43,11 @@ button.excel {
 button.excel:hover { background: #047857; }
 button.excel:disabled { background: #9ca3af; border-color: #9ca3af; }
 button.danger { color: #dc2626; }
+button.link {
+  border: none; background: none; color: #2563eb;
+  text-decoration: underline; padding: 0 4px;
+}
+button.link:hover { background: none; color: #1d4ed8; }
 input.num { width: 64px; }
 
 .newtask {

@@ -39,7 +39,12 @@ export default function TaskList() {
       fmtDT(t.start_datetime), fmtDT(t.end_datetime_estimated),
       STAT_LABEL[t.task_stat] || t.task_stat,
     ].map(esc).join(','))
-    const csv = '\uFEFF' + [header.map(esc).join(','), ...lines].join('\r\n')
+    const fields = ['site_name', 'priority', 'task_csrid', 'task_name',
+      'work_hours_estimated', 'req_userid', 'itos_userid', 'work_userid',
+      'start_datetime', 'end_datetime_estimated', 'task_stat']
+    const csv = '\uFEFF' + [header.map(esc).join(','),
+      fields.map(esc).join(','),   // 테이블 컬럼명 라인
+      ...lines].join('\r\n')
     const now = new Date()
     const p2 = n => String(n).padStart(2, '0')
     const stamp = `${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}` +
