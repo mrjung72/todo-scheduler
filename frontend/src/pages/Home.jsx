@@ -57,6 +57,8 @@ export default function Home() {
               <div className="kb-title">
                 {t.site_name && <span className="kb-site">{t.site_name}</span>}
                 {t.task_csrid && <span className="csr">{t.task_csrid}</span>}
+                {(t.req_user_name || t.req_userid) &&
+                  <span className="kb-req">{t.req_user_name || t.req_userid}</span>}
                 {t.task_name}
                 <span className={`home-stat st-${t.task_stat}`}>
                   {STAT_LABEL[t.task_stat] || t.task_stat}

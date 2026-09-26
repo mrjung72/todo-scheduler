@@ -203,6 +203,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .ev-line { display: flex; align-items: baseline; overflow: hidden; white-space: nowrap; }
 .ev-site { font-weight: 700; margin-right: 5px; flex-shrink: 0; }
 .ev-worker { margin-left: 5px; flex-shrink: 0; opacity: .85; }
+.ev-req { margin-right: 4px; flex-shrink: 0; opacity: .9; font-weight: 600; }
 .ev-title { overflow: hidden; text-overflow: ellipsis; }
 .ev-stat {
   margin-left: auto; flex-shrink: 0; font-size: 10px; padding: 0 4px;

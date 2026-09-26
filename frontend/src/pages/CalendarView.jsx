@@ -3,8 +3,9 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT, NEXT_STAT,
+import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL,
   loadFilter, saveFilter } from '../api'
+import TaskDetailPopup from '../TaskDetailPopup'
 
 const p2 = n => String(n).padStart(2, '0')
 const fmtYMD = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
@@ -105,20 +106,12 @@ export default function CalendarView() {
   const admin = me?.user_grade === 0
   // 휴일/휴가 등록: 관리자(0)·개발자(1)·IT담당자(2) (비관리자는 본인 휴가만)
   const canReg = me && [0, 1, 2].includes(me.user_grade)
-  // 수정 가능: 관리자(0)는 전부, 개발자(1)는 본인 작업만
-  const canEdit = s => !s.holiday && me &&
-    (me.user_grade === 0 || (me.user_grade === 1 && s.work_userid === me.userid))
+  const [users, setUsers] = useState([])          // 휴가 등록 폼용
   const [events, setEvents] = useState([])
   const [dayEvents, setDayEvents] = useState([])
   const [holEvents, setHolEvents] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [pview, setPview] = useState('info')      // info | req(작업요청상세) | his(이력)
-  const [his, setHis] = useState(null)            // 상태변경이력 캐시
-  const [files, setFiles] = useState(null)        // 첨부파일 목록 캐시
-  const fileRef = useRef(null)
-  // 첨부파일 등록: 관리자(0)·개발자(1)
-  const canAttach = me && [0, 1].includes(me.user_grade)
-  const [users, setUsers] = useState([])
+  const [selected, setSelected] = useState(null)  // 휴가/휴일 팝업 대상
+  const [selTask, setSelTask] = useState(null)    // 작업 상세 팝업 대상(공용 컴포넌트)
   const [sites, setSites] = useState([])
   const [dayMap, setDayMap] = useState({})
   // 초기값 = 저장된 검색조건, 없으면 사용자 기본사이트
@@ -130,7 +123,6 @@ export default function CalendarView() {
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
     holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
   const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
-  const [editForm, setEditForm] = useState(null)  // 작업 수정 모드
   const calRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -219,84 +211,18 @@ export default function CalendarView() {
     load()
   }
 
-  // datetime-local 입력값 'YYYY-MM-DDTHH:mm' (로컬 시각)
-  const toLocalInput = d => d ? fmtLocal(d).replace(' ', 'T') : ''
-
-  const startEdit = () => setEditForm({
-    priority: selected.priority ?? 0,
-    work_hours_estimated: selected.work_hours_estimated ?? 0,
-    work_userid: selected.work_userid || '',
-    work_stat: selected.work_stat || selected.task_stat || 'W',
-    req_remark: selected.task_req_remark || '',
-    start: toLocalInput(selected.start),
-    unfix: false,
-  })
-  const saveEdit = async e => {
-    e.preventDefault()
-    await api.put(`/tasks/${selected.taskid}`, {
-      priority: +editForm.priority,
-      work_hours_estimated: +editForm.work_hours_estimated,
-      work_userid: editForm.work_userid || null,
-      task_req_remark: editForm.req_remark || null,
+  const onEventClick = (info) => {
+    const p = { ...info.event.extendedProps, title: info.event.title,
+      workschid: info.event.id, start: info.event.start, end: info.event.end }
+    if (p.holiday) { setSelected(p); return }
+    // 작업 이벤트 → 공용 작업 상세 팝업 (TaskDetail 형태로 매핑)
+    setSelTask({
+      ...p,
+      task_name: info.event.title,
+      workschid: +info.event.id,
+      start_datetime: fmtLocal(info.event.start),
+      end_datetime_estimated: fmtLocal(info.event.end),
     })
-    await api.put(`/schedules/${selected.workschid}`, {
-      work_stat: editForm.work_stat,
-      work_userid: editForm.work_userid || null,
-    })
-    if (editForm.unfix) {
-      await api.patch(`/schedules/${selected.workschid}/unfix`)
-    } else if (editForm.start && editForm.start !== toLocalInput(selected.start)) {
-      // 로컬 naive 시각 그대로 전송 (toISOString은 UTC로 밀림)
-      await api.patch(`/schedules/${selected.workschid}/start`, {
-        start_datetime: editForm.start.length === 16 ? editForm.start + ':00' : editForm.start,
-      })
-    }
-    setEditForm(null)
-    setSelected(null)
-    load()
-  }
-
-  // 작업요청 상세 화면의 첨부파일 목록/업로드/다운로드
-  const loadFiles = () => {
-    api.get('/attach-files', { params: { taskid: selected.taskid } })
-      .then(r => setFiles(r.data)).catch(console.error)
-  }
-  const downloadFile = f =>
-    api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
-      .then(r => {
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(r.data)
-        a.download = f.file_name
-        a.click()
-        URL.revokeObjectURL(a.href)
-      }).catch(e => alert(e.response?.data?.detail || '다운로드 실패'))
-  const uploadFile = async () => {
-    const f = fileRef.current?.files?.[0]
-    if (!f) { alert('첨부할 파일을 선택하세요'); return }
-    const fd = new FormData()
-    fd.append('file', f)
-    fd.append('taskid', selected.taskid)
-    if (selected.workschid) fd.append('workschid', selected.workschid)
-    try {
-      await api.post('/attach-files', fd)
-      fileRef.current.value = ''
-      loadFiles()
-    } catch (e) { alert(e.response?.data?.detail || '업로드 실패') }
-  }
-
-  const onEventClick = async (info) => {
-    const props = { ...info.event.extendedProps, title: info.event.title,
-      workschid: info.event.id,
-      start: info.event.start, end: info.event.end, daily: null }
-    setEditForm(null)
-    setPview('info')
-    setHis(null)
-    setFiles(null)
-    setSelected(props)
-    if (!props.holiday) {
-      const { data } = await api.get(`/schedules/${info.event.id}/daily`)
-      setSelected(s => s && s.taskid === props.taskid ? { ...s, daily: data } : s)
-    }
   }
 
   const kw = q.trim().toLowerCase()
@@ -350,10 +276,13 @@ export default function CalendarView() {
             || arg.event.extendedProps.task_stat] || ''
           const csr = arg.event.extendedProps.task_csrid
           const site = arg.event.extendedProps.site_name
+          const req = arg.event.extendedProps.req_user_name
+            || arg.event.extendedProps.req_userid
           return (
             <div className="ev-line">
               {site && <span className="ev-site">{site}</span>}
               {csr && <span className="csr">{csr}</span>}
+              {req && <span className="ev-req">{req}</span>}
               <span className="ev-title">{arg.event.title}</span>
               {w && <span className="ev-worker">{w}</span>}
               {stat && <span className="ev-stat">{stat}</span>}
@@ -364,189 +293,27 @@ export default function CalendarView() {
         dayMaxEventRows={6}
         datesSet={load}
       />
-      {selected && (
+      {selected?.holiday && (
         <div className="popup" onClick={() => setSelected(null)}>
           <div className="popup-body" onClick={e => e.stopPropagation()}>
-            <h3 className="popup-title" style={{
-              background: selected.holiday ? '#fb8c00' : taskColor(selected.taskid),
-            }}>
-              {selected.holiday && selected.start
-                ? `${selected.start.getMonth() + 1}/${selected.start.getDate()} `
-                : (selected.site_name || selected.siteid) &&
-                  `${selected.site_name || selected.siteid} `}
-              {selected.task_csrid && <span className="csr">{selected.task_csrid}</span>}
+            <h3 className="popup-title" style={{ background: '#fb8c00' }}>
+              {selected.start &&
+                `${selected.start.getMonth() + 1}/${selected.start.getDate()} `}
               {selected.title}
             </h3>
-            {editForm ? (
-              <form onSubmit={saveEdit}>
-                <div className="popup-info">
-                  <p><b>우선순위</b>
-                    <input type="number" value={editForm.priority}
-                      onChange={e => setEditForm({ ...editForm, priority: e.target.value })} /></p>
-                  <p><b>예상시간(h)</b>
-                    <input type="number" min="0.5" step="0.5" required
-                      value={editForm.work_hours_estimated}
-                      onChange={e => setEditForm({ ...editForm, work_hours_estimated: e.target.value })} /></p>
-                  <p><b>작업자</b>
-                    <select value={editForm.work_userid}
-                      onChange={e => setEditForm({ ...editForm, work_userid: e.target.value })}>
-                      <option value="">-</option>
-                      {users.filter(u => u.user_grade === 1)
-                        .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-                    </select></p>
-                  <p><b>상태</b>
-                    <select value={editForm.work_stat}
-                      onChange={e => setEditForm({ ...editForm, work_stat: e.target.value })}>
-                      {Object.entries(STAT_LABEL)
-                        .filter(([k]) => NEXT_STAT[selected.work_stat
-                          || selected.task_stat]?.includes(k))
-                        .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select></p>
-                  <p><b>시작일시</b>
-                    <input type="datetime-local" value={editForm.start}
-                      onChange={e => setEditForm({ ...editForm, start: e.target.value })} /></p>
-                  <p className="full"><b>작업요청내용</b>
-                    <textarea rows="12" value={editForm.req_remark}
-                      onChange={e => setEditForm({ ...editForm, req_remark: e.target.value })} /></p>
-                  {!!selected.start_fixed && (
-                    <p className="chk">
-                      <input type="checkbox" checked={editForm.unfix}
-                        onChange={e => setEditForm({ ...editForm, unfix: e.target.checked })} />
-                      <span>시작일시 고정 해제 (재계산 시 자동 배치)</span>
-                    </p>
-                  )}
-                </div>
-                <div className="popup-btns">
-                  <button type="submit" className="primary">저장</button>
-                  <button type="button" onClick={() => setEditForm(null)}>취소</button>
-                </div>
-              </form>
-            ) : selected.holiday ? (
-              <div className="popup-info">
-                <p><b>작업자</b> {selected.user_name || selected.work_userid}</p>
-                <p><b>구분</b> {selected.holiday_category === 'A' ? '종일' : `일부 (${selected.holiday_hours}h)`}</p>
-                {selected.holiday_remark && <p><b>설명</b> {selected.holiday_remark}</p>}
-              </div>
-            ) : pview === 'req' ? (
-              <div className="popup-info">
-                <div className="req-detail">
-                  {selected.task_req_remark || '작업요청 내용이 없습니다'}
-                </div>
-                <div className="daily">
-                  <b>첨부파일</b>
-                  <table>
-                    <tbody>
-                      {(files || []).map(f => (
-                        <tr key={f.fileid}>
-                          <td>
-                            <button className="link"
-                              onClick={() => downloadFile(f)}>{f.file_name}</button>
-                          </td>
-                          <td className="r">{fmtLocal(new Date(f.create_date))}</td>
-                        </tr>
-                      ))}
-                      {files && !files.length && (
-                        <tr><td colSpan="2" className="empty">첨부파일이 없습니다</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                  {canAttach && (
-                    <div className="attach-add">
-                      <input type="file" ref={fileRef} />
-                      <button onClick={uploadFile}>첨부</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : pview === 'his' ? (
-              <div className="popup-info">
-                <div className="daily">
-                  <b>작업스케줄 이력</b>
-                  <table>
-                    <thead><tr>
-                      <th>등록일시</th><th>변경상태</th>
-                      <th className="r">작업기간</th><th>비고</th>
-                    </tr></thead>
-                    <tbody>
-                      {(his || []).map(h => (
-                        <tr key={h.workschhisid}>
-                          <td className="c">{fmtLocal(new Date(h.create_date))}</td>
-                          <td>{STAT_LABEL[h.work_stat] ?? h.work_stat}</td>
-                          <td className="r">{h.work_hours ? `${h.work_hours}h` : '-'}</td>
-                          <td>{h.remark || ''}</td>
-                        </tr>
-                      ))}
-                      {(!his || !his.length) && (
-                        <tr><td colSpan="4" className="empty">이력이 없습니다</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="popup-info">
-                <p><b>사이트</b> {selected.site_name || selected.siteid || '-'}</p>
-                <p><b>작업자</b> {selected.work_user_name || selected.work_userid || '-'}</p>
-                <p><b>우선순위</b> {selected.priority}</p>
-                <p><b>예상시간</b> {selected.work_hours_estimated}h
-                  {selected.daily && ` (총 ${selected.daily.length}일)`}</p>
-                <p><b>시작</b> {fmtLocal(selected.start)}</p>
-                <p><b>종료(예상)</b> {fmtLocal(selected.end)}</p>
-                {selected.daily && selected.daily.length > 0 && (
-                  <div className="daily">
-                    <b>일별 작업시간</b>
-                    <table>
-                      <tbody>
-                        {selected.daily.map(d => {
-                          const wd = '일월화수목금토'[new Date(d.date).getDay()]
-                          return (
-                            <tr key={d.date}>
-                              <td>{d.date} ({wd})</td>
-                              <td className="r">{d.hours}h</td>
-                            </tr>
-                          )
-                        })}
-                        <tr className="sum">
-                          <td>합계</td>
-                          <td className="r">
-                            {selected.daily.reduce((a, d) => a + d.hours, 0).toFixed(1)}h
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-            {!editForm && (
-              <div className="popup-btns">
-                {!selected.holiday && (
-                  <button onClick={() => {
-                    setPview(pview === 'req' ? 'info' : 'req')
-                    if (pview !== 'req') loadFiles()
-                  }}>
-                    {pview === 'req' ? '작업정보' : '작업요청 상세'}
-                  </button>
-                )}
-                {!selected.holiday && (
-                  <button onClick={() => {
-                    setPview(pview === 'his' ? 'info' : 'his')
-                    if (pview !== 'his' && !his) {
-                      api.get(`/schedules/${selected.workschid}/his`)
-                        .then(r => setHis(r.data)).catch(console.error)
-                    }
-                  }}>
-                    {pview === 'his' ? '작업정보' : '스케줄이력'}
-                  </button>
-                )}
-                {canEdit(selected) && pview === 'info' &&
-                  <button onClick={startEdit}>수정</button>}
-                <button onClick={() => setSelected(null)}>닫기</button>
-              </div>
-            )}
+            <div className="popup-info">
+              <p><b>작업자</b> {selected.user_name || selected.work_userid}</p>
+              <p><b>구분</b> {selected.holiday_category === 'A' ? '종일' : `일부 (${selected.holiday_hours}h)`}</p>
+              {selected.holiday_remark && <p><b>설명</b> {selected.holiday_remark}</p>}
+            </div>
+            <div className="popup-btns">
+              <button onClick={() => setSelected(null)}>닫기</button>
+            </div>
           </div>
         </div>
       )}
+      {selTask && <TaskDetailPopup task={selTask}
+        onClose={() => setSelTask(null)} onChanged={load} />}
       {holForm && (
         <div className="popup" onClick={() => setHolForm(null)}>
           <div className="popup-body" onClick={e => e.stopPropagation()}>

@@ -10,7 +10,7 @@ const TABS = [
   { key: 'calendar', label: '달력', adminOnly: true },
   { key: 'holidays', label: '작업자휴가' },
   { key: 'schedules', label: '작업스케줄' },
-  { key: 'schedhis', label: '스케줄이력' },
+  { key: 'schedhis', label: '스케쥴변경이력' },
   { key: 'files', label: '첨부파일' },
 ]
 
@@ -1099,7 +1099,7 @@ function SchedHisTab() {
       <div className="toolbar">
         <input placeholder="검색 (스케줄ID/작업/작업자/상태/비고)" value={q}
           onChange={e => setQ(e.target.value)} />
-        <ExcelButtons name="스케줄이력" cols={cols} rows={filtered} />
+        <ExcelButtons name="스케줄상태변경이력" cols={cols} rows={filtered} />
         {admin && rows.length > 0 &&
           <button className="danger" onClick={delAll}>전체삭제</button>}
       </div>

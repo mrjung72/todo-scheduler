@@ -69,10 +69,14 @@ def list_schedules(
 def calendar_events(db: Session = Depends(get_db)):
     """FullCalendar용 이벤트: 스케줄 + 작업/담당자/사이트 정보"""
     WorkUser = User
+    from sqlalchemy.orm import aliased
+    ReqUser = aliased(User)
     rows = (
-        db.query(WorkSchedule, Task, WorkUser.user_name, Site.site_name)
+        db.query(WorkSchedule, Task, WorkUser.user_name, Site.site_name,
+                 Task.req_userid, ReqUser.user_name)
         .join(Task, WorkSchedule.taskid == Task.taskid)
         .outerjoin(WorkUser, WorkUser.userid == WorkSchedule.work_userid)
+        .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(Site, Site.siteid == Task.siteid)
         .filter(WorkSchedule.work_stat.in_(["W", "P"]))
         .all()
@@ -80,7 +84,7 @@ def calendar_events(db: Session = Depends(get_db)):
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
     events = []
-    for sched, task, work_user_name, site_name in rows:
+    for sched, task, work_user_name, site_name, req_userid, req_user_name in rows:
         if not sched.start_datetime or not sched.end_datetime_estimated:
             continue
         events.append({
@@ -99,6 +103,8 @@ def calendar_events(db: Session = Depends(get_db)):
                 "work_stat": sched.work_stat,
                 "task_stat": task.task_stat,
                 "work_hours_estimated": task.work_hours_estimated,
+                "req_userid": req_userid,
+                "req_user_name": req_user_name,
                 "task_req_remark": task.task_req_remark,
                 "start_fixed": sched.start_fixed,
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도

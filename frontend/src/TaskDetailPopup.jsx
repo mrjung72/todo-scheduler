@@ -8,12 +8,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const canEdit = me && (me.user_grade === 0 ||
     (me.user_grade === 1 && task.work_userid === me.userid))
   const canAttach = me && [0, 1].includes(me.user_grade)
-  const [pview, setPview] = useState('info')   // info | req | his
+  const [pview, setPview] = useState('req')   // req(기본: 요청상세) | info | his
   const [editForm, setEditForm] = useState(null)
   const [users, setUsers] = useState([])
   const [daily, setDaily] = useState(null)
   const [his, setHis] = useState(null)
   const [files, setFiles] = useState(null)
+  const [cfg, setCfg] = useState(null)
   const fileRef = useRef(null)
 
   const toLocalInput = iso => iso ? String(iso).slice(0, 16) : ''
@@ -24,6 +25,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         .then(r => setDaily(r.data)).catch(() => setDaily([]))
     }
     api.get('/users').then(r => setUsers(r.data)).catch(() => {})
+    api.get('/config').then(r => setCfg(r.data)).catch(() => {})
+    loadFiles()   // 기본 보기(요청상세)의 첨부파일 목록
   }, [task.workschid])
 
   const startEdit = () => setEditForm({
@@ -93,6 +96,11 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
       loadFiles()
     } catch (e) { alert(e.response?.data?.detail || '업로드 실패') }
   }
+
+  // 총 작업일수: 일별 배분이 있으면 실제 일수, 없으면 예상시간/하루작업시간으로 환산
+  const workDays = (daily && daily.length) ? daily.length
+    : (cfg?.work_hours_per_day && task.work_hours_estimated
+      ? +(task.work_hours_estimated / cfg.work_hours_per_day).toFixed(1) : null)
 
   return (
     <div className="popup" onClick={onClose}>
@@ -203,11 +211,11 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           </div>
         ) : (
           <div className="popup-info">
-            <p><b>사이트</b> {task.site_name || task.siteid || '-'}</p>
+            <p><b>요청자</b> {task.req_user_name || task.req_userid || '-'}</p>
             <p><b>작업자</b> {task.work_user_name || task.work_userid || '-'}</p>
             <p><b>우선순위</b> {task.priority}</p>
             <p><b>예상시간</b> {task.work_hours_estimated}h
-              {daily && daily.length > 0 && ` (총 ${daily.length}일)`}</p>
+              {workDays != null && ` (총 ${workDays}일)`}</p>
             <p><b>상태</b> {STAT_LABEL[task.work_stat || task.task_stat] || '-'}</p>
             <p><b>시작</b> {fmtDT(task.start_datetime) || '-'}</p>
             <p><b>종료(예상)</b> {fmtDT(task.end_datetime_estimated) || '-'}</p>
@@ -243,7 +251,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               setPview(pview === 'req' ? 'info' : 'req')
               if (pview !== 'req') loadFiles()
             }}>
-              {pview === 'req' ? '작업정보' : '작업요청 상세'}
+              {pview === 'req' ? '작업정보' : '요청정보'}
             </button>
             {task.workschid && (
               <button onClick={() => {
@@ -253,7 +261,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     .then(r => setHis(r.data)).catch(console.error)
                 }
               }}>
-                {pview === 'his' ? '작업정보' : '스케줄이력'}
+                {pview === 'his' ? '작업정보' : '상태변경이력'}
               </button>
             )}
             {canEdit && pview === 'info' &&
