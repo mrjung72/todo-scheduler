@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL, NEXT_STAT } from '../api'
+import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL, NEXT_STAT,
+  loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
 const TABS = [
@@ -443,7 +444,10 @@ function TasksTab() {
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
   const [form, setForm] = useState(empty)
-  const [q, setQ] = useState('')
+  const [savedF] = useState(() => loadFilter('admin-tasks'))
+  const [q, setQ] = useState(savedF.q || '')
+  const [siteF, setSiteF] = useState(savedF.site || '')
+  const [statF, setStatF] = useState(savedF.stat || '')
   const [selTask, setSelTask] = useState(null)
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
   useEffect(() => {
@@ -481,7 +485,9 @@ function TasksTab() {
       t.req_userid, t.req_user_name, t.itos_userid, t.itos_user_name,
       t.work_userid, t.work_user_name, STAT_LABEL[t.task_stat],
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
-  })).filter(t => admin || t.work_userid === myId())  // 비관리자: 본인 작업만
+  })).filter(t =>
+    (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
+    .filter(t => admin || t.work_userid === myId())  // 비관리자: 본인 작업만
 
   const revStat = revMap(STAT_LABEL)
   const cols = [
@@ -550,8 +556,20 @@ function TasksTab() {
         <button type="submit">추가</button>
       </form>
       <div className="toolbar">
+        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <select value={statF} onChange={e => setStatF(e.target.value)}>
+          <option value="">상태(전체)</option>
+          {statOpt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
           onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-tasks', { site: siteF, stat: statF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
         <ExcelButtons name="작업" cols={cols} rows={filtered}
           onUpload={admin ? upload : null} onDone={load} />
       </div>
@@ -784,10 +802,14 @@ function SchedulesTab() {
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [users, setUsers] = useState([])
+  const [sites, setSites] = useState([])
   const [startForm, setStartForm] = useState(null)  // {workschid, start, fixed} 시작일시 팝업
   const [selTask, setSelTask] = useState(null)
   const [msg, setMsg] = useState('')
-  const [q, setQ] = useState('')
+  const [savedF] = useState(() => loadFilter('admin-schedules'))
+  const [q, setQ] = useState(savedF.q || '')
+  const [siteF, setSiteF] = useState(savedF.site || '')
+  const [statF, setStatF] = useState(savedF.stat || '')
   const admin = isAdmin()
   const can = s => admin || s.work_userid === myId()
   const empty = { taskid: '', work_userid: admin ? '' : (myId() || ''),
@@ -801,6 +823,7 @@ function SchedulesTab() {
   useEffect(() => {
     load()
     api.get('/users').then(r => setUsers(r.data))
+    api.get('/sites').then(r => setSites(r.data))
   }, [load])
 
   const taskOf = id => tasks.find(t => t.taskid === id)
@@ -868,7 +891,10 @@ function SchedulesTab() {
       t?.task_name, t?.site_name, t?.siteid, s.work_userid, userName(s.work_userid),
       s.work_remark, STAT_LABEL[s.work_stat],
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
-  })).filter(s => admin || s.work_userid === myId())  // 비관리자: 본인 스케줄만
+  })).filter(s =>
+    (!siteF || taskOf(s.taskid)?.siteid === siteF) &&
+    (!statF || s.work_stat === statF))
+    .filter(s => admin || s.work_userid === myId())  // 비관리자: 본인 스케줄만
 
   const revStat = revMap(STAT_LABEL)
   const cols = [
@@ -932,8 +958,20 @@ function SchedulesTab() {
         <button type="submit">추가</button>
       </form>
       <div className="toolbar">
+        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <select value={statF} onChange={e => setStatF(e.target.value)}>
+          <option value="">상태(전체)</option>
+          {statOpt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <input placeholder="검색 (작업명/사이트/작업자/내용/상태)" value={q}
           onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-schedules', { site: siteF, stat: statF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
       </div>
       <table className="grid">
         <thead><tr>
@@ -1018,6 +1056,7 @@ function SchedulesTab() {
 
 /* ---------------- 작업스케줄 이력 ---------------- */
 function SchedHisTab() {
+  const admin = isAdmin()
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [q, setQ] = useState('')
@@ -1031,6 +1070,11 @@ function SchedHisTab() {
     api.get('/tasks').then(r => setTasks(r.data)).catch(console.error)
   }, [])
   const taskOf = id => tasks.find(t => t.taskid === id)
+  const delHis = id => window.confirm(`이력 #${id} 삭제?`) &&
+    api.delete(`/schedules/his/${id}`).then(load).catch(e => alert(errMsg(e)))
+  const delAll = () => window.confirm(
+    '모든 스케줄이력을 삭제하시겠습니까? 복구할 수 없습니다') &&
+    api.delete('/schedules/his').then(load).catch(e => alert(errMsg(e)))
 
   const kw = q.trim().toLowerCase()
   const filtered = rows.filter(r => !kw ||
@@ -1056,11 +1100,14 @@ function SchedHisTab() {
         <input placeholder="검색 (스케줄ID/작업/작업자/상태/비고)" value={q}
           onChange={e => setQ(e.target.value)} />
         <ExcelButtons name="스케줄이력" cols={cols} rows={filtered} />
+        {admin && rows.length > 0 &&
+          <button className="danger" onClick={delAll}>전체삭제</button>}
       </div>
       <table className="grid">
         <thead><tr>
           <th>이력ID</th><th>스케줄ID</th><th>작업</th><th>작업자</th>
           <th>변경상태</th><th className="r">작업기간<br/>(Hour)</th><th>비고</th><th>등록일시</th>
+          {admin && <th></th>}
         </tr></thead>
         <tbody>
           {filtered.map(r => (
@@ -1076,10 +1123,13 @@ function SchedHisTab() {
               <td className="r">{r.work_hours || 0}</td>
               <td>{r.remark || ''}</td>
               <td className="c">{fmtDT(r.create_date)}</td>
+              {admin &&
+                <td><button className="danger"
+                  onClick={() => delHis(r.workschhisid)}>삭제</button></td>}
             </tr>
           ))}
           {filtered.length === 0 &&
-            <tr><td colSpan="8" className="empty">이력이 없습니다</td></tr>}
+            <tr><td colSpan={admin ? 9 : 8} className="empty">이력이 없습니다</td></tr>}
         </tbody>
       </table>
       <p className="hint">

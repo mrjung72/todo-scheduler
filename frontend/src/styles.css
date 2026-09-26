@@ -144,7 +144,8 @@ table.grid td.clickable:hover { background: #eff6ff; }
 }
 .kb-cards {
   flex: 1; overflow-y: auto; padding: 8px; background: #f8fafc;
-  display: flex; flex-direction: column; gap: 8px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  align-content: start;
 }
 .kb-area.drop-over { outline: 2px dashed #3b82f6; outline-offset: -2px; }
 .kb-card {
@@ -158,6 +159,9 @@ table.grid td.clickable:hover { background: #eff6ff; }
 }
 .kb-card[draggable="true"] { cursor: grab; }
 .kb-card[draggable="true"]:active { cursor: grabbing; }
+.kb-row1 { font-size: 12px; margin-bottom: 3px; }
+.kb-no { color: #94a3b8; font-size: 11px; font-weight: 700; margin-right: 5px; }
+.kb-req { color: #0f766e; margin-right: 6px; font-weight: 600; }
 .kb-title { font-weight: 600; font-size: 13px; }
 .kb-site { color: #2563eb; margin-right: 5px; }
 .kb-csr, .csr {
@@ -173,7 +177,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
   display: flex; gap: 8px; flex-wrap: wrap;
   font-size: 11px; color: #94a3b8; margin-top: 4px;
 }
-.kb-empty { color: #94a3b8; font-size: 12px; text-align: center; padding: 12px; }
+.kb-empty { grid-column: 1 / -1; color: #94a3b8; font-size: 12px; text-align: center; padding: 12px; }
 
 /* 작업자 개인 휴가 이벤트 */
 .fc .holiday-event {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
+import api, { STAT_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
 // 3열 배치: 좌 = 대기중(70%)+취소(30%), 중 = 작업중(70%)+작업보류(30%), 우 = 완료(100%)
@@ -103,19 +103,18 @@ export default function Kanban() {
                       onDragStart={e =>
                         e.dataTransfer.setData('text/taskid', String(t.taskid))}
                       style={{ borderLeft: `5px solid ${taskColor(t.taskid)}` }}>
-                      <div className="kb-title">
+                      <div className="kb-row1">
+                        <span className="kb-no">#{t.taskid}</span>
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_csrid && <span className="kb-csr">{t.task_csrid}</span>}
+                      </div>
+                      <div className="kb-title">
+                        <span className="kb-req">{t.req_user_name || t.req_userid || '-'}</span>
                         {t.task_name}
                       </div>
-                      <div className="kb-sub">
-                        {t.work_user_name || t.work_userid || '-'}
-                      </div>
                       <div className="kb-meta">
-                        <span>우선순위 {t.priority}</span>
-                        <span>{t.work_hours_estimated}h</span>
-                        {t.start_datetime &&
-                          <span>{fmtDT(t.start_datetime)}~{fmtDT(t.end_datetime_estimated)}</span>}
+                        {(t.start_datetime || t.end_datetime_estimated) &&
+                          <span>{(t.start_datetime || '').slice(0, 10)} ~ {(t.end_datetime_estimated || '').slice(0, 10)}</span>}
                       </div>
                       <button className="kb-detail" title="작업 상세"
                         onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>

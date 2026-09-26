@@ -8,7 +8,7 @@ from ..models import WorkSchedule, WorkScheduleHis, Task, User, Site
 from ..schemas import (
     ScheduleCreate, ScheduleUpdate, ScheduleOut, ScheduleHisOut,
 )
-from ..security import get_current_user, check_owner_or_admin
+from ..security import get_current_user, check_owner_or_admin, require_admin
 from ..scheduler import (
     get_calendar_map, get_holiday_map, add_work_hours,
     worker_segments, workday_cal, FREE_DAY_STAT,
@@ -140,6 +140,25 @@ def schedule_his(workschid: int, db: Session = Depends(get_db)):
     return (db.query(WorkScheduleHis)
             .filter(WorkScheduleHis.workschid == workschid)
             .order_by(WorkScheduleHis.workschhisid.desc()).all())
+
+
+@router.delete("/his", status_code=204)
+def delete_all_schedule_his(db: Session = Depends(get_db),
+                            me: User = Depends(require_admin)):
+    """스케줄 상태변경이력 전체 삭제 (관리자 전용)."""
+    db.query(WorkScheduleHis).delete()
+    db.commit()
+
+
+@router.delete("/his/{workschhisid}", status_code=204)
+def delete_schedule_his(workschhisid: int, db: Session = Depends(get_db),
+                        me: User = Depends(require_admin)):
+    """스케줄 상태변경이력 단건 삭제 (관리자 전용)."""
+    obj = db.get(WorkScheduleHis, workschhisid)
+    if not obj:
+        raise HTTPException(404, "이력을 찾을 수 없습니다")
+    db.delete(obj)
+    db.commit()
 
 
 @router.get("/{workschid}/daily")
