@@ -8,6 +8,8 @@ const TABS = [
   { key: 'calendar', label: '달력', adminOnly: true },
   { key: 'holidays', label: '작업자휴가' },
   { key: 'schedules', label: '작업스케줄' },
+  { key: 'schedhis', label: '스케줄이력' },
+  { key: 'files', label: '첨부파일' },
 ]
 
 // 개발자(등급 1)도 접근 가능한 탭. 비관리자는 자기 작업만 수정 가능.
@@ -32,6 +34,8 @@ export default function Admin() {
       {tab === 'calendar' && <CalendarTab />}
       {tab === 'holidays' && <HolidaysTab />}
       {tab === 'schedules' && <SchedulesTab />}
+      {tab === 'schedhis' && <SchedHisTab />}
+      {tab === 'files' && <AttachFilesTab />}
     </div>
   )
 }
@@ -973,6 +977,229 @@ function SchedulesTab() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ---------------- 작업스케줄 이력 ---------------- */
+function SchedHisTab() {
+  const [rows, setRows] = useState([])
+  const [q, setQ] = useState('')
+  const load = useCallback(async () => {
+    const { data } = await api.get('/schedules/his')
+    setRows(data)
+  }, [])
+  useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
+
+  const kw = q.trim().toLowerCase()
+  const filtered = rows.filter(r => !kw ||
+    [r.workschid, r.taskid, r.task_name, r.work_userid,
+     STAT_LABEL[r.work_stat], r.remark]
+      .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
+
+  const cols = [
+    { label: '이력ID', field: 'workschhisid' },
+    { label: '스케줄ID', field: 'workschid' },
+    { label: '작업ID', field: 'taskid' },
+    { label: '작업명(참조)', field: '_task_name', get: r => r.task_name || '' },
+    { label: '작업자', field: 'work_userid' },
+    { label: '변경상태', field: 'work_stat', get: r => STAT_LABEL[r.work_stat] ?? r.work_stat },
+    { label: '작업기간(H)', field: 'work_hours' },
+    { label: '비고', field: 'remark' },
+    { label: '등록일시', field: 'create_date', get: r => fmtDT(r.create_date) },
+  ]
+
+  return (
+    <div>
+      <div className="toolbar">
+        <input placeholder="검색 (스케줄ID/작업/작업자/상태/비고)" value={q}
+          onChange={e => setQ(e.target.value)} />
+        <ExcelButtons name="스케줄이력" cols={cols} rows={filtered} />
+      </div>
+      <table className="grid">
+        <thead><tr>
+          <th>이력ID</th><th>스케줄ID</th><th>작업</th><th>작업자</th>
+          <th>변경상태</th><th className="r">작업기간<br/>(Hour)</th><th>비고</th><th>등록일시</th>
+        </tr></thead>
+        <tbody>
+          {filtered.map(r => (
+            <tr key={r.workschhisid}>
+              <td className="r">{r.workschhisid}</td>
+              <td className="r">{r.workschid}</td>
+              <td>{r.task_name || `작업#${r.taskid}` || '-'}</td>
+              <td>{r.work_userid || '-'}</td>
+              <td className="c">{STAT_LABEL[r.work_stat] ?? r.work_stat}</td>
+              <td className="r">{r.work_hours || 0}</td>
+              <td>{r.remark || ''}</td>
+              <td className="c">{fmtDT(r.create_date)}</td>
+            </tr>
+          ))}
+          {filtered.length === 0 &&
+            <tr><td colSpan="8" className="empty">이력이 없습니다</td></tr>}
+        </tbody>
+      </table>
+      <p className="hint">
+        작업상태 변경 시마다 자동 기록됩니다. 작업기간은 작업중(P) 구간이
+        종료(보류/완료 등)될 때 해당 P 이력행에 기록됩니다.
+      </p>
+    </div>
+  )
+}
+
+/* ---------------- 첨부파일 ---------------- */
+function AttachFilesTab() {
+  const admin = isAdmin(), me = myId()
+  const [rows, setRows] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [scheds, setScheds] = useState([])
+  const [q, setQ] = useState('')
+  const [form, setForm] = useState({ taskid: '', workschid: '' })
+  const fileRef = useRef(null)
+
+  const load = useCallback(async () => {
+    const { data } = await api.get('/attach-files')
+    setRows(data)
+  }, [])
+  useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
+  useEffect(() => {
+    api.get('/tasks').then(r => setTasks(r.data)).catch(console.error)
+    api.get('/schedules').then(r => setScheds(r.data)).catch(console.error)
+  }, [])
+
+  const taskOf = id => tasks.find(t => t.taskid === id)
+  const canEdit = f => admin || (f.work_userid && f.work_userid === me)
+  const kw = q.trim().toLowerCase()
+  const filtered = rows.filter(f => !kw ||
+    [f.file_name, f.task_name, f.task_filepath, f.taskid, f.workschid]
+      .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
+  const taskScheds = scheds.filter(s => s.taskid === +form.taskid)
+
+  const save = (fileid, patch) =>
+    api.put(`/attach-files/${fileid}`, patch).then(load)
+      .catch(e => alert(errMsg(e)))
+
+  const upload = async e => {
+    e.preventDefault()
+    const f = fileRef.current?.files?.[0]
+    if (!f) { alert('업로드할 파일을 선택하세요'); return }
+    const fd = new FormData()
+    fd.append('file', f)
+    fd.append('taskid', form.taskid)
+    if (form.workschid) fd.append('workschid', form.workschid)
+    try {
+      await api.post('/attach-files', fd)
+      setForm({ ...form, workschid: '' })
+      if (fileRef.current) fileRef.current.value = ''
+      load()
+    } catch (ex) { alert(errMsg(ex)) }
+  }
+
+  const download = f =>
+    api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
+      .then(r => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(r.data)
+        a.download = f.file_name
+        a.click()
+        URL.revokeObjectURL(a.href)
+      }).catch(e => alert(errMsg(e)))
+
+  const del = f => {
+    if (!confirm(`첨부파일 '${f.file_name}'을(를) 삭제할까요?`)) return
+    api.delete(`/attach-files/${f.fileid}`).then(load)
+      .catch(e => alert(errMsg(e)))
+  }
+
+  const cols = [
+    { label: '파일ID', field: 'fileid' },
+    { label: '파일명', field: 'file_name' },
+    { label: '작업ID', field: 'taskid' },
+    { label: '작업명(참조)', field: '_task_name', get: f => f.task_name || '' },
+    { label: '스케줄ID', field: 'workschid' },
+    { label: '첨부파일경로', field: 'task_filepath' },
+    { label: '등록일시', field: 'create_date', get: f => fmtDT(f.create_date) },
+  ]
+  const uploadCsv = async o => {
+    const body = {
+      file_name: o.file_name,
+      taskid: +o.taskid || null,
+      workschid: +o.workschid || null,
+      task_filepath: o.task_filepath || null,
+    }
+    const id = +o.fileid
+    return (Number.isInteger(id) && id > 0 && rows.some(f => f.fileid === id))
+      ? api.put(`/attach-files/${id}`, body)
+      : api.post('/attach-files/meta', body)
+  }
+
+  return (
+    <div>
+      <div className="toolbar">
+        <ExcelButtons name="첨부파일" cols={cols} rows={filtered}
+          onUpload={admin ? uploadCsv : null} onDone={load} />
+        <input placeholder="검색 (파일명/작업/경로)" value={q}
+          onChange={e => setQ(e.target.value)} />
+      </div>
+      <form className="newtask" onSubmit={upload}>
+        <select required value={form.taskid}
+          onChange={e => setForm({ taskid: e.target.value, workschid: '' })}>
+          <option value="">작업 선택</option>
+          {tasks.map(t => (
+            <option key={t.taskid} value={t.taskid}>
+              {t.site_name ? `${t.site_name} ` : ''}{t.task_name}
+            </option>
+          ))}
+        </select>
+        <select value={form.workschid}
+          onChange={e => setForm({ ...form, workschid: e.target.value })}>
+          <option value="">스케줄(선택)</option>
+          {taskScheds.map(s => (
+            <option key={s.workschid} value={s.workschid}>
+              #{s.workschid} {fmtDT(s.start_datetime) || '미배치'}
+            </option>
+          ))}
+        </select>
+        <input type="file" ref={fileRef} required />
+        <button type="submit">업로드</button>
+      </form>
+      <table className="grid">
+        <thead><tr>
+          <th>파일ID</th><th>파일명</th><th>작업</th><th className="r">스케줄ID</th>
+          <th>첨부파일경로</th><th>등록일시</th><th></th>
+        </tr></thead>
+        <tbody>
+          {filtered.map(f => (
+            <tr key={f.fileid}>
+              <td className="r">{f.fileid}</td>
+              <td><EditableCell value={f.file_name} disabled={!canEdit(f)}
+                onSave={v => save(f.fileid, {
+                  file_name: v, taskid: f.taskid,
+                  workschid: f.workschid, task_filepath: f.task_filepath,
+                })} /></td>
+              <td>{f.task_name || (f.taskid ? `작업#${f.taskid}` : '-')}</td>
+              <td className="r">{f.workschid || '-'}</td>
+              <td><EditableCell value={f.task_filepath} disabled={!canEdit(f)}
+                onSave={v => save(f.fileid, {
+                  file_name: f.file_name, taskid: f.taskid,
+                  workschid: f.workschid, task_filepath: v,
+                })} /></td>
+              <td className="c">{fmtDT(f.create_date)}</td>
+              <td>
+                {f.task_filepath &&
+                  <button onClick={() => download(f)}>다운로드</button>}
+                {canEdit(f) &&
+                  <button className="danger" onClick={() => del(f)}>삭제</button>}
+              </td>
+            </tr>
+          ))}
+          {filtered.length === 0 &&
+            <tr><td colSpan="7" className="empty">첨부파일이 없습니다</td></tr>}
+        </tbody>
+      </table>
+      <p className="hint">
+        [업로드]는 파일을 서버 uploads/ 폴더에 저장합니다.
+        외부 경로만 등록하려면 엑셀 업로드(CSV)를 사용하세요.
+      </p>
     </div>
   )
 }

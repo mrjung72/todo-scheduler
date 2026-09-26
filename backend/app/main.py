@@ -8,7 +8,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import __version__
 from .database import Base, engine, SessionLocal
 from .models import User, Site, Task, CalendarDefine, WorkSchedule
-from .routers import users, sites, tasks, calendar, schedules, user_holidays, auth
+from .routers import (users, sites, tasks, calendar, schedules,
+                      user_holidays, auth, attach_files)
 from .security import hash_password, parse_token
 
 app = FastAPI(title="TODO Scheduler API", version=__version__)
@@ -28,6 +29,7 @@ app.include_router(tasks.router)
 app.include_router(calendar.router)
 app.include_router(schedules.router)
 app.include_router(user_holidays.router)
+app.include_router(attach_files.router)
 
 # --- API 인증 가드: /api/* 는 로그인 토큰 필요 (login/health/config 제외) ---
 from fastapi.responses import JSONResponse

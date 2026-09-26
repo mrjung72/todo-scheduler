@@ -111,6 +111,28 @@ def calendar_events(db: Session = Depends(get_db)):
     return events
 
 
+@router.get("/his")
+def all_schedule_his(db: Session = Depends(get_db)):
+    """전체 작업스케줄 상태변경이력 (최근 이력 순, 관리자화면용)."""
+    rows = (db.query(WorkScheduleHis, Task.task_name, WorkSchedule.work_userid,
+                     WorkSchedule.taskid)
+            .join(WorkSchedule,
+                  WorkScheduleHis.workschid == WorkSchedule.workschid)
+            .outerjoin(Task, Task.taskid == WorkSchedule.taskid)
+            .order_by(WorkScheduleHis.workschhisid.desc()).all())
+    return [{
+        "workschhisid": h.workschhisid,
+        "workschid": h.workschid,
+        "taskid": taskid,
+        "task_name": task_name,
+        "work_userid": work_userid,
+        "work_stat": h.work_stat,
+        "work_hours": h.work_hours,
+        "remark": h.remark,
+        "create_date": h.create_date,
+    } for h, task_name, work_userid, taskid in rows]
+
+
 @router.get("/{workschid}/his", response_model=list[ScheduleHisOut])
 def schedule_his(workschid: int, db: Session = Depends(get_db)):
     """작업스케줄 상태변경이력 (최근 이력 순)."""
