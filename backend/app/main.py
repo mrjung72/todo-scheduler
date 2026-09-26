@@ -35,7 +35,9 @@ app.include_router(attach_files.router)
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
-_AUTH_OPEN = {"/api/auth/login", "/api/health", "/api/config"}
+_AUTH_OPEN = {"/api/auth/login", "/api/health", "/api/config",
+              "/api/auth/signup", "/api/auth/check-userid",
+              "/api/auth/reapply", "/api/auth/rejected-info"}
 
 
 @app.exception_handler(IntegrityError)
@@ -110,6 +112,8 @@ def migrate(db):
     if "default_siteid" not in cols:
         db.execute(text(
             "ALTER TABLE users ADD COLUMN default_siteid TEXT REFERENCES sites(siteid)"))
+    if "reject_remark" not in cols:
+        db.execute(text("ALTER TABLE users ADD COLUMN reject_remark TEXT"))
     cols = {r[1] for r in db.execute(text("PRAGMA table_info(tasks)"))}
     if "work_userid" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))

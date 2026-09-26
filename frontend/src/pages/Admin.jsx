@@ -312,10 +312,22 @@ function UsersTab() {
                     .catch(e => alert(e.response?.data?.detail || '초기화 실패'))
                 }>초기화</button>
               </td>
-              <td className="c"><EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
-                options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
-              <td>{u.user_grade !== 0 &&
-                <button className="danger" onClick={() => del(u.userid)}>삭제</button>}</td>
+              <td className="c" title={u.reject_remark ? `승인불가 사유: ${u.reject_remark}` : ''}>
+                <EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
+                  options={[{ value: 'Y', label: 'Y' }, { value: 'A', label: '승인대기(A)' },
+                            { value: 'R', label: '승인불가(R)' }, { value: 'N', label: 'N' }]} /></td>
+              <td>
+                {u.user_stat === 'A' && <>
+                  <button onClick={() => save(u.userid, { user_stat: 'Y' })}>승인</button>
+                  <button onClick={() => {
+                    const r = window.prompt('승인불가 사유를 입력하세요 (빈칸 가능)')
+                    if (r === null) return
+                    save(u.userid, { user_stat: 'R', reject_remark: r || null })
+                  }}>승인불가</button>
+                </>}
+                {u.user_grade !== 0 &&
+                  <button className="danger" onClick={() => del(u.userid)}>삭제</button>}
+              </td>
             </tr>
           ))}
         </tbody>

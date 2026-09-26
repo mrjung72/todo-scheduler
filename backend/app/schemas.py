@@ -12,6 +12,7 @@ class UserBase(BaseModel):
     user_email: Optional[str] = None
     user_grade: Optional[int] = 9
     user_stat: Optional[str] = "Y"
+    reject_remark: Optional[str] = None    # 승인불가 사유
     default_siteid: Optional[str] = None   # 기본사이트ID
 
 

@@ -212,6 +212,13 @@ table.grid td.clickable:hover { background: #eff6ff; }
 /* 팝업 첨부파일 등록 행 */
 .attach-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .attach-add input[type="file"] { font-size: 12px; flex: 1; }
+.signup-box { width: 420px; }
+.signup-box .hint { text-align: center; }
+.signup-box input[readonly] { background: #f3f4f6; color: #6b7280; }
+.id-msg-slot { min-height: 18px; }
+.id-msg { font-size: 12px; margin-left: 2px; line-height: 18px; }
+.id-msg.good { color: #16a34a; }
+.id-msg.bad { color: #dc2626; }
 
 /* 상세 팝업 */
 .popup {

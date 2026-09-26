@@ -7,6 +7,7 @@ import Kanban from './pages/Kanban'
 import CalendarView from './pages/CalendarView'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
 
 export default function App() {
   const [cfg, setCfg] = useState(null)
@@ -19,6 +20,8 @@ export default function App() {
   }, [])
 
   const [wantLogin, setWantLogin] = useState(false)
+  // null=닫힘, {}=일반 회원가입, {userid,password}=승인불가 재신청 모드
+  const [signupInit, setSignupInit] = useState(null)
   const [profile, setProfile] = useState(null)   // 사용자 상세 팝업
   const [pwOpen, setPwOpen] = useState(false)    // 비밀번호 변경 팝업
   const [pw, setPw] = useState({ cur: '', next: '', confirm: '' })
@@ -58,15 +61,21 @@ export default function App() {
 
   // 비로그인: 홈 화면만 공개, [로그인] 버튼으로 로그인 화면 전환
   if (!me || !localStorage.getItem('token')) {
-    if (wantLogin) return <Login onLogin={u => { setMe(u); setWantLogin(false) }} />
+    if (signupInit !== null)
+      return <Signup initial={signupInit} onBack={() => setSignupInit(null)} />
+    if (wantLogin) return <Login onLogin={u => { setMe(u); setWantLogin(false) }}
+      onSignup={() => { setWantLogin(false); setSignupInit({}) }}
+      onReapply={info => { setWantLogin(false); setSignupInit(info) }} />
     return (
       <div className="app">
         <header className="topbar">
           <Link to="/" className="logo">
             TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
           </Link>
-          <button className="primary" style={{ marginLeft: 'auto' }}
-            onClick={() => setWantLogin(true)}>로그인</button>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button onClick={() => setSignupInit({})}>회원가입</button>
+            <button className="primary" onClick={() => setWantLogin(true)}>로그인</button>
+          </span>
         </header>
         <main>
           <Routes>
