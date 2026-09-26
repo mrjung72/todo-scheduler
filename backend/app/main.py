@@ -31,8 +31,16 @@ app.include_router(user_holidays.router)
 
 # --- API 인증 가드: /api/* 는 로그인 토큰 필요 (login/health/config 제외) ---
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 _AUTH_OPEN = {"/api/auth/login", "/api/health", "/api/config"}
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request, exc):
+    return JSONResponse(
+        {"detail": "참조 중인 데이터가 있거나 입력값이 올바르지 않아 처리할 수 없습니다"},
+        status_code=409)
 
 
 @app.middleware("http")

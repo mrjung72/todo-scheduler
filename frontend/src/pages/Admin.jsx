@@ -133,6 +133,11 @@ function ExcelButtons({ name, cols, rows, onUpload, onDone }) {
 }
 
 const revMap = m => Object.fromEntries(Object.entries(m).map(([k, l]) => [l, k]))
+// API 오류 응답을 사용자 메시지로 변환
+const errMsg = e => {
+  const d = e.response?.data?.detail
+  return typeof d === 'string' ? d : (d ? JSON.stringify(d) : '처리 중 오류가 발생했습니다')
+}
 // 'YYYY-MM-DD HH:mm' → ISO(초 포함). 형식이 맞지 않으면 null
 const dtOf = v => {
   const s = (v || '').trim().replace(' ', 'T')
@@ -153,14 +158,16 @@ function UsersTab() {
     api.get('/sites').then(r => setSites(r.data))
   }, [load])
 
-  const save = (id, patch) => api.put(`/users/${id}`, patch).then(load)
+  const save = (id, patch) => api.put(`/users/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
   const add = async e => {
     e.preventDefault()
-    await api.post('/users', form)
-    setForm(empty); load()
+    try {
+      await api.post('/users', form)
+      setForm(empty); load()
+    } catch (e) { alert(errMsg(e)) }
   }
   const del = id => window.confirm(`사용자 ${id} 삭제?`) &&
-    api.delete(`/users/${id}`).then(load)
+    api.delete(`/users/${id}`).then(load).catch(e => alert(errMsg(e)))
 
   const siteIdOf = v => !v ? null :
     (sites.find(s => s.siteid === v)?.siteid ??
@@ -276,14 +283,16 @@ function SitesTab() {
   const load = useCallback(() => api.get('/sites').then(r => setRows(r.data)), [])
   useEffect(() => { load(); api.get('/users').then(r => setUsers(r.data)) }, [load])
 
-  const save = (id, patch) => api.put(`/sites/${id}`, patch).then(load)
+  const save = (id, patch) => api.put(`/sites/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
   const add = async e => {
     e.preventDefault()
-    await api.post('/sites', form)
-    setForm(empty); load()
+    try {
+      await api.post('/sites', form)
+      setForm(empty); load()
+    } catch (e) { alert(errMsg(e)) }
   }
   const del = id => window.confirm(`사이트 ${id} 삭제?`) &&
-    api.delete(`/sites/${id}`).then(load)
+    api.delete(`/sites/${id}`).then(load).catch(e => alert(errMsg(e)))
 
   const userIdOf = v => !v ? null :
     (users.find(u => u.userid === v)?.userid ??
@@ -373,14 +382,16 @@ function TasksTab() {
     api.get('/sites').then(r => setSites(r.data))
   }, [load])
 
-  const save = (id, patch) => api.put(`/tasks/${id}`, patch).then(load)
+  const save = (id, patch) => api.put(`/tasks/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
   const add = async e => {
     e.preventDefault()
-    await api.post('/tasks', form)
-    setForm(empty); load()
+    try {
+      await api.post('/tasks', form)
+      setForm(empty); load()
+    } catch (e) { alert(errMsg(e)) }
   }
   const del = id => window.confirm(`작업 #${id} 삭제?`) &&
-    api.delete(`/tasks/${id}`).then(load)
+    api.delete(`/tasks/${id}`).then(load).catch(e => alert(errMsg(e)))
 
   const admin = isAdmin()
   const can = t => admin || t.work_userid === myId()
@@ -530,11 +541,11 @@ function CalendarTab() {
   }, [month])
   useEffect(() => { load() }, [load])
 
-  const save = (dateid, patch) => api.put(`/calendar/${dateid}`, patch).then(load)
+  const save = (dateid, patch) => api.put(`/calendar/${dateid}`, patch).then(load).catch(e => alert(errMsg(e)))
   const generate = () =>
     api.post(`/calendar/generate?year=${year}`).then(r => {
       alert(`${r.data.created}일 생성`); load()
-    })
+    }).catch(e => alert(errMsg(e)))
 
   return (
     <div>
@@ -600,22 +611,24 @@ function HolidaysTab() {
   }, [load])
 
   const save = (h, patch) =>
-    api.put(`/user-holidays/${h.dateid}/${h.work_userid}`, patch).then(load)
+    api.put(`/user-holidays/${h.dateid}/${h.work_userid}`, patch).then(load).catch(e => alert(errMsg(e)))
 
   const add = async e => {
     e.preventDefault()
     if (!form.date || !form.work_userid) return
-    await api.post('/user-holidays', {
-      dateid: form.date.replaceAll('-', ''),
-      work_userid: form.work_userid,
-      holiday_category: form.holiday_category,
-      holiday_hours: form.holiday_category === 'P' ? +form.holiday_hours : 0,
-      holiday_remark: form.holiday_remark,
-    })
-    setForm(empty); load()
+    try {
+      await api.post('/user-holidays', {
+        dateid: form.date.replaceAll('-', ''),
+        work_userid: form.work_userid,
+        holiday_category: form.holiday_category,
+        holiday_hours: form.holiday_category === 'P' ? +form.holiday_hours : 0,
+        holiday_remark: form.holiday_remark,
+      })
+      setForm(empty); load()
+    } catch (e) { alert(errMsg(e)) }
   }
   const del = h => window.confirm(`${h.dateid} ${h.user_name || h.work_userid} 휴가 삭제?`) &&
-    api.delete(`/user-holidays/${h.dateid}/${h.work_userid}`).then(load)
+    api.delete(`/user-holidays/${h.dateid}/${h.work_userid}`).then(load).catch(e => alert(errMsg(e)))
 
   const catOptions = Object.entries(HOL_CAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const userOptions = [{ value: '', label: '작업자(전체)' },
@@ -713,38 +726,46 @@ function SchedulesTab() {
 
   const taskOf = id => tasks.find(t => t.taskid === id)
 
-  const saveSched = (id, patch) => api.put(`/schedules/${id}`, patch).then(load)
-  const saveTask = (taskid, patch) => api.put(`/tasks/${taskid}`, patch).then(load)
+  const saveSched = (id, patch) => api.put(`/schedules/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
+  const saveTask = (taskid, patch) => api.put(`/tasks/${taskid}`, patch).then(load).catch(e => alert(errMsg(e)))
 
   const add = async e => {
     e.preventDefault()
-    await api.post('/schedules', { ...form, taskid: +form.taskid })
-    setForm(empty); load()
+    try {
+      await api.post('/schedules', { ...form, taskid: +form.taskid })
+      setForm(empty); load()
+    } catch (e) { alert(errMsg(e)) }
   }
   const del = id => window.confirm(`스케줄 #${id} 삭제?`) &&
-    api.delete(`/schedules/${id}`).then(load)
+    api.delete(`/schedules/${id}`).then(load).catch(e => alert(errMsg(e)))
 
   const recalc = async () => {
-    const { data } = await api.post('/tasks/recalculate')
-    setMsg(`재계산 완료: ${data.updated}건 반영` +
-      (data.created ? ` (스케줄 신규 추가 ${data.created}건)` : ''))
-    load()
+    try {
+      const { data } = await api.post('/tasks/recalculate')
+      setMsg(`재계산 완료: ${data.updated}건 반영` +
+        (data.created ? ` (스케줄 신규 추가 ${data.created}건)` : ''))
+      load()
+    } catch (e) { alert(errMsg(e)) }
   }
 
   const saveStart = async e => {
     e.preventDefault()
     if (!startForm?.start) return
-    await api.patch(`/schedules/${startForm.workschid}/start`, {
-      // 로컬 naive 시각 그대로 전송 (toISOString은 UTC로 밀림)
-      start_datetime: startForm.start.length === 16 ? startForm.start + ':00' : startForm.start,
-    })
-    setStartForm(null)
-    load()
+    try {
+      await api.patch(`/schedules/${startForm.workschid}/start`, {
+        // 로컬 naive 시각 그대로 전송 (toISOString은 UTC로 밀림)
+        start_datetime: startForm.start.length === 16 ? startForm.start + ':00' : startForm.start,
+      })
+      setStartForm(null)
+      load()
+    } catch (e) { alert(errMsg(e)) }
   }
   const unfixStart = async () => {
-    await api.patch(`/schedules/${startForm.workschid}/unfix`)
-    setStartForm(null)
-    load()
+    try {
+      await api.patch(`/schedules/${startForm.workschid}/unfix`)
+      setStartForm(null)
+      load()
+    } catch (e) { alert(errMsg(e)) }
   }
 
   // 작업자는 개발자(등급 1)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
