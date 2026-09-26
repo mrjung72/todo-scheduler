@@ -39,9 +39,9 @@ class Task(Base):
     task_stat = Column(Text, default="W")  # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
     task_csrid = Column(Text)
     task_req_remark = Column(Text)
-    req_userid = Column(Text)
-    itos_userid = Column(Text)
-    work_userid = Column(Text)            # 작업자(개발자)
+    req_userid = Column(Text, ForeignKey("users.userid"))
+    itos_userid = Column(Text, ForeignKey("users.userid"))
+    work_userid = Column(Text, ForeignKey("users.userid"))  # 작업자(개발자)
     task_start_date = Column(DateTime)
     task_end_date = Column(DateTime)
     create_date = Column(DateTime, default=datetime.now)

@@ -18,6 +18,15 @@ ReqUser = aliased(User)
 ItosUser = aliased(User)
 WorkUser = aliased(User)
 
+# users FK 대상 컬럼: 화면/CSV에서 빈 문자열로 들어오면 FK 위반이 되므로 NULL로 정규화
+_USER_FK_COLS = ("req_userid", "itos_userid", "work_userid")
+
+
+def _norm_user_fks(data: dict):
+    for k in _USER_FK_COLS:
+        if data.get(k) == "":
+            data[k] = None
+
 
 def _detail_query(db: Session):
     """tasks + 대표 work_schedule(taskid별 최소 workschid) + 사용자/사이트 조인"""
@@ -144,6 +153,7 @@ def auto_schedule_one(taskid: int, db: Session = Depends(get_db),
 def create_task(body: TaskCreate, db: Session = Depends(get_db),
                 me: User = Depends(get_current_user)):
     data = body.model_dump()
+    _norm_user_fks(data)
     if me.user_grade != 0:
         data["work_userid"] = me.userid  # 비관리자는 자기 작업만 등록 가능
     task = Task(**data)
@@ -166,6 +176,7 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         raise HTTPException(404, "작업을 찾을 수 없습니다")
     check_owner_or_admin(me, obj.work_userid)
     data = body.model_dump(exclude_unset=True)
+    _norm_user_fks(data)
     if me.user_grade != 0 and "work_userid" in data and data["work_userid"] != me.userid:
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
     new_stat = data.pop("task_stat", None)

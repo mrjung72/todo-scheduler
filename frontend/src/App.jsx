@@ -92,8 +92,7 @@ export default function App() {
         </nav>
         {cfg && (
           <span className="workhours" title={`WORK_SEGMENTS=${cfg.work_segments}`}>
-            근무 {cfg.segments.map(s => `${s.start}~${s.end}`).join(', ')}
-            {' '}(하루 {cfg.work_hours_per_day}h)
+            {cfg.work_hours_per_day} 시간/일 작업 기준
           </span>
         )}
         <span className="me">
