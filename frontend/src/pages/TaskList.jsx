@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, taskColor, loadFilter, saveFilter } from '../api'
+import TaskDetailPopup from '../TaskDetailPopup'
 
 export default function TaskList() {
   const [tasks, setTasks] = useState([])
@@ -11,6 +12,7 @@ export default function TaskList() {
   const [q, setQ] = useState(savedF.q || '')
   const [statFilter, setStatFilter] = useState(savedF.stat || '')
   const [cfg, setCfg] = useState(null)
+  const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
 
   const load = useCallback(async () => {
     const params = {}
@@ -102,7 +104,7 @@ export default function TaskList() {
               <td className="c">{t.site_name || t.siteid}</td>
               <td className="r fit">{t.priority}</td>
               <td className="csr-col">{t.task_csrid || '-'}</td>
-              <td>{t.task_name}</td>
+              <td><button className="link" onClick={() => setSel(t)}>{t.task_name}</button></td>
               <td className="r fit">{t.work_hours_estimated}</td>
               <td className="c">{t.req_user_name || t.req_userid}</td>
               <td className="c">{t.itos_user_name || t.itos_userid}</td>
@@ -120,6 +122,7 @@ export default function TaskList() {
           )}
         </tbody>
       </table>
+      {sel && <TaskDetailPopup task={sel} onClose={() => setSel(null)} onChanged={load} />}
       <p className="hint">
         우선순위 순 정렬. 작업 수정·삭제·일정 재적용은 [관리자 → 작업스케줄] 화면에서 합니다.
         {cfg

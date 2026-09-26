@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
+import TaskDetailPopup from '../TaskDetailPopup'
 
 // 3열 배치: 좌 = 대기중(70%)+취소(30%), 중 = 작업중(70%)+작업보류(30%), 우 = 완료(100%)
 const LAYOUT = [
@@ -19,6 +20,7 @@ export default function Kanban() {
   const [q, setQ] = useState(savedF.q || '')
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
+  const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
 
   // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
   const canMove = t => me && (me.user_grade === 0 ||
@@ -104,7 +106,7 @@ export default function Kanban() {
                       <div className="kb-title">
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_csrid && <span className="kb-csr">{t.task_csrid}</span>}
-                        {t.task_name}
+                        <button className="link" onClick={() => setSel(t)}>{t.task_name}</button>
                       </div>
                       <div className="kb-sub">
                         {t.work_user_name || t.work_userid || '-'}
@@ -124,6 +126,7 @@ export default function Kanban() {
           </div>
         ))}
       </div>
+      {sel && <TaskDetailPopup task={sel} onClose={() => setSel(null)} onChanged={load} />}
     </div>
   )
 }
