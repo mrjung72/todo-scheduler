@@ -314,7 +314,8 @@ function UsersTab() {
               </td>
               <td className="c"><EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
                 options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
-              <td><button className="danger" onClick={() => del(u.userid)}>삭제</button></td>
+              <td>{u.user_grade !== 0 &&
+                <button className="danger" onClick={() => del(u.userid)}>삭제</button>}</td>
             </tr>
           ))}
         </tbody>

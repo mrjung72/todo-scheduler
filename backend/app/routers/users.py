@@ -90,5 +90,7 @@ def delete_user(userid: str, db: Session = Depends(get_db)):
     obj = db.get(User, userid)
     if not obj:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
+    if obj.user_grade == 0:
+        raise HTTPException(400, "관리자 등급 사용자는 삭제할 수 없습니다")
     db.delete(obj)
     db.commit()
