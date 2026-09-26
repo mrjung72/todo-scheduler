@@ -202,6 +202,9 @@ table.grid td.clickable:hover { background: #eff6ff; }
   white-space: pre-wrap; word-break: break-word;
   max-height: 240px; overflow-y: auto; font-size: 13px; line-height: 1.6;
 }
+/* 팝업 첨부파일 등록 행 */
+.attach-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.attach-add input[type="file"] { font-size: 12px; flex: 1; }
 
 /* 상세 팝업 */
 .popup {
@@ -229,11 +232,15 @@ table.grid td.clickable:hover { background: #eff6ff; }
 }
 .popup-info p:last-child { margin-bottom: 0; }
 /* 수정 폼의 입력 컨트롤도 값 컬럼에 맞춤 */
-.popup-info input:not([type="checkbox"]), .popup-info select {
+.popup-info input:not([type="checkbox"]), .popup-info select,
+.popup-info textarea {
   flex: 1; padding: 4px 8px; font-size: 13px;
   border: 1px solid #d1d5db; border-radius: 4px; background: #fff;
 }
 .popup-info p.chk { align-items: center; gap: 6px; font-weight: 400; }
+/* 라벨 아래 전체 너비로 펼치는 행 (작업요청내용 등) */
+.popup-info p.full { flex-wrap: wrap; }
+.popup-info p.full textarea, .popup-info p.full input { flex-basis: 100%; }
 
 .daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }
 .daily table { width: 100%; border-collapse: collapse; margin-top: 4px; }

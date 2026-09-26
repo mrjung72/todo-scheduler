@@ -40,9 +40,15 @@ def _to_out(row):
 
 
 @router.get("")
-def list_files(db: Session = Depends(get_db),
+def list_files(taskid: int | None = None, workschid: int | None = None,
+               db: Session = Depends(get_db),
                me: object = Depends(get_current_user)):
-    return [_to_out(r) for r in _list_query(db).all()]
+    q = _list_query(db)
+    if taskid is not None:
+        q = q.filter(TaskAttachFile.taskid == taskid)
+    if workschid is not None:
+        q = q.filter(TaskAttachFile.workschid == workschid)
+    return [_to_out(r) for r in q.all()]
 
 
 class AttachMeta(BaseModel):

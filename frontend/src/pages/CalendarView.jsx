@@ -114,6 +114,10 @@ export default function CalendarView() {
   const [selected, setSelected] = useState(null)
   const [pview, setPview] = useState('info')      // info | req(작업요청상세) | his(이력)
   const [his, setHis] = useState(null)            // 상태변경이력 캐시
+  const [files, setFiles] = useState(null)        // 첨부파일 목록 캐시
+  const fileRef = useRef(null)
+  // 첨부파일 등록: 관리자(0)·개발자(1)
+  const canAttach = me && [0, 1].includes(me.user_grade)
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
   const [dayMap, setDayMap] = useState({})
@@ -223,6 +227,7 @@ export default function CalendarView() {
     work_hours_estimated: selected.work_hours_estimated ?? 0,
     work_userid: selected.work_userid || '',
     work_stat: selected.work_stat || selected.task_stat || 'W',
+    req_remark: selected.task_req_remark || '',
     start: toLocalInput(selected.start),
     unfix: false,
   })
@@ -232,6 +237,7 @@ export default function CalendarView() {
       priority: +editForm.priority,
       work_hours_estimated: +editForm.work_hours_estimated,
       work_userid: editForm.work_userid || null,
+      task_req_remark: editForm.req_remark || null,
     })
     await api.put(`/schedules/${selected.workschid}`, {
       work_stat: editForm.work_stat,
@@ -250,6 +256,34 @@ export default function CalendarView() {
     load()
   }
 
+  // 작업요청 상세 화면의 첨부파일 목록/업로드/다운로드
+  const loadFiles = () => {
+    api.get('/attach-files', { params: { taskid: selected.taskid } })
+      .then(r => setFiles(r.data)).catch(console.error)
+  }
+  const downloadFile = f =>
+    api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
+      .then(r => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(r.data)
+        a.download = f.file_name
+        a.click()
+        URL.revokeObjectURL(a.href)
+      }).catch(e => alert(e.response?.data?.detail || '다운로드 실패'))
+  const uploadFile = async () => {
+    const f = fileRef.current?.files?.[0]
+    if (!f) { alert('첨부할 파일을 선택하세요'); return }
+    const fd = new FormData()
+    fd.append('file', f)
+    fd.append('taskid', selected.taskid)
+    if (selected.workschid) fd.append('workschid', selected.workschid)
+    try {
+      await api.post('/attach-files', fd)
+      fileRef.current.value = ''
+      loadFiles()
+    } catch (e) { alert(e.response?.data?.detail || '업로드 실패') }
+  }
+
   const onEventClick = async (info) => {
     const props = { ...info.event.extendedProps, title: info.event.title,
       workschid: info.event.id,
@@ -257,6 +291,7 @@ export default function CalendarView() {
     setEditForm(null)
     setPview('info')
     setHis(null)
+    setFiles(null)
     setSelected(props)
     if (!props.holiday) {
       const { data } = await api.get(`/schedules/${info.event.id}/daily`)
@@ -370,6 +405,9 @@ export default function CalendarView() {
                   <p><b>시작일시</b>
                     <input type="datetime-local" value={editForm.start}
                       onChange={e => setEditForm({ ...editForm, start: e.target.value })} /></p>
+                  <p className="full"><b>작업요청내용</b>
+                    <textarea rows="12" value={editForm.req_remark}
+                      onChange={e => setEditForm({ ...editForm, req_remark: e.target.value })} /></p>
                   {!!selected.start_fixed && (
                     <p className="chk">
                       <input type="checkbox" checked={editForm.unfix}
@@ -393,6 +431,31 @@ export default function CalendarView() {
               <div className="popup-info">
                 <div className="req-detail">
                   {selected.task_req_remark || '작업요청 내용이 없습니다'}
+                </div>
+                <div className="daily">
+                  <b>첨부파일</b>
+                  <table>
+                    <tbody>
+                      {(files || []).map(f => (
+                        <tr key={f.fileid}>
+                          <td>
+                            <button className="link"
+                              onClick={() => downloadFile(f)}>{f.file_name}</button>
+                          </td>
+                          <td className="r">{fmtLocal(new Date(f.create_date))}</td>
+                        </tr>
+                      ))}
+                      {files && !files.length && (
+                        <tr><td colSpan="2" className="empty">첨부파일이 없습니다</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  {canAttach && (
+                    <div className="attach-add">
+                      <input type="file" ref={fileRef} />
+                      <button onClick={uploadFile}>첨부</button>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : pview === 'his' ? (
@@ -458,7 +521,10 @@ export default function CalendarView() {
             {!editForm && (
               <div className="popup-btns">
                 {!selected.holiday && (
-                  <button onClick={() => setPview(pview === 'req' ? 'info' : 'req')}>
+                  <button onClick={() => {
+                    setPview(pview === 'req' ? 'info' : 'req')
+                    if (pview !== 'req') loadFiles()
+                  }}>
                     {pview === 'req' ? '작업정보' : '작업요청 상세'}
                   </button>
                 )}
