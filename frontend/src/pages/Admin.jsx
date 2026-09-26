@@ -205,6 +205,8 @@ function UsersTab() {
   const [rows, setRows] = useState([])
   const [sites, setSites] = useState([])
   const [form, setForm] = useState(empty)
+  const [q, setQ] = useState('')
+  const [statF, setStatF] = useState('')
   const load = useCallback(() => api.get('/users').then(r => setRows(r.data)), [])
   useEffect(() => {
     load()
@@ -219,9 +221,6 @@ function UsersTab() {
       setForm(empty); load()
     } catch (e) { alert(errMsg(e)) }
   }
-  const del = id => window.confirm(`사용자 ${id} 삭제?`) &&
-    api.delete(`/users/${id}`).then(load).catch(e => alert(errMsg(e)))
-
   const revGrade = revMap(GRADE_LABEL)
   const cols = [
     { label: 'ID', field: 'userid' },
@@ -252,6 +251,11 @@ function UsersTab() {
     return r
   }
 
+  const shown = rows.filter(u =>
+    (!statF || u.user_stat === statF) &&
+    (!q || [u.userid, u.user_name, u.dept_name, u.job_title, u.user_tel, u.user_email]
+      .some(v => (v || '').toLowerCase().includes(q.toLowerCase()))))
+
   return (
     <div>
       <form className="newtask" onSubmit={add}>
@@ -277,7 +281,16 @@ function UsersTab() {
         <button type="submit">추가</button>
       </form>
       <div className="toolbar">
-        <ExcelButtons name="사용자" cols={cols} rows={rows}
+        <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
+          onChange={e => setQ(e.target.value)} />
+        <select value={statF} onChange={e => setStatF(e.target.value)}>
+          <option value="">전체 상태</option>
+          <option value="Y">Y (활성)</option>
+          <option value="A">A (승인대기)</option>
+          <option value="R">R (승인불가)</option>
+          <option value="N">N (비활성)</option>
+        </select>
+        <ExcelButtons name="사용자" cols={cols} rows={shown}
           onUpload={upload} onDone={load} />
       </div>
       <table className="grid">
@@ -286,7 +299,7 @@ function UsersTab() {
           <th>이메일</th><th>등급</th><th>기본사이트</th><th>비밀번호</th><th>상태</th><th></th>
         </tr></thead>
         <tbody>
-          {rows.map(u => (
+          {shown.map(u => (
             <tr key={u.userid}>
               <td>{u.userid}</td>
               <td className="c"><EditableCell value={u.user_name} onSave={v => save(u.userid, { user_name: v })} /></td>
@@ -325,8 +338,6 @@ function UsersTab() {
                     save(u.userid, { user_stat: 'R', reject_remark: r || null })
                   }}>승인불가</button>
                 </>}
-                {u.user_grade !== 0 &&
-                  <button className="danger" onClick={() => del(u.userid)}>삭제</button>}
               </td>
             </tr>
           ))}
