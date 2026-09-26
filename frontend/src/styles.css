@@ -109,6 +109,8 @@ table.grid td.clickable:hover { background: #eff6ff; }
 /* 컬럼 폭 축소: 값 길이에 맞추고 나머지는 다른 컬럼이 사용 */
 .grid td.csr-col, .grid th.csr-col,
 .grid td.fit, .grid th.fit { white-space: nowrap; width: 1%; }
+/* width:1% 셀 안 입력칸이 0에 수렴하지 않도록 최소 너비 확보 */
+.grid td.fit input, .grid td.fit select { width: 70px; }
 
 /* 칸반 보드 */
 .kanban-wrap { height: calc(100vh - 84px); display: flex; flex-direction: column; }
