@@ -7,6 +7,7 @@
 import os
 from datetime import datetime
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -18,8 +19,15 @@ from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/attach-files", tags=["attach-files"])
 
-UPLOAD_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+BACKEND_DIR = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))   # backend/
+load_dotenv(os.path.join(BACKEND_DIR, ".env"))
+
+# 업로드 디렉토리 (.env UPLOAD_DIR, 상대경로는 backend/ 기준, 기본 uploads)
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+if not os.path.isabs(UPLOAD_DIR):
+    UPLOAD_DIR = os.path.join(BACKEND_DIR, UPLOAD_DIR)
+UPLOAD_DIR = os.path.normpath(UPLOAD_DIR)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -77,7 +85,8 @@ def upload_file(file: UploadFile = File(...),
     path = os.path.join(UPLOAD_DIR, safe_name)
     with open(path, "wb") as out:
         out.write(file.file.read())
-    obj.task_filepath = os.path.join("uploads", safe_name)
+    # backend/ 기준 상대경로로 저장 (커스텀 UPLOAD_DIR 절대경로도 그대로 인식)
+    obj.task_filepath = os.path.relpath(path, BACKEND_DIR)
     db.commit()
     return _to_out((obj, task.task_name, task.work_userid))
 
@@ -130,7 +139,7 @@ def download_file(fileid: int, db: Session = Depends(get_db),
     if not obj.task_filepath:
         raise HTTPException(404, "저장된 파일이 없습니다 (경로만 등록된 레코드)")
     path = (obj.task_filepath if os.path.isabs(obj.task_filepath)
-            else os.path.join(os.path.dirname(UPLOAD_DIR), obj.task_filepath))
+            else os.path.join(BACKEND_DIR, obj.task_filepath))
     if not os.path.isfile(path):
         raise HTTPException(404, "파일을 찾을 수 없습니다")
     return FileResponse(path, filename=obj.file_name)
@@ -146,11 +155,11 @@ def delete_file(fileid: int, db: Session = Depends(get_db),
         task = db.get(Task, obj.taskid)
         if task:
             check_owner_or_admin(me, task.work_userid)
-    # uploads/ 아래에 저장된 실제 파일이면 함께 삭제
+    # 업로드 디렉토리 아래에 저장된 실제 파일이면 함께 삭제
     if obj.task_filepath:
         path = (obj.task_filepath if os.path.isabs(obj.task_filepath)
-                else os.path.join(os.path.dirname(UPLOAD_DIR), obj.task_filepath))
-        if path.startswith(UPLOAD_DIR) and os.path.isfile(path):
+                else os.path.join(BACKEND_DIR, obj.task_filepath))
+        if os.path.normpath(path).startswith(UPLOAD_DIR) and os.path.isfile(path):
             os.remove(path)
     db.delete(obj)
     db.commit()

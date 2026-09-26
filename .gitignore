@@ -7,7 +7,9 @@ venv/
 # Env
 .env
 
+uploads/
 app/uploads/
+
 
 # SQLite DB
 backend/*.db
