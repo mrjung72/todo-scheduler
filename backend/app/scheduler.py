@@ -162,6 +162,23 @@ def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None, u
         cur = next_work_start(datetime.combine(d + timedelta(days=1), time(0, 0)), cal, hol, userid)
 
 
+def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = None, userid=None) -> float:
+    """start~end 사이 근무구간 겹침 시간 합계 (실제 작업시간 측정용).
+    start 일이 'F'(휴일 수동작업)면 그 날은 경과시간 그대로 계산된다."""
+    hol = hol or {}
+    if not start or not end or end <= start:
+        return 0.0
+    total = 0.0
+    d = start.date()
+    while d <= end.date():
+        for seg_s, seg_e in worker_segments(d, cal, hol, userid):
+            s, e = max(start, seg_s), min(end, seg_e)
+            if s < e:
+                total += (e - s).total_seconds() / 3600.0
+        d += timedelta(days=1)
+    return round(total, 2)
+
+
 def recalculate(db: Session, only_userid: str = None) -> tuple:
     """대기중(W) 작업의 스케줄 재계산. (갱신된 스케줄 수, 신규 생성 수) 반환.
 
@@ -230,10 +247,6 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
 
             est_hours = task.work_hours_estimated or 0
             sched.end_datetime_estimated = add_work_hours(start, est_hours, cal_f, hol, uid)
-
-            real_hours = task.work_hours_real or 0
-            if real_hours > 0:
-                sched.end_datetime_real = add_work_hours(start, real_hours, cal_f, hol, uid)
 
             cursor = sched.end_datetime_estimated
             updated += 1

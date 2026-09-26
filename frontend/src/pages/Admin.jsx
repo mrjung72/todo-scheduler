@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL } from '../api'
+import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL, NEXT_STAT } from '../api'
 
 const TABS = [
   { key: 'users', label: '사용자', adminOnly: true },
@@ -435,6 +435,7 @@ function TasksTab() {
 
   const admin = isAdmin()
   const can = t => admin || t.work_userid === myId()
+  const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
@@ -470,7 +471,6 @@ function TasksTab() {
     { label: '작업자(참조)', field: '_work_name', get: t => t.work_user_name || '' },
     { label: '작업자ID', field: 'work_userid' },
     { label: '작업요청내용', field: 'task_req_remark' },
-    { label: '작업요청첨부파일경로', field: 'task_req_filepath' },
     { label: '작업시작일시', field: 'task_start_date', get: t => fmtDT(t.task_start_date) },
     { label: '작업종료일시', field: 'task_end_date', get: t => fmtDT(t.task_end_date) },
     { label: '생성일시', field: 'create_date', get: t => fmtDT(t.create_date) },
@@ -485,7 +485,6 @@ function TasksTab() {
       task_stat: revStat[o.task_stat] ?? o.task_stat ?? 'W',
       task_csrid: o.task_csrid || null,
       task_req_remark: o.task_req_remark || null,
-      task_req_filepath: o.task_req_filepath || null,
       task_start_date: dtOf(o.task_start_date),
       task_end_date: dtOf(o.task_end_date),
       req_userid: o.req_userid || null,
@@ -547,7 +546,7 @@ function TasksTab() {
                 onSave={v => save(t.taskid, { work_hours_real: v })} /></td>
               <td className="c"><EditableCell value={t.task_stat} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_stat: v })}
-                options={Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))} /></td>
+                options={statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
               <td className="c"><EditableCell value={t.req_userid} disabled={!can(t)}
@@ -850,8 +849,6 @@ function SchedulesTab() {
     { label: '종료일시(실제)', field: 'end_datetime_real', get: s => fmtDT(s.end_datetime_real) },
     { label: '작업요청내용(참조)', field: '_req_remark',
       get: s => taskOf(s.taskid)?.task_req_remark || '' },
-    { label: '작업요청첨부파일경로(참조)', field: '_req_filepath',
-      get: s => taskOf(s.taskid)?.task_req_filepath || '' },
     { label: '작업시작일시(참조)', field: '_task_start',
       get: s => fmtDT(taskOf(s.taskid)?.task_start_date) },
     { label: '작업종료일시(참조)', field: '_task_end',
@@ -929,7 +926,7 @@ function SchedulesTab() {
                   options={woptFor(s.work_userid)} /></td>
                 <td className="c"><EditableCell value={s.work_stat} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_stat: v })}
-                  options={statOpt} /></td>
+                  options={statOpt.filter(o => NEXT_STAT[s.work_stat]?.includes(o.value))} /></td>
                 <td><EditableCell value={s.work_remark} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_remark: v })} /></td>
                 <td className={`c${can(s) ? ' clickable' : ''}`}

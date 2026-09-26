@@ -39,7 +39,6 @@ class Task(Base):
     task_stat = Column(Text, default="W")  # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
     task_csrid = Column(Text)
     task_req_remark = Column(Text)
-    task_req_filepath = Column(Text)
     req_userid = Column(Text)
     itos_userid = Column(Text)
     work_userid = Column(Text)            # 작업자(개발자)
@@ -71,11 +70,30 @@ class WorkSchedule(Base):
     taskid = Column(Integer, ForeignKey("tasks.taskid"))
     work_stat = Column(Text, default="W")     # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
     work_remark = Column(Text)
-    work_filepath = Column(Text)
     work_userid = Column(Text)
     start_datetime = Column(DateTime)
     end_datetime_estimated = Column(DateTime)
     end_datetime_real = Column(DateTime)
     # 시작일시 수동 고정 여부 (1이면 재계산 시에도 start_datetime 유지)
     start_fixed = Column(Integer, default=0)
+    create_date = Column(DateTime, default=datetime.now)
+
+
+class WorkScheduleHis(Base):
+    __tablename__ = "work_schedule_his"
+    workschhisid = Column(Integer, primary_key=True, autoincrement=True)
+    workschid = Column(Integer, ForeignKey("work_schedule.workschid"))
+    work_stat = Column(Text)               # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
+    work_hours = Column(REAL, default=0)   # 작업기간(시간), 작업중 구간에만 적용
+    remark = Column(Text)                  # 비고
+    create_date = Column(DateTime, default=datetime.now)
+
+
+class TaskAttachFile(Base):
+    __tablename__ = "task_attach_files"
+    fileid = Column(Integer, primary_key=True, autoincrement=True)
+    file_name = Column(Text, nullable=False)
+    taskid = Column(Integer, ForeignKey("tasks.taskid"))
+    workschid = Column(Integer, ForeignKey("work_schedule.workschid"))
+    task_filepath = Column(Text)
     create_date = Column(DateTime, default=datetime.now)

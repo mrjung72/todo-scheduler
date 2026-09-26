@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, taskColor } from '../api'
+import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor } from '../api'
 
 // 3열 배치: 좌 = 대기중(70%)+취소(30%), 중 = 작업중(70%)+작업보류(30%), 우 = 완료(100%)
 const LAYOUT = [
@@ -40,6 +40,11 @@ export default function Kanban() {
     const taskid = +e.dataTransfer.getData('text/taskid')
     const t = tasks.find(x => x.taskid === taskid)
     if (!t || t.task_stat === st || !canMove(t)) return
+    // 허용 전이 외 이동은 서버와 동일 규칙으로 차단
+    if (!(NEXT_STAT[t.task_stat] || []).includes(st)) {
+      setErr(`${STAT_LABEL[t.task_stat]} 상태에서는 ${STAT_LABEL[st]}(으)로 변경할 수 없습니다`)
+      return
+    }
     try {
       await api.put(`/tasks/${taskid}`, { task_stat: st })  // 스케줄 work_stat도 동기화됨
       load()

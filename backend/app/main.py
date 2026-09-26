@@ -111,6 +111,11 @@ def migrate(db):
     cols = {r[1] for r in db.execute(text("PRAGMA table_info(tasks)"))}
     if "work_userid" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))
+    if "task_req_filepath" in cols:   # 첨부파일은 task_attach_files 테이블로 이관
+        db.execute(text("ALTER TABLE tasks DROP COLUMN task_req_filepath"))
+    cols = {r[1] for r in db.execute(text("PRAGMA table_info(work_schedule)"))}
+    if "work_filepath" in cols:
+        db.execute(text("ALTER TABLE work_schedule DROP COLUMN work_filepath"))
     db.commit()
 
 

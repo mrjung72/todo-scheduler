@@ -9,6 +9,7 @@ from ..scheduler import (
     recalculate, get_calendar_map, get_holiday_map,
     add_work_hours, workday_cal,
 )
+from ..statusflow import apply_task_stat_change
 from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -167,29 +168,21 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     data = body.model_dump(exclude_unset=True)
     if me.user_grade != 0 and "work_userid" in data and data["work_userid"] != me.userid:
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
+    new_stat = data.pop("task_stat", None)
+    remark = data.pop("stat_remark", None)
     for k, v in data.items():
         setattr(obj, k, v)
-    # 작업상태 변경 시 연결된 스케줄(work_stat)도 동기화
-    if "task_stat" in data:
-        db.query(WorkSchedule).filter(
-            WorkSchedule.taskid == taskid,
-        ).update({WorkSchedule.work_stat: obj.task_stat})
-        # 작업중/완료 전환 시에만 작업 시작/종료일시 반영 (대표 스케줄 기준)
-        if obj.task_stat in ("P", "F"):
-            rep = db.query(WorkSchedule).filter(
-                WorkSchedule.taskid == taskid,
-            ).order_by(WorkSchedule.workschid).first()
-            if rep:
-                obj.task_start_date = rep.start_datetime
-                obj.task_end_date = rep.end_datetime_real or rep.end_datetime_estimated
+    # 작업상태 변경: 전이 규칙 검증 + 이력 기록 + 스케줄 동기화
+    if new_stat is not None:
+        apply_task_stat_change(db, obj, new_stat, remark)
     # 작업자 변경 시 대기중 스케줄의 작업자도 함께 갱신
     if "work_userid" in data:
         db.query(WorkSchedule).filter(
             WorkSchedule.taskid == taskid,
             WorkSchedule.work_stat == "W",
         ).update({WorkSchedule.work_userid: obj.work_userid})
-    # 예상/실제 작업시간 변경 시 시작일시가 잡힌 스케줄의 종료일시 재계산
-    if "work_hours_estimated" in data or "work_hours_real" in data:
+    # 예상 작업시간 변경 시 시작일시가 잡힌 스케줄의 종료예상일시 재계산
+    if "work_hours_estimated" in data:
         cal = get_calendar_map(db)
         hol = get_holiday_map(db)
         for sched in db.query(WorkSchedule).filter(
@@ -202,10 +195,6 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
             sched.end_datetime_estimated = add_work_hours(
                 sched.start_datetime, obj.work_hours_estimated or 0,
                 cal_f, hol, uid)
-            if obj.work_hours_real:
-                sched.end_datetime_real = add_work_hours(
-                    sched.start_datetime, obj.work_hours_real,
-                    cal_f, hol, uid)
     db.commit()
     db.refresh(obj)
     return obj

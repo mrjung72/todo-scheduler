@@ -60,7 +60,6 @@ CREATE TABLE tasks (
 	task_stat TEXT,                -- 작업상태(W-대기중,P-작업중,D-작업보류,F-완료,C-취소)
 	task_csrid TEXT,               -- 관련 CSR ID
 	task_req_remark TEXT,          -- 작업요청내용
-	task_req_filepath TEXT,        -- 작업요청첨부파일경로
 	req_userid TEXT,               -- 요청자(현업담당자)ID
 	itos_userid TEXT,              -- IT업무담당자ID
 	work_userid TEXT,              -- 작업자ID
@@ -84,9 +83,8 @@ CREATE TABLE calendar_define (
 CREATE TABLE work_schedule (
     workschid INTEGER PRIMARY KEY,    -- 작업스케쥴ID 
     taskid INTEGER,                   -- 작업ID 
-	work_stat TEXT,                   -- 작업상태(W-대기중,P-작업중,F-완료,C-취소)
+	work_stat TEXT,                   -- 작업상태(W-대기중,P-작업중,D-작업보류,F-완료,C-취소)
 	work_remark TEXT,                 -- 작업내용
-	work_filepath TEXT,               -- 작업첨부파일경로
 	work_userid TEXT,                 -- 작업자ID
     start_datetime DATETIME,          -- 작업 시작 일시 (자동계산 또는 수동설정)
     end_datetime_estimated DATETIME,  -- 작업 예상 종료 일시 (자동계산)
@@ -135,3 +133,54 @@ FOREIGN KEY (default_siteid) REFERENCES sites(siteid)
 작업상태값(W-대기중,P-작업중,D-작업보류,F-완료,C-취소)을 기준으로 5개 영역으로 나눌꺼야, 
 크게 3열로 나누고, 좌측 위쪽 70%는 대기중, 아래쪽 30%는 취소, 중앙 위쪽 70%는 작업중, 
 아래쪽 30%는 작업보류, 우측 전체는 완료 작업 영역으로 적용해줘
+
+
+
+
+>>> 버전 0.5.3
+작업상태 변경이력 테이블 및 관련첨부파일 테이블 추가
+
+7. 작업스케쥴 상태변경이력
+CREATE TABLE work_schedule_his (
+    workschhisid INTEGER PRIMARY KEY, -- 작업스케쥴이력ID 
+    workschid INTEGER,                -- 작업스케쥴ID 
+	work_stat TEXT,                   -- 작업상태(W-대기중,P-작업중,D-작업보류,F-완료,C-취소)
+    work_hours REAL DEFAULT 0,        -- 작업기간(시간), 작업중 상태일 때만 적용
+	remark TEXT,                      -- 비고
+	create_date datetime,             -- 등록일자
+	FOREIGN KEY (workschid) REFERENCES work_schedule(workschid)
+);
+
+
+8. 작업관련첨부파일정의
+CREATE TABLE task_attach_files (
+    fileid INTEGER PRIMARY KEY,    -- 파일ID 
+    file_name TEXT NOT NULL,       -- 파일명
+    taskid INTEGER,                -- 작업ID 
+    workschid INTEGER,             -- 작업스케쥴ID 
+	task_filepath TEXT,            -- 첨부파일경로
+	create_date datetime,          -- 등록일자
+	FOREIGN KEY (taskid) REFERENCES tasks(taskid),
+	FOREIGN KEY (workschid) REFERENCES work_schedule(workschid)
+);
+
+tasks과 work_schedule 테이블에서는 첨부파일경로 컬럼제거
+
+
+
+작업상태 변경 규칙정의
+1. 대기중 작업은 취소/작업중 상태로만 이동할 수 있다
+   단, 작업시작일시가 현재시각보다 이전일 경우에만 작업중 상태로 변경 가능하다
+       작업중 상태로 변경되면 현재 시각이 작업시작일시로 적용되어야한다.
+2. 작업취소 상태의 작업은 대기 상태로만 변경가능하다.
+3. 작업중 상태의 작업은 작업보류/작업완료 상태로만 이동 가능하다
+   작업완료 상태로 바뀔때는 실제작업완료일시를 현재시각으로 적용한다.
+4. 작업보류 상태의 작업은 작업중/작업취소 상태로만 변경가능하다
+5. 작업완료 상태의 작업은 다른 상태로 변경 불가하다.
+6. 작업상태 변경시 마다 상태변경이력 테이블(work_schedule_his)에 기록한다.
+7. 작업상태가 완료외의 상태로 바뀔때는 실제작업종료 시간은 항상 null이 되어야 해
+
+
+
+
+

@@ -4,13 +4,16 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import WorkSchedule, Task, User, Site
-from ..schemas import ScheduleCreate, ScheduleUpdate, ScheduleOut
+from ..models import WorkSchedule, WorkScheduleHis, Task, User, Site
+from ..schemas import (
+    ScheduleCreate, ScheduleUpdate, ScheduleOut, ScheduleHisOut,
+)
 from ..security import get_current_user, check_owner_or_admin
 from ..scheduler import (
     get_calendar_map, get_holiday_map, add_work_hours,
     worker_segments, workday_cal, FREE_DAY_STAT,
 )
+from ..statusflow import apply_stat_change
 from datetime import timedelta
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
@@ -108,6 +111,14 @@ def calendar_events(db: Session = Depends(get_db)):
     return events
 
 
+@router.get("/{workschid}/his", response_model=list[ScheduleHisOut])
+def schedule_his(workschid: int, db: Session = Depends(get_db)):
+    """작업스케줄 상태변경이력 (최근 이력 순)."""
+    return (db.query(WorkScheduleHis)
+            .filter(WorkScheduleHis.workschid == workschid)
+            .order_by(WorkScheduleHis.workschhisid.desc()).all())
+
+
 @router.get("/{workschid}/daily")
 def daily_hours(workschid: int, db: Session = Depends(get_db)):
     """스케줄의 시작~종료 구간을 일별 작업시간으로 분해."""
@@ -191,17 +202,15 @@ def update_schedule(workschid: int, body: ScheduleUpdate, db: Session = Depends(
     data = body.model_dump(exclude_unset=True)
     if me.user_grade != 0 and "work_userid" in data and data["work_userid"] != me.userid:
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
+    new_stat = data.pop("work_stat", None)
+    remark = data.pop("stat_remark", None)
     for k, v in data.items():
         setattr(obj, k, v)
-    # 작업상태 변경 시 연결된 작업(tasks.task_stat)도 동기화
-    if "work_stat" in data and obj.taskid:
-        task = db.get(Task, obj.taskid)
-        if task:
-            task.task_stat = obj.work_stat
-            # 작업중/완료 전환 시에만 작업 테이블의 시작/종료일시 반영
-            if obj.work_stat in ("P", "F"):
-                task.task_start_date = obj.start_datetime
-                task.task_end_date = obj.end_datetime_real or obj.end_datetime_estimated
+    # 작업상태 변경: 전이 규칙 검증 + 이력 기록 + tasks 동기화
+    if new_stat is not None:
+        apply_stat_change(db, obj,
+                          db.get(Task, obj.taskid) if obj.taskid else None,
+                          new_stat, remark)
     db.commit()
     db.refresh(obj)
     return obj

@@ -66,7 +66,6 @@ class TaskBase(BaseModel):
     task_stat: Optional[str] = "W"
     task_csrid: Optional[str] = None
     task_req_remark: Optional[str] = None
-    task_req_filepath: Optional[str] = None
     req_userid: Optional[str] = None
     itos_userid: Optional[str] = None
     work_userid: Optional[str] = None   # 작업자(개발자)
@@ -87,12 +86,12 @@ class TaskUpdate(BaseModel):
     task_stat: Optional[str] = None
     task_csrid: Optional[str] = None
     task_req_remark: Optional[str] = None
-    task_req_filepath: Optional[str] = None
     req_userid: Optional[str] = None
     itos_userid: Optional[str] = None
     work_userid: Optional[str] = None
     task_start_date: Optional[datetime] = None
     task_end_date: Optional[datetime] = None
+    stat_remark: Optional[str] = None   # 작업상태 변경 시 이력 비고
 
 
 class TaskOut(TaskBase):
@@ -154,7 +153,6 @@ class ScheduleBase(BaseModel):
     taskid: Optional[int] = None
     work_stat: Optional[str] = "W"
     work_remark: Optional[str] = None
-    work_filepath: Optional[str] = None
     work_userid: Optional[str] = None
     start_datetime: Optional[datetime] = None
     end_datetime_estimated: Optional[datetime] = None
@@ -170,12 +168,32 @@ class ScheduleUpdate(BaseModel):
     taskid: Optional[int] = None
     work_stat: Optional[str] = None
     work_remark: Optional[str] = None
-    work_filepath: Optional[str] = None
     work_userid: Optional[str] = None
     start_datetime: Optional[datetime] = None
     end_datetime_estimated: Optional[datetime] = None
     end_datetime_real: Optional[datetime] = None
     start_fixed: Optional[int] = None
+    stat_remark: Optional[str] = None   # 작업상태 변경 시 이력 비고
+
+
+class ScheduleHisOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    workschhisid: int
+    workschid: Optional[int] = None
+    work_stat: Optional[str] = None
+    work_hours: Optional[float] = 0
+    remark: Optional[str] = None
+    create_date: Optional[datetime] = None
+
+
+class TaskAttachFileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    fileid: int
+    file_name: str
+    taskid: Optional[int] = None
+    workschid: Optional[int] = None
+    task_filepath: Optional[str] = None
+    create_date: Optional[datetime] = None
 
 
 class ScheduleOut(ScheduleBase):

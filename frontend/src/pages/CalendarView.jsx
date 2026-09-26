@@ -3,7 +3,7 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT } from '../api'
+import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT, NEXT_STAT } from '../api'
 
 const p2 = n => String(n).padStart(2, '0')
 const fmtYMD = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
@@ -355,6 +355,8 @@ export default function CalendarView() {
                     <select value={editForm.work_stat}
                       onChange={e => setEditForm({ ...editForm, work_stat: e.target.value })}>
                       {Object.entries(STAT_LABEL)
+                        .filter(([k]) => NEXT_STAT[selected.work_stat
+                          || selected.task_stat]?.includes(k))
                         .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                     </select></p>
                   <p><b>시작일시</b>

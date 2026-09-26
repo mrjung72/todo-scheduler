@@ -35,6 +35,15 @@ export const STAT_LABEL = {
   C: '취소',
 }
 
+// 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일)
+export const NEXT_STAT = {
+  W: ['W', 'P', 'C'],
+  P: ['P', 'D', 'F'],
+  D: ['D', 'P', 'C'],
+  C: ['C', 'W'],
+  F: ['F'],
+}
+
 export const DAY_STAT_LABEL = {
   W: '근무일',
   H: '휴일',
