@@ -3,7 +3,8 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT, NEXT_STAT } from '../api'
+import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, fmtDT, NEXT_STAT,
+  loadFilter, saveFilter } from '../api'
 
 const p2 = n => String(n).padStart(2, '0')
 const fmtYMD = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
@@ -116,10 +117,12 @@ export default function CalendarView() {
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
   const [dayMap, setDayMap] = useState({})
-  // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
-  const [siteFilter, setSiteFilter] = useState(me?.default_siteid || '')
-  const [q, setQ] = useState('')
-  const [statFilter, setStatFilter] = useState('')
+  // 초기값 = 저장된 검색조건, 없으면 사용자 기본사이트
+  const [savedF] = useState(() => loadFilter('calendar'))
+  const [siteFilter, setSiteFilter] = useState(() =>
+    savedF.site ?? me?.default_siteid ?? '')
+  const [q, setQ] = useState(savedF.q || '')
+  // 달력은 대기중(W)/작업중(P) 스케줄만 표시 (서버에서도 W,P만 반환)
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
     holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
   const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
@@ -265,7 +268,6 @@ export default function CalendarView() {
   const filtered = events.filter(e => {
     const p = e.extendedProps || {}
     if (siteFilter && p.siteid !== siteFilter) return false
-    if (statFilter && (p.work_stat || p.task_stat) !== statFilter) return false
     if (kw && ![e.title, p.work_user_name, p.work_userid, p.site_name]
       .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
     return true
@@ -283,11 +285,11 @@ export default function CalendarView() {
           value={q}
           onChange={e => setQ(e.target.value)}
         />
-        <select value={statFilter} onChange={e => setStatFilter(e.target.value)}>
-          <option value="">상태(전체)</option>
-          {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <button onClick={load}>검색</button>
+        <span className="hint-inline">대기중/작업중 작업만 표시</span>
+        <button onClick={() => {
+          saveFilter('calendar', { site: siteFilter, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
       </div>
       <FullCalendar
         ref={calRef}

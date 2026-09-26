@@ -85,9 +85,9 @@ export default function App() {
           TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
         </Link>
         <nav>
-          <NavLink to="/tasks">작업목록</NavLink>
           <NavLink to="/kanban">칸반</NavLink>
           <NavLink to="/calendar">달력</NavLink>
+          <NavLink to="/tasks">작업목록</NavLink>
           {[0, 1].includes(me.user_grade) && <NavLink to="/admin">관리자</NavLink>}
         </nav>
         {cfg && (

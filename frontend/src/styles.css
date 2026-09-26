@@ -27,6 +27,7 @@ main { padding: 16px 20px; }
 .msg { color: #047857; font-size: 13px; }
 .err { color: #dc2626; font-size: 13px; }
 .hint { color: #6b7280; font-size: 12px; }
+.hint-inline { color: #6b7280; font-size: 12px; white-space: nowrap; }
 
 input, select, button {
   font-size: 13px; padding: 5px 8px; border: 1px solid #d1d5db;

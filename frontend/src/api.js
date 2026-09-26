@@ -35,6 +35,14 @@ export const STAT_LABEL = {
   C: '취소',
 }
 
+// 화면별 검색조건 저장/복원 (localStorage)
+export const loadFilter = key => {
+  try { return JSON.parse(localStorage.getItem(`filter:${key}`) || '{}') }
+  catch { return {} }
+}
+export const saveFilter = (key, obj) =>
+  localStorage.setItem(`filter:${key}`, JSON.stringify(obj))
+
 // 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일)
 export const NEXT_STAT = {
   W: ['W', 'P', 'C'],

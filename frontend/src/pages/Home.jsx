@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, taskColor } from '../api'
+import api, { fmtDT, STAT_LABEL, taskColor, loadFilter, saveFilter } from '../api'
 
 /* 모바일 스타일 메인 화면: 작업 목록을 카드 리스트로 표시, 탭하면 상세 펼침 */
 export default function Home() {
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
-  // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
+  // 초기값 = 저장된 검색조건, 없으면 사용자 기본사이트
+  const [savedF] = useState(() => loadFilter('home'))
   const [siteFilter, setSiteFilter] = useState(() =>
-    JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid || '')
-  const [q, setQ] = useState('')
-  const [statFilter, setStatFilter] = useState('')
+    savedF.site ?? JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid ?? '')
+  const [q, setQ] = useState(savedF.q || '')
+  const [statFilter, setStatFilter] = useState(savedF.stat || '')
   const [openId, setOpenId] = useState(null)
 
   const load = useCallback(async () => {
@@ -41,7 +42,10 @@ export default function Home() {
           <option value="">상태(전체)</option>
           {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        <button onClick={load}>검색</button>
+        <button onClick={() => {
+          saveFilter('home', { site: siteFilter, q, stat: statFilter })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
       </div>
       <div className="home-list">
         {tasks.map(t => {

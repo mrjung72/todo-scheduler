@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor } from '../api'
+import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
 
 // 3열 배치: 좌 = 대기중(70%)+취소(30%), 중 = 작업중(70%)+작업보류(30%), 우 = 완료(100%)
 const LAYOUT = [
@@ -13,9 +13,10 @@ export default function Kanban() {
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
   // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
+  const [savedF] = useState(() => loadFilter('kanban'))
   const [siteFilter, setSiteFilter] = useState(() =>
-    me?.default_siteid || '')
-  const [q, setQ] = useState('')
+    savedF.site ?? me?.default_siteid ?? '')
+  const [q, setQ] = useState(savedF.q || '')
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
 
@@ -69,7 +70,10 @@ export default function Kanban() {
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
         />
-        <button onClick={load}>검색</button>
+        <button onClick={() => {
+          saveFilter('kanban', { site: siteFilter, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
         {err && <span className="err">{err}</span>}
       </div>
 
