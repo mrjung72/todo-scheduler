@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, taskColor, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
+const PAGE_SIZE = 20
+
 export default function TaskList() {
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
@@ -13,6 +15,7 @@ export default function TaskList() {
   const [statFilter, setStatFilter] = useState(savedF.stat || '')
   const [cfg, setCfg] = useState(null)
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
+  const [page, setPage] = useState(0)
 
   const load = useCallback(async () => {
     const params = {}
@@ -24,6 +27,7 @@ export default function TaskList() {
   }, [q, statFilter, siteFilter])
 
   useEffect(() => { load().catch(console.error) }, [load])
+  useEffect(() => setPage(0), [q, statFilter, siteFilter])   // 검색조건 변경 시 1페이지로
   useEffect(() => {
     api.get('/config').then(r => setCfg(r.data))
     api.get('/sites').then(r => setSites(r.data))
@@ -66,6 +70,10 @@ export default function TaskList() {
     URL.revokeObjectURL(a.href)
   }
 
+  const pages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
+  const cur = Math.min(page, pages - 1)
+  const paged = tasks.slice(cur * PAGE_SIZE, (cur + 1) * PAGE_SIZE)
+
   return (
     <div>
       <div className="toolbar">
@@ -99,7 +107,7 @@ export default function TaskList() {
           </tr>
         </thead>
         <tbody>
-          {tasks.map(t => (
+          {paged.map(t => (
             <tr key={t.taskid} style={{ borderLeft: `6px solid ${taskColor(t.taskid)}` }}>
               <td className="c">{t.site_name || t.siteid}</td>
               <td className="r fit">{t.priority}</td>
@@ -122,6 +130,12 @@ export default function TaskList() {
           )}
         </tbody>
       </table>
+      <div className="pager">
+        <span className="pager-count">총 {tasks.length}건</span>
+        <button disabled={cur <= 0} onClick={() => setPage(cur - 1)}>이전</button>
+        <span>{cur + 1} / {pages} 페이지</span>
+        <button disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>다음</button>
+      </div>
       {sel && <TaskDetailPopup task={sel} onClose={() => setSel(null)} onChanged={load} />}
       <p className="hint">
         우선순위 순 정렬. 작업 수정·삭제·일정 재적용은 [관리자 → 작업스케줄] 화면에서 합니다.

@@ -53,6 +53,10 @@ input.num { width: 64px; }
 
 .newtask {
   display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+  background: #f5f6f8; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px;
+}
+/* 관리자 화면: 검색라인을 입력라인과 동일한 박스 크기로 */
+.admin .toolbar {
   background: #fff; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px;
 }
 .newtask input { min-width: 120px; }
@@ -300,6 +304,10 @@ table.grid td.clickable:hover { background: #eff6ff; }
 button.logout { padding: 3px 10px; font-size: 12px; }
 
 /* 메인(모바일 스타일) */
+.pager { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+.pager .pager-count { font-weight: 600; color: #374151; }
+.pager button:disabled { color: #9ca3af; }
+
 .home-wrap { max-width: 820px; margin: 0 auto; }
 .home-card {
   background: #fff; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;

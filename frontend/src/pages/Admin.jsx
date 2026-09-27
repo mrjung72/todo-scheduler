@@ -23,7 +23,7 @@ const isProtectedUser = u => u.userid === 'admin' && myId() !== 'admin'
 export default function Admin() {
   const [tab, setTab] = useState('users')
   return (
-    <div>
+    <div className="admin">
       <div className="tabs">
         {TABS.map(t => (
           <button key={t.key} className={tab === t.key ? 'tab active' : 'tab'}
@@ -62,6 +62,56 @@ function EditableCell({ value, onSave, type = 'text', options, disabled }) {
       onBlur={() => v !== (value ?? '') && onSave(type === 'number' ? +v : v)}
       onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
   )
+}
+
+// 이름 입력 시 실시간 검색되는 사용자 선택 셀 (datalist 리스트다운)
+// value = userid, 표시/입력은 "이름 (ID)" 형태
+function SearchUserCell({ value, users, listId, onSave, disabled }) {
+  const toLabel = uid => {
+    const u = users.find(u => u.userid === uid)
+    return u ? `${u.user_name} (${u.userid})` : (uid || '')
+  }
+  const [v, setV] = useState(toLabel(value))
+  useEffect(() => setV(toLabel(value)), [value, users])
+  if (disabled) return <span>{toLabel(value)}</span>
+  const commit = () => {
+    const t = v.trim()
+    const m = t.match(/\(([^()]*)\)\s*$/)   // "이름 (ID)" → ID 추출
+    const uid = !t ? null
+      : m ? m[1].trim()
+      : (users.find(u => u.user_name === t)?.userid ?? t)
+    if (uid !== (value || null)) onSave(uid)
+  }
+  return (
+    <input list={listId} value={v} placeholder="이름 입력"
+      onChange={e => setV(e.target.value)} onBlur={commit}
+      onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
+  )
+}
+
+/* ---------------- 페이징 공통 ---------------- */
+const PAGE_SIZE = 20
+
+function Pager({ total, page, setPage }) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  return (
+    <div className="pager">
+      <span className="pager-count">총 {total}건</span>
+      <button disabled={page <= 0} onClick={() => setPage(page - 1)}>이전</button>
+      <span>{page + 1} / {pages} 페이지</span>
+      <button disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>다음</button>
+    </div>
+  )
+}
+
+// list를 페이지 단위로 잘라 paged 목록과 pager 요소를 반환 (deps 변경 시 1페이지로)
+function usePager(list, deps) {
+  const [page, setPage] = useState(0)
+  useEffect(() => setPage(0), deps)
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+  const cur = Math.min(page, pages - 1)
+  const paged = list.slice(cur * PAGE_SIZE, (cur + 1) * PAGE_SIZE)
+  return { paged, pager: <Pager total={list.length} page={cur} setPage={setPage} /> }
 }
 
 /* ---------------- 엑셀 다운/업로드 공통 ---------------- */
@@ -256,9 +306,23 @@ function UsersTab() {
     (!statF || u.user_stat === statF) &&
     (!q || [u.userid, u.user_name, u.dept_name, u.job_title, u.user_tel, u.user_email]
       .some(v => (v || '').toLowerCase().includes(q.toLowerCase()))))
+  const { paged, pager } = usePager(shown, [q, statF])
 
   return (
     <div>
+      <div className="toolbar">
+        <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
+          onChange={e => setQ(e.target.value)} />
+        <select value={statF} onChange={e => setStatF(e.target.value)}>
+          <option value="">전체 상태</option>
+          <option value="Y">Y (활성)</option>
+          <option value="A">A (승인대기)</option>
+          <option value="R">R (승인불가)</option>
+          <option value="N">N (비활성)</option>
+        </select>
+        <ExcelButtons name="사용자" cols={cols} rows={shown}
+          onUpload={upload} onDone={load} />
+      </div>
       <form className="newtask" onSubmit={add}>
         <input required placeholder="사용자ID" value={form.userid}
           onChange={e => setForm({ ...form, userid: e.target.value })} />
@@ -281,26 +345,13 @@ function UsersTab() {
         </select>
         <button type="submit">추가</button>
       </form>
-      <div className="toolbar">
-        <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
-          onChange={e => setQ(e.target.value)} />
-        <select value={statF} onChange={e => setStatF(e.target.value)}>
-          <option value="">전체 상태</option>
-          <option value="Y">Y (활성)</option>
-          <option value="A">A (승인대기)</option>
-          <option value="R">R (승인불가)</option>
-          <option value="N">N (비활성)</option>
-        </select>
-        <ExcelButtons name="사용자" cols={cols} rows={shown}
-          onUpload={upload} onDone={load} />
-      </div>
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
           <th>이메일</th><th>등급</th><th>기본사이트</th><th>비밀번호</th><th>상태</th><th></th>
         </tr></thead>
         <tbody>
-          {shown.map(u => {
+          {paged.map(u => {
             const locked = isProtectedUser(u)
             return (
             <tr key={u.userid}>
@@ -356,6 +407,7 @@ function UsersTab() {
           })}
         </tbody>
       </table>
+      {pager}
     </div>
   )
 }
@@ -403,9 +455,14 @@ function SitesTab() {
   const itosOptions = [{ value: '', label: '-' },
     ...users.filter(u => [0, 2].includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
+  const { paged, pager } = usePager(rows, [])
 
   return (
     <div>
+      <div className="toolbar">
+        <ExcelButtons name="사이트" cols={cols} rows={rows}
+          onUpload={upload} onDone={load} />
+      </div>
       <form className="newtask" onSubmit={add}>
         <input required placeholder="사이트ID" value={form.siteid}
           onChange={e => setForm({ ...form, siteid: e.target.value })} />
@@ -420,16 +477,12 @@ function SitesTab() {
         </select>
         <button type="submit">추가</button>
       </form>
-      <div className="toolbar">
-        <ExcelButtons name="사이트" cols={cols} rows={rows}
-          onUpload={upload} onDone={load} />
-      </div>
       <table className="grid">
         <thead><tr>
           <th>사이트ID</th><th>사이트명</th><th>설명</th><th>IT담당자</th><th>상태</th><th></th>
         </tr></thead>
         <tbody>
-          {rows.map(s => (
+          {paged.map(s => (
             <tr key={s.siteid}>
               <td>{s.siteid}</td>
               <td><EditableCell value={s.site_name} onSave={v => save(s.siteid, { site_name: v })} /></td>
@@ -443,6 +496,7 @@ function SitesTab() {
           ))}
         </tbody>
       </table>
+      {pager}
     </div>
   )
 }
@@ -519,6 +573,8 @@ function TasksTab() {
     : uopt([1]).filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
+  // 현업담당자 검색 리스트다운 대상 (일반사용자 3, 요청자 9)
+  const reqUsers = users.filter(u => [3, 9].includes(u.user_grade))
 
   const filtered = (!q.trim() ? rows : rows.filter(t => {
     const kw = q.trim().toLowerCase()
@@ -530,6 +586,7 @@ function TasksTab() {
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
     .filter(t => staff || t.work_userid === myId())  // 비관리자: 본인 작업만
+  const { paged, pager } = usePager(filtered, [q, siteF, statF])
 
   const revStat = revMap(STAT_LABEL)
   const cols = [
@@ -581,26 +638,11 @@ function TasksTab() {
 
   return (
     <div>
-      <form className="newtask" onSubmit={add}>
-        <input required placeholder="작업명" value={form.task_name}
-          onChange={e => setForm({ ...form, task_name: e.target.value })} />
-        <select value={form.siteid} onChange={e => setForm({ ...form, siteid: e.target.value })}>
-          {sopt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <input type="number" className="num" placeholder="우선순위" value={form.priority}
-          onChange={e => setForm({ ...form, priority: +e.target.value })} />
-        <input type="number" className="num" step="0.5" placeholder="예상시간"
-          value={form.work_hours_estimated}
-          onChange={e => setForm({ ...form, work_hours_estimated: +e.target.value })} />
-        {staff && (
-          <select value={form.work_userid}
-            onChange={e => setForm({ ...form, work_userid: e.target.value })}>
-            <option value="">작업자(개발자)</option>
-            {devOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        )}
-        <button type="submit">추가</button>
-      </form>
+      <datalist id="req-user-dl">
+        <option value="">-</option>
+        {reqUsers.map(u =>
+          <option key={u.userid} value={`${u.user_name} (${u.userid})`} />)}
+      </datalist>
       <div className="toolbar">
         <select value={siteF} onChange={e => setSiteF(e.target.value)}>
           <option value="">사이트(전체)</option>
@@ -621,18 +663,37 @@ function TasksTab() {
         <button className="primary" onClick={recalc}>재적용(재계산)</button>
         {msg && <span className="msg">{msg}</span>}
       </div>
+      <form className="newtask" onSubmit={add}>
+        <input required placeholder="작업명" value={form.task_name}
+          onChange={e => setForm({ ...form, task_name: e.target.value })} />
+        <select value={form.siteid} onChange={e => setForm({ ...form, siteid: e.target.value })}>
+          {sopt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <input type="number" className="num" placeholder="우선순위" value={form.priority}
+          onChange={e => setForm({ ...form, priority: +e.target.value })} />
+        <input type="number" className="num" step="0.5" placeholder="예상시간"
+          value={form.work_hours_estimated}
+          onChange={e => setForm({ ...form, work_hours_estimated: +e.target.value })} />
+        {staff && (
+          <select value={form.work_userid}
+            onChange={e => setForm({ ...form, work_userid: e.target.value })}>
+            <option value="">작업자(개발자)</option>
+            {devOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        )}
+        <button type="submit">추가</button>
+      </form>
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>사이트</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">예상 작업<br/>시간(H)</th><th className="fit">실제 작업<br/>시간(H)</th>
           <th>상태</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
-          <th>시작일시</th><th>종료일시<br/>(예상)</th><th>종료일시<br/>(실제)</th><th>요청내용</th><th></th>
+          <th>시작일시</th><th>종료일시<br/>(예상)</th><th>종료일시<br/>(실제)</th><th></th>
         </tr></thead>
         <tbody>
-          {filtered.map(t => (
+          {paged.map(t => (
             <tr key={t.taskid}>
               <td className="r">{t.taskid}</td>
-              <td><EditableCell value={t.siteid} disabled={!can(t)}
-                onSave={v => save(t.taskid, { siteid: v })} options={sopt} /></td>
+              <td>{t.site_name || t.siteid || '-'}</td>
               <td><EditableCell value={t.task_name} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_name: v })} /></td>
               <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t)}
@@ -646,9 +707,9 @@ function TasksTab() {
                 options={statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
-              <td className="c"><EditableCell value={t.req_userid} disabled={!can(t)}
-                onSave={v => save(t.taskid, { req_userid: v })}
-                options={uopt([3, 9])} /></td>
+              <td className="c"><SearchUserCell value={t.req_userid} disabled={!can(t)}
+                users={reqUsers} listId="req-user-dl"
+                onSave={v => save(t.taskid, { req_userid: v })} /></td>
               <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { itos_userid: v })}
                 options={uopt([0, 2])} /></td>
@@ -667,8 +728,6 @@ function TasksTab() {
               </td>
               <td className="c">{fmtDT(t.task_end_date_estimated)}</td>
               <td className="c">{fmtDT(t.task_end_date)}</td>
-              <td><EditableCell value={t.task_req_remark} disabled={!can(t)}
-                onSave={v => save(t.taskid, { task_req_remark: v })} /></td>
               <td>
                 <button onClick={() => setSelTask(t)}>상세</button>
                 {['R', 'C', 'W', 'H', 'X'].includes(t.task_stat) && can(t) &&
@@ -678,6 +737,7 @@ function TasksTab() {
           ))}
         </tbody>
       </table>
+      {pager}
       <p className="hint">
         우선순위·예상시간·작업자 수정 후 [재적용]을 누르면 대기중(W) 작업의
         시작/종료일시가 작업자별 우선순위 순으로 재계산됩니다.
@@ -727,20 +787,22 @@ function CalendarTab() {
     api.post(`/calendar/generate?year=${year}`).then(r => {
       alert(`${r.data.created}일 생성`); load()
     }).catch(e => alert(errMsg(e)))
+  const { paged, pager } = usePager(rows, [month])
 
   return (
     <div>
       <div className="toolbar">
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
-        <input type="number" className="num" value={year}
-          onChange={e => setYear(+e.target.value)} style={{ width: 90 }} />
-        <button onClick={generate}>해당 연도 달력 생성</button>
         <span className="hint">휴일(H)로 지정된 날은 스케줄 계산에서 제외됩니다.</span>
+        <input type="number" className="num" value={year}
+          onChange={e => setYear(+e.target.value)}
+          style={{ width: 90, marginLeft: 'auto' }} />
+        <button className="primary" onClick={generate}>해당 연도 달력 생성</button>
       </div>
       <table className="grid">
         <thead><tr><th>일자ID</th><th>일자</th><th>요일</th><th>상태</th><th>설명</th></tr></thead>
         <tbody>
-          {rows.map(d => {
+          {paged.map(d => {
             const dt = new Date(`${d.dateid.slice(0, 4)}-${d.dateid.slice(4, 6)}-${d.dateid.slice(6, 8)}`)
             const wd = '일월화수목금토'[dt.getDay()]
             return (
@@ -757,6 +819,7 @@ function CalendarTab() {
           })}
         </tbody>
       </table>
+      {pager}
     </div>
   )
 }
@@ -815,9 +878,24 @@ function HolidaysTab() {
   const userOptions = [{ value: '', label: '작업자(전체)' },
     ...users.filter(u => u.user_grade === 1)
       .map(u => ({ value: u.userid, label: u.user_name }))]
+  const { paged, pager } = usePager(rows, [year, filterUser])
 
   return (
     <div>
+      <div className="toolbar">
+        <input type="number" className="num" value={year}
+          onChange={e => setYear(+e.target.value)} style={{ width: 90 }} />
+        <span className="hint">년</span>
+        {staff && (
+          <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+            {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        )}
+        <span className="hint">
+          종일(A)은 해당일 근무 제외, 일부(P)는 휴가시간만큼 근무시간 차감(하루 뒤쪽부터).
+          반영은 [작업목록]의 재적용 시 적용됩니다.
+        </span>
+      </div>
       <form className="newtask" onSubmit={add}>
         <input type="date" required value={form.date}
           onChange={e => setForm({ ...form, date: e.target.value })} />
@@ -842,26 +920,12 @@ function HolidaysTab() {
           onChange={e => setForm({ ...form, holiday_remark: e.target.value })} />
         <button type="submit">추가</button>
       </form>
-      <div className="toolbar">
-        <input type="number" className="num" value={year}
-          onChange={e => setYear(+e.target.value)} style={{ width: 90 }} />
-        <span className="hint">년</span>
-        {staff && (
-          <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
-            {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        )}
-        <span className="hint">
-          종일(A)은 해당일 근무 제외, 일부(P)는 휴가시간만큼 근무시간 차감(하루 뒤쪽부터).
-          반영은 [작업목록]의 재적용 시 적용됩니다.
-        </span>
-      </div>
       <table className="grid">
         <thead><tr>
           <th>일자</th><th>작업자</th><th>구분</th><th>휴가시간</th><th>설명</th><th></th>
         </tr></thead>
         <tbody>
-          {rows.map(h => (
+          {paged.map(h => (
             <tr key={`${h.dateid}-${h.work_userid}`}>
               <td className="c">{h.dateid.slice(0,4)}-{h.dateid.slice(4,6)}-{h.dateid.slice(6,8)}</td>
               <td className="c">{h.user_name || h.work_userid}</td>
@@ -878,6 +942,7 @@ function HolidaysTab() {
           {rows.length === 0 && <tr><td colSpan="6" className="empty">등록된 휴가가 없습니다</td></tr>}
         </tbody>
       </table>
+      {pager}
     </div>
   )
 }
@@ -926,10 +991,6 @@ function SchedulesTab() {
   // 값이 깨지지 않도록 해당 작업자만 선택지에 포함
   const devOpt = users.filter(u => u.user_grade === 1)
     .map(u => ({ value: u.userid, label: u.user_name }))
-  const woptFor = cur =>
-    [{ value: '', label: '-' }, ...devOpt,
-      ...(cur && !devOpt.some(o => o.value === cur)
-        ? [{ value: cur, label: userName(cur) || cur }] : [])]
   const uopt = [{ value: '', label: '-' }, ...devOpt]
   const topt = [{ value: '', label: '-' },
     ...tasks.map(t => ({ value: t.taskid, label: `#${t.taskid} ${t.task_name}` }))]
@@ -944,6 +1005,7 @@ function SchedulesTab() {
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(s => !siteF || taskOf(s.taskid)?.siteid === siteF)
     .filter(s => staff || s.work_userid === myId())  // 비관리자: 본인 이력만
+  const { paged, pager } = usePager(filtered, [q, siteF])
 
   const cols = [
     { label: 'ID', field: 'workschid' },
@@ -968,6 +1030,20 @@ function SchedulesTab() {
 
   return (
     <div>
+      <div className="toolbar">
+        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <input placeholder="검색 (작업명/사이트/작업자/내용)" value={q}
+          onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-schedules', { site: siteF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
+        <ExcelButtons name="작업이력" cols={cols} rows={filtered}
+          onUpload={staff ? upload : null} onDone={load} />
+      </div>
       <form className="newtask" onSubmit={add}>
         <select required value={form.taskid}
           onChange={e => setForm({ ...form, taskid: e.target.value })}>
@@ -985,36 +1061,18 @@ function SchedulesTab() {
           onChange={e => setForm({ ...form, work_remark: e.target.value })} />
         <button type="submit">추가</button>
       </form>
-      <div className="toolbar">
-        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
-          <option value="">사이트(전체)</option>
-          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
-        </select>
-        <input placeholder="검색 (작업명/사이트/작업자/내용)" value={q}
-          onChange={e => setQ(e.target.value)} />
-        <button onClick={() => {
-          saveFilter('admin-schedules', { site: siteF, q })
-          alert('현재 검색조건을 저장했습니다')
-        }}>검색조건 저장</button>
-        <ExcelButtons name="작업이력" cols={cols} rows={filtered}
-          onUpload={staff ? upload : null} onDone={load} />
-      </div>
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>작업</th><th>작업자</th><th>작업내용</th><th>등록일시</th><th></th>
         </tr></thead>
         <tbody>
-          {filtered.map(s => {
+          {paged.map(s => {
             const t = taskOf(s.taskid)
             return (
               <tr key={s.workschid}>
                 <td className="r">{s.workschid}</td>
-                <td><EditableCell value={s.taskid} disabled={!staff}
-                  onSave={v => saveSched(s.workschid, { taskid: v })}
-                  options={topt} /></td>
-                <td className="c"><EditableCell value={s.work_userid} disabled={!staff}
-                  onSave={v => saveSched(s.workschid, { work_userid: v })}
-                  options={woptFor(s.work_userid)} /></td>
+                <td>{t ? `#${t.taskid} ${t.task_name}` : (s.taskid || '-')}</td>
+                <td className="c">{userName(s.work_userid) || s.work_userid || '-'}</td>
                 <td><EditableCell value={s.work_remark} disabled={!can(s)}
                   onSave={v => saveSched(s.workschid, { work_remark: v })} /></td>
                 <td className="c">{fmtDT(s.create_date)}</td>
@@ -1029,6 +1087,7 @@ function SchedulesTab() {
           {filtered.length === 0 && <tr><td colSpan="6" className="empty">작업이력이 없습니다</td></tr>}
         </tbody>
       </table>
+      {pager}
       <p className="hint">
         작업자가 실제 작업한 내용을 수동으로 기록하는 이력입니다.
         작업의 일정·상태는 [작업스케쥴] 탭에서 관리합니다.
@@ -1043,7 +1102,11 @@ function SchedHisTab() {
   const staff = isStaff()
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
-  const [q, setQ] = useState('')
+  const [sites, setSites] = useState([])
+  const [savedF] = useState(() => loadFilter('admin-schedhis'))
+  const [q, setQ] = useState(savedF.q || '')
+  const [siteF, setSiteF] = useState(savedF.site || '')
+  const [statF, setStatF] = useState(savedF.stat || '')
   const [selTask, setSelTask] = useState(null)
   const load = useCallback(async () => {
     const { data } = await api.get('/schedules/his')
@@ -1052,6 +1115,7 @@ function SchedHisTab() {
   useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
   useEffect(() => {
     api.get('/tasks').then(r => setTasks(r.data)).catch(console.error)
+    api.get('/sites').then(r => setSites(r.data)).catch(console.error)
   }, [])
   const taskOf = id => tasks.find(t => t.taskid === id)
   const delHis = id => window.confirm(`이력 #${id} 삭제?`) &&
@@ -1061,10 +1125,14 @@ function SchedHisTab() {
     api.delete('/schedules/his').then(load).catch(e => alert(errMsg(e)))
 
   const kw = q.trim().toLowerCase()
-  const filtered = rows.filter(r => !kw ||
-    [r.taskid, r.task_name, r.work_userid,
-     STAT_LABEL[r.task_stat], r.remark]
-      .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
+  const filtered = rows
+    .filter(r => !kw ||
+      [r.taskid, r.task_name, r.work_userid,
+       STAT_LABEL[r.task_stat], r.remark]
+        .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
+    .filter(r => !siteF || taskOf(r.taskid)?.siteid === siteF)
+    .filter(r => !statF || r.task_stat === statF)
+  const { paged, pager } = usePager(filtered, [q, siteF, statF])
 
   const cols = [
     { label: '이력ID', field: 'taskchgid' },
@@ -1080,8 +1148,21 @@ function SchedHisTab() {
   return (
     <div>
       <div className="toolbar">
+        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <select value={statF} onChange={e => setStatF(e.target.value)}>
+          <option value="">상태(전체)</option>
+          {Object.entries(STAT_LABEL).map(([k, v]) =>
+            <option key={k} value={k}>{v}</option>)}
+        </select>
         <input placeholder="검색 (작업/작업자/상태/비고)" value={q}
           onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-schedhis', { site: siteF, stat: statF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
         <ExcelButtons name="작업상태변경이력" cols={cols} rows={filtered} />
         {staff && rows.length > 0 &&
           <button className="danger" onClick={delAll}>전체삭제</button>}
@@ -1093,7 +1174,7 @@ function SchedHisTab() {
           {staff && <th></th>}
         </tr></thead>
         <tbody>
-          {filtered.map(r => (
+          {paged.map(r => (
             <tr key={r.taskchgid}>
               <td className="r">{r.taskchgid}</td>
               <td>{taskOf(r.taskid)
@@ -1114,6 +1195,7 @@ function SchedHisTab() {
             <tr><td colSpan={staff ? 8 : 7} className="empty">이력이 없습니다</td></tr>}
         </tbody>
       </table>
+      {pager}
       <p className="hint">
         작업상태 변경 시마다 자동 기록됩니다. 작업기간은 작업중(P) 구간이
         종료(중단/완료/반려)될 때 해당 P 이력행에 기록되고
@@ -1130,7 +1212,11 @@ function AttachFilesTab() {
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [scheds, setScheds] = useState([])
-  const [q, setQ] = useState('')
+  const [sites, setSites] = useState([])
+  const [savedF] = useState(() => loadFilter('admin-attach'))
+  const [q, setQ] = useState(savedF.q || '')
+  const [siteF, setSiteF] = useState(savedF.site || '')
+  const [statF, setStatF] = useState(savedF.stat || '')
   const [selTask, setSelTask] = useState(null)
   const [form, setForm] = useState({ taskid: '', workschid: '' })
   const fileRef = useRef(null)
@@ -1143,14 +1229,19 @@ function AttachFilesTab() {
   useEffect(() => {
     api.get('/tasks').then(r => setTasks(r.data)).catch(console.error)
     api.get('/schedules').then(r => setScheds(r.data)).catch(console.error)
+    api.get('/sites').then(r => setSites(r.data)).catch(console.error)
   }, [])
 
   const taskOf = id => tasks.find(t => t.taskid === id)
   const canEdit = f => staff || (f.work_userid && f.work_userid === me)
   const kw = q.trim().toLowerCase()
-  const filtered = rows.filter(f => !kw ||
-    [f.file_name, f.task_name, f.task_filepath, f.taskid, f.workschid]
-      .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
+  const filtered = rows
+    .filter(f => !kw ||
+      [f.file_name, f.task_name, f.task_filepath, f.taskid, f.workschid]
+        .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
+    .filter(f => !siteF || taskOf(f.taskid)?.siteid === siteF)
+    .filter(f => !statF || taskOf(f.taskid)?.task_stat === statF)
+  const { paged, pager } = usePager(filtered, [q, siteF, statF])
   const taskScheds = scheds.filter(s => s.taskid === +form.taskid)
 
   const save = (fileid, patch) =>
@@ -1214,10 +1305,23 @@ function AttachFilesTab() {
   return (
     <div>
       <div className="toolbar">
-        <ExcelButtons name="첨부파일" cols={cols} rows={filtered}
-          onUpload={staff ? uploadCsv : null} onDone={load} />
+        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <select value={statF} onChange={e => setStatF(e.target.value)}>
+          <option value="">상태(전체)</option>
+          {Object.entries(STAT_LABEL).map(([k, v]) =>
+            <option key={k} value={k}>{v}</option>)}
+        </select>
         <input placeholder="검색 (파일명/작업/경로)" value={q}
           onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-attach', { site: siteF, stat: statF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
+        <ExcelButtons name="첨부파일" cols={cols} rows={filtered}
+          onUpload={staff ? uploadCsv : null} onDone={load} />
       </div>
       <form className="newtask" onSubmit={upload}>
         <select required value={form.taskid}
@@ -1247,7 +1351,7 @@ function AttachFilesTab() {
           <th>첨부파일경로</th><th>등록일시</th><th></th>
         </tr></thead>
         <tbody>
-          {filtered.map(f => (
+          {paged.map(f => (
             <tr key={f.fileid}>
               <td className="r">{f.fileid}</td>
               <td><EditableCell value={f.file_name} disabled={!canEdit(f)}
@@ -1278,6 +1382,7 @@ function AttachFilesTab() {
             <tr><td colSpan="7" className="empty">첨부파일이 없습니다</td></tr>}
         </tbody>
       </table>
+      {pager}
       <p className="hint">
         [업로드]는 파일을 서버 uploads/ 폴더에 저장합니다.
         외부 경로만 등록하려면 엑셀 업로드(CSV)를 사용하세요.

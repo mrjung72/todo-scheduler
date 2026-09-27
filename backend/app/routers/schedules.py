@@ -144,10 +144,11 @@ def update_work_log(workschid: int, body: WorkLogUpdate,
         raise HTTPException(404, "작업이력을 찾을 수 없습니다")
     check_owner_or_admin(me, obj.work_userid)
     data = body.model_dump(exclude_unset=True)
-    if me.user_grade != 0 and "work_userid" in data and data["work_userid"] != me.userid:
-        raise HTTPException(403, "다른 작업자의 이력으로 변경할 수 없습니다")
-    if "taskid" in data and data["taskid"] and not db.get(Task, data["taskid"]):
-        raise HTTPException(404, "작업을 찾을 수 없습니다")
+    # 등록 후에는 작업/작업자 변경 불가 — 작업내용만 수정 가능
+    if "taskid" in data and data["taskid"] != obj.taskid:
+        raise HTTPException(400, "등록된 이력의 작업은 변경할 수 없습니다")
+    if "work_userid" in data and data["work_userid"] != obj.work_userid:
+        raise HTTPException(400, "등록된 이력의 작업자는 변경할 수 없습니다")
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
