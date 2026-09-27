@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import api, { STAT_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
-// 3열 배치: 좌 = 대기중(70%)+취소(30%), 중 = 작업중(70%)+작업보류(30%), 우 = 완료(100%)
+// 3열 배치: 좌 = 검토·요청, 중 = 대기·작업중·중단, 우 = 완료·반려
 const LAYOUT = [
-  ['W', 'C'],
-  ['P', 'D'],
-  ['F'],
+  ['C', 'R'],
+  ['W', 'P', 'H'],
+  ['F', 'X'],
 ]
 
 export default function Kanban() {
@@ -49,7 +49,7 @@ export default function Kanban() {
       return
     }
     try {
-      await api.put(`/tasks/${taskid}`, { task_stat: st })  // 스케줄 work_stat도 동기화됨
+      await api.put(`/tasks/${taskid}`, { task_stat: st })
       load()
     } catch (ex) {
       setErr(ex.response?.data?.detail || '상태 변경에 실패했습니다')
@@ -113,8 +113,8 @@ export default function Kanban() {
                         {t.task_name}
                       </div>
                       <div className="kb-meta">
-                        {(t.start_datetime || t.end_datetime_estimated) &&
-                          <span>{(t.start_datetime || '').slice(0, 10)} ~ {(t.end_datetime_estimated || '').slice(0, 10)}</span>}
+                        {(t.task_start_date || t.task_end_date_estimated) &&
+                          <span>{(t.task_start_date || '').slice(0, 10)} ~ {(t.task_end_date_estimated || '').slice(0, 10)}</span>}
                       </div>
                       <button className="kb-detail" title="작업 상세"
                         onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>

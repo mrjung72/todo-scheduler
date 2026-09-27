@@ -37,14 +37,18 @@ class Task(Base):
     priority = Column(Integer, default=0)
     work_hours_estimated = Column(REAL, default=0)
     work_hours_real = Column(REAL, default=0)
-    task_stat = Column(Text, default="W")  # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
+    # R-작업요청, C-검토중, W-대기중, P-작업중, H-작업중단, F-작업완료, X-작업반려
+    task_stat = Column(Text, default="R")
     task_csrid = Column(Text)
     task_req_remark = Column(Text)
     req_userid = Column(Text, ForeignKey("users.userid"))
     itos_userid = Column(Text, ForeignKey("users.userid"))
     work_userid = Column(Text, ForeignKey("users.userid"))  # 작업자(개발자)
-    task_start_date = Column(DateTime)
-    task_end_date = Column(DateTime)
+    task_start_date = Column(DateTime)          # 작업시작일자 (자동계산 또는 수동설정)
+    task_end_date = Column(DateTime)            # 작업완료일자 (실제)
+    task_end_date_estimated = Column(DateTime)  # 작업 예상 종료 일시 (자동계산)
+    start_fixed = Column(Integer, default=0)    # 시작일시 수동 고정 여부
+    req_date = Column(DateTime)                 # 요청일자
     create_date = Column(DateTime, default=datetime.now)
 
 
@@ -65,26 +69,22 @@ class UserHoliday(Base):
     holiday_remark = Column(Text)
 
 
-class WorkSchedule(Base):
-    __tablename__ = "work_schedule"
+class WorkScheduleLog(Base):
+    """작업자 작업이력 (수동 기록). 작업의 일정/상태는 tasks 에서 관리."""
+    __tablename__ = "work_schedule_log"
     workschid = Column(Integer, primary_key=True, autoincrement=True)
     taskid = Column(Integer, ForeignKey("tasks.taskid"))
-    work_stat = Column(Text, default="W")     # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
-    work_remark = Column(Text)
-    work_userid = Column(Text)
-    start_datetime = Column(DateTime)
-    end_datetime_estimated = Column(DateTime)
-    end_datetime_real = Column(DateTime)
-    # 시작일시 수동 고정 여부 (1이면 재계산 시에도 start_datetime 유지)
-    start_fixed = Column(Integer, default=0)
+    work_remark = Column(Text)             # 작업내용
+    work_userid = Column(Text)             # 작업자ID
     create_date = Column(DateTime, default=datetime.now)
 
 
-class WorkScheduleHis(Base):
-    __tablename__ = "work_schedule_his"
-    workschhisid = Column(Integer, primary_key=True, autoincrement=True)
-    workschid = Column(Integer, ForeignKey("work_schedule.workschid"))
-    work_stat = Column(Text)               # W-대기중, P-작업중, D-작업보류, F-완료, C-취소
+class TaskChgLog(Base):
+    """작업 상태변경이력. work_hours 는 작업중(P) 구간이 끝날 때 해당 P 행에 기록."""
+    __tablename__ = "task_chg_log"
+    taskchgid = Column(Integer, primary_key=True, autoincrement=True)
+    taskid = Column(Integer, ForeignKey("tasks.taskid"))
+    task_stat = Column(Text)               # 변경된 작업상태
     work_hours = Column(REAL, default=0)   # 작업기간(시간), 작업중 구간에만 적용
     remark = Column(Text)                  # 비고
     create_date = Column(DateTime, default=datetime.now)
@@ -95,6 +95,6 @@ class TaskAttachFile(Base):
     fileid = Column(Integer, primary_key=True, autoincrement=True)
     file_name = Column(Text, nullable=False)
     taskid = Column(Integer, ForeignKey("tasks.taskid"))
-    workschid = Column(Integer, ForeignKey("work_schedule.workschid"))
+    workschid = Column(Integer, ForeignKey("work_schedule_log.workschid"))
     task_filepath = Column(Text)
     create_date = Column(DateTime, default=datetime.now)

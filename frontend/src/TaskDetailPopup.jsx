@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor } from './api'
 
 // 달력 작업 팝업과 동일한 스타일의 작업 상세 팝업 (칸반/작업목록 공용)
-// task: /api/tasks 의 TaskDetail 형태 (workschid, work_stat, start_datetime 등 포함)
+// task: /api/tasks 의 TaskDetail 형태 (task_start_date, task_stat 등 포함)
 export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const canEdit = me && (me.user_grade === 0 ||
@@ -20,22 +20,20 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const toLocalInput = iso => iso ? String(iso).slice(0, 16) : ''
 
   useEffect(() => {
-    if (task.workschid) {
-      api.get(`/schedules/${task.workschid}/daily`)
-        .then(r => setDaily(r.data)).catch(() => setDaily([]))
-    }
+    api.get(`/tasks/${task.taskid}/daily`)
+      .then(r => setDaily(r.data)).catch(() => setDaily([]))
     api.get('/users').then(r => setUsers(r.data)).catch(() => {})
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
     loadFiles()   // 기본 보기(요청상세)의 첨부파일 목록
-  }, [task.workschid])
+  }, [task.taskid])
 
   const startEdit = () => setEditForm({
     priority: task.priority ?? 0,
     work_hours_estimated: task.work_hours_estimated ?? 0,
     work_userid: task.work_userid || '',
-    work_stat: task.work_stat || task.task_stat || 'W',
+    task_stat: task.task_stat || 'W',
     req_remark: task.task_req_remark || '',
-    start: toLocalInput(task.start_datetime),
+    start: toLocalInput(task.task_start_date),
     unfix: false,
   })
 
@@ -47,21 +45,16 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         work_hours_estimated: +editForm.work_hours_estimated,
         work_userid: editForm.work_userid || null,
         task_req_remark: editForm.req_remark || null,
+        task_stat: editForm.task_stat,
       })
-      if (task.workschid) {
-        await api.put(`/schedules/${task.workschid}`, {
-          work_stat: editForm.work_stat,
-          work_userid: editForm.work_userid || null,
+      if (editForm.unfix) {
+        await api.patch(`/tasks/${task.taskid}/unfix`)
+      } else if (editForm.start &&
+          editForm.start !== toLocalInput(task.task_start_date)) {
+        await api.patch(`/tasks/${task.taskid}/start`, {
+          start_datetime: editForm.start.length === 16
+            ? editForm.start + ':00' : editForm.start,
         })
-        if (editForm.unfix) {
-          await api.patch(`/schedules/${task.workschid}/unfix`)
-        } else if (editForm.start &&
-            editForm.start !== toLocalInput(task.start_datetime)) {
-          await api.patch(`/schedules/${task.workschid}/start`, {
-            start_datetime: editForm.start.length === 16
-              ? editForm.start + ':00' : editForm.start,
-          })
-        }
       }
       onChanged?.()
       onClose()
@@ -89,7 +82,6 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     const fd = new FormData()
     fd.append('file', f)
     fd.append('taskid', task.taskid)
-    if (task.workschid) fd.append('workschid', task.workschid)
     try {
       await api.post('/attach-files', fd)
       fileRef.current.value = ''
@@ -128,10 +120,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
                 </select></p>
               <p><b>상태</b>
-                <select value={editForm.work_stat}
-                  onChange={e => setEditForm({ ...editForm, work_stat: e.target.value })}>
+                <select value={editForm.task_stat}
+                  onChange={e => setEditForm({ ...editForm, task_stat: e.target.value })}>
                   {Object.entries(STAT_LABEL)
-                    .filter(([k]) => NEXT_STAT[task.work_stat || task.task_stat]?.includes(k))
+                    .filter(([k]) => NEXT_STAT[task.task_stat]?.includes(k))
                     .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select></p>
               <p><b>시작일시</b>
@@ -187,7 +179,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         ) : pview === 'his' ? (
           <div className="popup-info">
             <div className="daily">
-              <b>작업스케줄 이력</b>
+              <b>작업상태변경이력</b>
               <table>
                 <thead><tr>
                   <th>등록일시</th><th>변경상태</th>
@@ -195,9 +187,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 </tr></thead>
                 <tbody>
                   {(his || []).map(h => (
-                    <tr key={h.workschhisid}>
+                    <tr key={h.taskchgid}>
                       <td className="c">{fmtDT(h.create_date)}</td>
-                      <td>{STAT_LABEL[h.work_stat] ?? h.work_stat}</td>
+                      <td>{STAT_LABEL[h.task_stat] ?? h.task_stat}</td>
                       <td className="r">{h.work_hours ? `${h.work_hours}h` : '-'}</td>
                       <td>{h.remark || ''}</td>
                     </tr>
@@ -216,9 +208,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             <p><b>우선순위</b> {task.priority}</p>
             <p><b>예상시간</b> {task.work_hours_estimated}h
               {workDays != null && ` (총 ${workDays}일)`}</p>
-            <p><b>상태</b> {STAT_LABEL[task.work_stat || task.task_stat] || '-'}</p>
-            <p><b>시작</b> {fmtDT(task.start_datetime) || '-'}</p>
-            <p><b>종료(예상)</b> {fmtDT(task.end_datetime_estimated) || '-'}</p>
+            <p><b>상태</b> {STAT_LABEL[task.task_stat] || '-'}</p>
+            <p><b>시작</b> {fmtDT(task.task_start_date) || '-'}</p>
+            <p><b>종료(예상)</b> {fmtDT(task.task_end_date_estimated) || '-'}</p>
             {daily && daily.length > 0 && (
               <div className="daily">
                 <b>일별 작업시간</b>
@@ -253,17 +245,15 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             }}>
               {pview === 'req' ? '작업정보' : '요청정보'}
             </button>
-            {task.workschid && (
-              <button onClick={() => {
-                setPview(pview === 'his' ? 'info' : 'his')
-                if (pview !== 'his' && !his) {
-                  api.get(`/schedules/${task.workschid}/his`)
-                    .then(r => setHis(r.data)).catch(console.error)
-                }
-              }}>
-                {pview === 'his' ? '작업정보' : '상태변경이력'}
-              </button>
-            )}
+            <button onClick={() => {
+              setPview(pview === 'his' ? 'info' : 'his')
+              if (pview !== 'his' && !his) {
+                api.get(`/tasks/${task.taskid}/his`)
+                  .then(r => setHis(r.data)).catch(console.error)
+              }
+            }}>
+              {pview === 'his' ? '작업정보' : '상태변경이력'}
+            </button>
             {canEdit && pview === 'info' &&
               <button onClick={startEdit}>수정</button>}
             <button onClick={onClose}>닫기</button>

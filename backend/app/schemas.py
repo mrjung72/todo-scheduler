@@ -64,7 +64,7 @@ class TaskBase(BaseModel):
     priority: Optional[int] = 0
     work_hours_estimated: Optional[float] = 0
     work_hours_real: Optional[float] = 0
-    task_stat: Optional[str] = "W"
+    task_stat: Optional[str] = "R"
     task_csrid: Optional[str] = None
     task_req_remark: Optional[str] = None
     req_userid: Optional[str] = None
@@ -72,6 +72,8 @@ class TaskBase(BaseModel):
     work_userid: Optional[str] = None   # 작업자(개발자)
     task_start_date: Optional[datetime] = None
     task_end_date: Optional[datetime] = None
+    task_end_date_estimated: Optional[datetime] = None
+    req_date: Optional[datetime] = None
 
 
 class TaskCreate(TaskBase):
@@ -92,6 +94,8 @@ class TaskUpdate(BaseModel):
     work_userid: Optional[str] = None
     task_start_date: Optional[datetime] = None
     task_end_date: Optional[datetime] = None
+    task_end_date_estimated: Optional[datetime] = None
+    req_date: Optional[datetime] = None
     stat_remark: Optional[str] = None   # 작업상태 변경 시 이력 비고
 
 
@@ -149,39 +153,35 @@ class UserHolidayOut(UserHolidayBase):
     span: Optional[list] = None
 
 
-# ---------- work_schedule ----------
-class ScheduleBase(BaseModel):
+# ---------- work_schedule_log (작업이력) ----------
+class WorkLogBase(BaseModel):
     taskid: Optional[int] = None
-    work_stat: Optional[str] = "W"
     work_remark: Optional[str] = None
     work_userid: Optional[str] = None
-    start_datetime: Optional[datetime] = None
-    end_datetime_estimated: Optional[datetime] = None
-    end_datetime_real: Optional[datetime] = None
-    start_fixed: Optional[int] = 0
 
 
-class ScheduleCreate(ScheduleBase):
+class WorkLogCreate(WorkLogBase):
     pass
 
 
-class ScheduleUpdate(BaseModel):
+class WorkLogUpdate(BaseModel):
     taskid: Optional[int] = None
-    work_stat: Optional[str] = None
     work_remark: Optional[str] = None
     work_userid: Optional[str] = None
-    start_datetime: Optional[datetime] = None
-    end_datetime_estimated: Optional[datetime] = None
-    end_datetime_real: Optional[datetime] = None
-    start_fixed: Optional[int] = None
-    stat_remark: Optional[str] = None   # 작업상태 변경 시 이력 비고
 
 
-class ScheduleHisOut(BaseModel):
+class WorkLogOut(WorkLogBase):
     model_config = ConfigDict(from_attributes=True)
-    workschhisid: int
-    workschid: Optional[int] = None
-    work_stat: Optional[str] = None
+    workschid: int
+    create_date: Optional[datetime] = None
+
+
+# ---------- task_chg_log (작업상태변경이력) ----------
+class TaskChgLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    taskchgid: int
+    taskid: Optional[int] = None
+    task_stat: Optional[str] = None
     work_hours: Optional[float] = 0
     remark: Optional[str] = None
     create_date: Optional[datetime] = None
@@ -197,22 +197,10 @@ class TaskAttachFileOut(BaseModel):
     create_date: Optional[datetime] = None
 
 
-class ScheduleOut(ScheduleBase):
-    model_config = ConfigDict(from_attributes=True)
-    workschid: int
-    create_date: Optional[datetime] = None
-
-
 # ---------- 조회용 확장 ----------
 class TaskDetail(TaskOut):
     req_user_name: Optional[str] = None
     itos_user_name: Optional[str] = None
     site_name: Optional[str] = None
-    workschid: Optional[int] = None
-    work_userid: Optional[str] = None
     work_user_name: Optional[str] = None
-    work_stat: Optional[str] = None
-    start_datetime: Optional[datetime] = None
-    end_datetime_estimated: Optional[datetime] = None
-    end_datetime_real: Optional[datetime] = None
     start_fixed: Optional[int] = 0

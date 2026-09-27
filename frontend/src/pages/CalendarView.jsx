@@ -213,15 +213,14 @@ export default function CalendarView() {
 
   const onEventClick = (info) => {
     const p = { ...info.event.extendedProps, title: info.event.title,
-      workschid: info.event.id, start: info.event.start, end: info.event.end }
+      start: info.event.start, end: info.event.end }
     if (p.holiday) { setSelected(p); return }
     // 작업 이벤트 → 공용 작업 상세 팝업 (TaskDetail 형태로 매핑)
     setSelTask({
       ...p,
       task_name: info.event.title,
-      workschid: +info.event.id,
-      start_datetime: fmtLocal(info.event.start),
-      end_datetime_estimated: fmtLocal(info.event.end),
+      task_start_date: fmtLocal(info.event.start),
+      task_end_date_estimated: fmtLocal(info.event.end),
     })
   }
 
@@ -272,8 +271,7 @@ export default function CalendarView() {
           if (arg.event.extendedProps.holiday) return arg.event.title
           const w = arg.event.extendedProps.work_user_name
             || arg.event.extendedProps.work_userid || ''
-          const stat = STAT_LABEL[arg.event.extendedProps.work_stat
-            || arg.event.extendedProps.task_stat] || ''
+          const stat = STAT_LABEL[arg.event.extendedProps.task_stat] || ''
           const csr = arg.event.extendedProps.task_csrid
           const site = arg.event.extendedProps.site_name
           const req = arg.event.extendedProps.req_user_name

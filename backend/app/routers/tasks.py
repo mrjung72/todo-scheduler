@@ -1,13 +1,15 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import or_, func, select
+from sqlalchemy import or_
+from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import Task, User, Site, WorkSchedule
-from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail
+from ..models import Task, User, Site, TaskChgLog, WorkScheduleLog
+from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail, TaskChgLogOut
 from ..scheduler import (
     recalculate, get_calendar_map, get_holiday_map,
-    add_work_hours, workday_cal,
+    add_work_hours, workday_cal, daily_breakdown,
 )
 from ..statusflow import apply_task_stat_change
 from ..security import get_current_user, check_owner_or_admin
@@ -29,50 +31,31 @@ def _norm_user_fks(data: dict):
 
 
 def _detail_query(db: Session):
-    """tasks + 대표 work_schedule(taskid별 최소 workschid) + 사용자/사이트 조인"""
-    sub = (
-        db.query(
-            WorkSchedule.taskid.label("taskid"),
-            func.min(WorkSchedule.workschid).label("mid"),
-        )
-        .group_by(WorkSchedule.taskid)
-        .subquery()
-    )
+    """tasks + 사용자/사이트 조인"""
     return (
         db.query(
             Task,
-            WorkSchedule,
             ReqUser.user_name.label("req_user_name"),
             ItosUser.user_name.label("itos_user_name"),
             WorkUser.user_name.label("work_user_name"),
             Site.site_name.label("site_name"),
         )
         .select_from(Task)
-        .outerjoin(sub, sub.c.taskid == Task.taskid)
-        .outerjoin(WorkSchedule, WorkSchedule.workschid == sub.c.mid)
         .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(ItosUser, ItosUser.userid == Task.itos_userid)
-        .outerjoin(WorkUser, WorkUser.userid ==
-                   func.coalesce(Task.work_userid, WorkSchedule.work_userid))
+        .outerjoin(WorkUser, WorkUser.userid == Task.work_userid)
         .outerjoin(Site, Site.siteid == Task.siteid)
     )
 
 
 def _to_detail(row) -> TaskDetail:
-    task, sched, req_name, itos_name, work_name, site_name = row
+    task, req_name, itos_name, work_name, site_name = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
     data.update(
         req_user_name=req_name,
         itos_user_name=itos_name,
         work_user_name=work_name,
         site_name=site_name,
-        workschid=sched.workschid if sched else None,
-        work_userid=task.work_userid or (sched.work_userid if sched else None),
-        work_stat=sched.work_stat if sched else None,
-        start_datetime=sched.start_datetime if sched else None,
-        end_datetime_estimated=sched.end_datetime_estimated if sched else None,
-        end_datetime_real=sched.end_datetime_real if sched else None,
-        start_fixed=sched.start_fixed if sched else 0,
     )
     return TaskDetail(**data)
 
@@ -107,7 +90,7 @@ def list_tasks(
             )
         elif field == "work_user":
             query = query.filter(
-                or_(WorkSchedule.work_userid.like(like), WorkUser.user_name.like(like))
+                or_(Task.work_userid.like(like), WorkUser.user_name.like(like))
             )
         else:
             query = query.filter(
@@ -117,7 +100,7 @@ def list_tasks(
                     ReqUser.user_name.like(like),
                     Task.itos_userid.like(like),
                     ItosUser.user_name.like(like),
-                    WorkSchedule.work_userid.like(like),
+                    Task.work_userid.like(like),
                     WorkUser.user_name.like(like),
                 )
             )
@@ -129,10 +112,9 @@ def list_tasks(
 @router.post("/recalculate")
 def recalc(db: Session = Depends(get_db),
            me: User = Depends(get_current_user)):
-    """우선순위 기준으로 작업의 시작/종료일시를 재계산.
+    """우선순위 기준으로 대기중 작업의 시작/종료일시를 재계산.
 
-    관리자는 전체, 개발자는 본인 작업만 대상으로 한다.
-    스케줄이 없는 대기중 작업은 스케줄을 자동 생성해 함께 배치한다."""
+    관리자는 전체, 개발자는 본인 작업만 대상으로 한다."""
     updated, created = recalculate(db, only_userid=None if me.user_grade == 0 else me.userid)
     return {"updated": updated, "created": created}
 
@@ -156,13 +138,17 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
     _norm_user_fks(data)
     if me.user_grade != 0:
         data["work_userid"] = me.userid  # 비관리자는 자기 작업만 등록 가능
+    if not data.get("req_userid"):
+        data["req_userid"] = me.userid   # 요청자 미지정 시 등록자 본인
+    now = datetime.now().replace(microsecond=0)
+    if not data.get("req_date"):
+        data["req_date"] = now          # 요청일자 = 등록 시각
     task = Task(**data)
     db.add(task)
     db.flush()  # taskid 확보
-    # 대표 작업스케줄 자동 생성 (상태는 작업 상태 그대로 -> 보류/완료 작업은 미배치)
-    sched = WorkSchedule(taskid=task.taskid, work_stat=task.task_stat or "W",
-                         work_userid=task.work_userid)
-    db.add(sched)
+    # 등록 상태를 상태변경이력 첫 행으로 기록
+    db.add(TaskChgLog(taskid=task.taskid, task_stat=task.task_stat or "R",
+                      work_hours=0, remark="등록", create_date=now))
     db.commit()
     db.refresh(task)
     return task
@@ -183,29 +169,19 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     remark = data.pop("stat_remark", None)
     for k, v in data.items():
         setattr(obj, k, v)
-    # 작업상태 변경: 전이 규칙 검증 + 이력 기록 + 스케줄 동기화
+    # 작업상태 변경: 전이 규칙 검증 + 이력 기록
     if new_stat is not None:
         apply_task_stat_change(db, obj, new_stat, remark)
-    # 작업자 변경 시 대기중 스케줄의 작업자도 함께 갱신
-    if "work_userid" in data:
-        db.query(WorkSchedule).filter(
-            WorkSchedule.taskid == taskid,
-            WorkSchedule.work_stat == "W",
-        ).update({WorkSchedule.work_userid: obj.work_userid})
-    # 예상 작업시간 변경 시 시작일시가 잡힌 스케줄의 종료예상일시 재계산
-    if "work_hours_estimated" in data:
+    # 예상 작업시간 변경 시 시작일시가 잡힌 작업의 종료예상일시 재계산
+    if "work_hours_estimated" in data and obj.task_start_date:
         cal = get_calendar_map(db)
         hol = get_holiday_map(db)
-        for sched in db.query(WorkSchedule).filter(
-                WorkSchedule.taskid == taskid).all():
-            if not sched.start_datetime:
-                continue
-            uid = sched.work_userid or ""
-            # 고정 시작일이 휴일이면 그날은 경과시간 그대로 적용
-            cal_f = workday_cal(cal, sched.start_datetime.date())
-            sched.end_datetime_estimated = add_work_hours(
-                sched.start_datetime, obj.work_hours_estimated or 0,
-                cal_f, hol, uid)
+        uid = obj.work_userid or ""
+        # 고정 시작일이 휴일이면 그날은 경과시간 그대로 적용
+        cal_f = workday_cal(cal, obj.task_start_date.date())
+        obj.task_end_date_estimated = add_work_hours(
+            obj.task_start_date, obj.work_hours_estimated or 0,
+            cal_f, hol, uid)
     db.commit()
     db.refresh(obj)
     return obj
@@ -218,6 +194,75 @@ def delete_task(taskid: int, db: Session = Depends(get_db),
     if not obj:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
     check_owner_or_admin(me, obj.work_userid)
-    db.query(WorkSchedule).filter(WorkSchedule.taskid == taskid).delete()
+    db.query(WorkScheduleLog).filter(
+        WorkScheduleLog.taskid == taskid).delete()
+    db.query(TaskChgLog).filter(TaskChgLog.taskid == taskid).delete()
     db.delete(obj)
     db.commit()
+
+
+class StartSet(BaseModel):
+    start_datetime: datetime
+
+
+@router.patch("/{taskid}/start", response_model=TaskOut)
+def set_start(taskid: int, body: StartSet, db: Session = Depends(get_db),
+              me: User = Depends(get_current_user)):
+    """시작일시 수동 설정 -> start_fixed=1 로 고정하고 종료예상일시 재계산."""
+    task = db.get(Task, taskid)
+    if not task:
+        raise HTTPException(404, "작업을 찾을 수 없습니다")
+    check_owner_or_admin(me, task.work_userid)
+    cal = get_calendar_map(db)
+    hol = get_holiday_map(db)
+    uid = task.work_userid or ""
+    # 입력값 그대로 저장 (휴일/근무시간 스냅 없음). 지정일이 휴일이면
+    # 근무구간을 무시하고 그날의 경과시간 그대로 작업시간을 적용해 종료를 계산
+    task.task_start_date = body.start_datetime
+    task.start_fixed = 1
+    cal = workday_cal(cal, body.start_datetime.date())
+    task.task_end_date_estimated = add_work_hours(
+        task.task_start_date, task.work_hours_estimated or 0, cal, hol, uid
+    )
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.patch("/{taskid}/unfix", response_model=TaskOut)
+def unfix_start(taskid: int, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
+    """수동 시작일시 고정 해제 -> 다음 재계산 시 자동 배치."""
+    task = db.get(Task, taskid)
+    if not task:
+        raise HTTPException(404, "작업을 찾을 수 없습니다")
+    check_owner_or_admin(me, task.work_userid)
+    task.start_fixed = 0
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.get("/{taskid}/daily")
+def daily_hours(taskid: int, db: Session = Depends(get_db)):
+    """작업의 시작~예상종료 구간을 일별 작업시간으로 분해."""
+    task = db.get(Task, taskid)
+    if not task:
+        raise HTTPException(404, "작업을 찾을 수 없습니다")
+    if not task.task_start_date or not task.task_end_date_estimated:
+        return []
+    cal = get_calendar_map(db)
+    hol = get_holiday_map(db)
+    uid = task.work_userid or ""
+    bd = daily_breakdown(
+        task.task_start_date, task.task_end_date_estimated,
+        workday_cal(cal, task.task_start_date.date()), hol, uid)
+    return [{"date": k, "hours": v["hours"]} for k, v in bd.items()]
+
+
+@router.get("/{taskid}/his", response_model=list[TaskChgLogOut])
+def task_his(taskid: int, db: Session = Depends(get_db)):
+    """작업 상태변경이력 (최근 이력 순)."""
+    return (db.query(TaskChgLog)
+            .filter(TaskChgLog.taskid == taskid)
+            .order_by(TaskChgLog.taskchgid.desc()).all())

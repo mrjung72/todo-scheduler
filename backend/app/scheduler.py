@@ -8,16 +8,16 @@ calendar_define 에 없는 날짜는 월~금=근무일, 토/일=휴일로 간주
   A(종일) -> 그날 근무 불가, P(일부) -> holiday_hours 만큼 하루 근무시간 차감(하루 뒤쪽부터 차감)
 
 재계산(recalculate) 규칙:
-- work_schedule 을 work_userid 별로 그룹화하고 task.priority 순으로 정렬
+- 대기중(W) tasks 를 work_userid 별로 그룹화하고 task.priority 순으로 정렬
 - 각 작업자 그룹 내에서 순차 배치 (이전 작업 종료 -> 다음 작업 시작)
-- start_fixed=1 인 스케줄은 start_datetime 을 유지하고 종료일시만 재계산
+- start_fixed=1 인 작업은 task_start_date 를 유지하고 종료예상일시만 재계산
 """
 import os
 from datetime import datetime, timedelta, date, time
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-from .models import CalendarDefine, WorkSchedule, Task, UserHoliday
+from .models import CalendarDefine, Task, UserHoliday
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
@@ -179,77 +179,90 @@ def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = No
     return round(total, 2)
 
 
-def recalculate(db: Session, only_userid: str = None) -> tuple:
-    """대기중(W) 작업의 스케줄 재계산. (갱신된 스케줄 수, 신규 생성 수) 반환.
+def daily_breakdown(start, end, cal, hol, uid):
+    """시작~종료 구간을 일별로 분해.
+    {date: {"hours": 작업시간, "spans": [[시작비율, 끝비율], ...]}} 반환.
+    spans 비율은 그날 근무시간(구간별 실제 근무 합계) 기준 0~1.
+    점심 등 구간 사이 공백은 제외되므로 채움이 연속적으로 이어진다."""
+    result = {}
+    d = start.date()
+    while d <= end.date():
+        segs = worker_segments(d, cal, hol, uid)
+        if segs:
+            daylen = sum((e - s).total_seconds() for s, e in segs) or 1
+            hours, spans = 0.0, []
+            offset = 0.0  # 이전 근무구간들의 누적 길이(초)
+            for s, e in segs:
+                seg_dur = (e - s).total_seconds()
+                cs, ce = max(s, start), min(e, end)
+                if cs < ce:
+                    hours += (ce - cs).total_seconds() / 3600.0
+                    spans.append([
+                        round((offset + (cs - s).total_seconds()) / daylen, 3),
+                        round((offset + (ce - s).total_seconds()) / daylen, 3),
+                    ])
+                offset += seg_dur
+            if hours > 0:
+                result[d.strftime("%Y-%m-%d")] = {
+                    "hours": round(hours, 1), "spans": spans,
+                    # 'F'(휴일 수동작업): 24h 기준 비율 -> 프론트에서 최소폭 보정
+                    "free": cal.get(d.strftime("%Y%m%d")) == FREE_DAY_STAT}
+        d += timedelta(days=1)
+    return result
 
-    only_userid 가 주어지면 해당 작업자의 스케줄/작업만 대상으로 한다.
-    스케줄이 없는 대기중 작업은 work_userid=itos_userid 로 스케줄을 자동 생성한다.
+
+def recalculate(db: Session, only_userid: str = None) -> tuple:
+    """대기중(W) 작업의 시작/예상종료일시 재계산. (갱신된 작업 수, 0) 반환.
+
+    only_userid 가 주어지면 해당 작업자의 작업만 대상으로 한다.
     """
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
 
-    # 스케줄이 없는 대기중/작업중 작업 -> 스케줄 자동 생성 (작업자는 IT담당자 기본 배정)
-    scheduled_taskids = {r[0] for r in db.query(WorkSchedule.taskid).all()}
-    created = 0
-    task_q = db.query(Task).filter(Task.task_stat.in_(["W", "P"]))
+    task_q = db.query(Task).filter(Task.task_stat == "W")   # 대기중 작업만 재계산
     if only_userid:
         task_q = task_q.filter(Task.work_userid == only_userid)
-    for t in task_q.all():
-        if t.taskid not in scheduled_taskids:
-            db.add(WorkSchedule(taskid=t.taskid, work_stat=t.task_stat,
-                                work_userid=t.work_userid or t.itos_userid))
-            created += 1
-    if created:
-        db.flush()
-
-    rows = (
-        db.query(WorkSchedule, Task)
-        .join(Task, WorkSchedule.taskid == Task.taskid)
-        .filter(Task.task_stat == "W")          # 대기중 작업만 재계산
-        .filter(WorkSchedule.work_stat == "W")
-    )
-    if only_userid:
-        rows = rows.filter(WorkSchedule.work_userid == only_userid)
-    rows = rows.all()
+    rows = task_q.all()
 
     # 작업자별 그룹화
     groups: dict = {}
-    for sched, task in rows:
-        key = sched.work_userid or ""
-        groups.setdefault(key, []).append((sched, task))
+    for task in rows:
+        key = task.work_userid or ""
+        groups.setdefault(key, []).append(task)
 
     now = datetime.now().replace(second=0, microsecond=0)
     updated = 0
 
-    # 작업자별 작업중(P) 스케줄의 가장 늦은 종료예상시각 -> 대기 작업은 그 이후 배치
+    # 작업자별 작업중(P) 작업의 가장 늦은 종료예상시각 -> 대기 작업은 그 이후 배치
     in_prog_end: dict = {}
-    for sch in db.query(WorkSchedule).filter(WorkSchedule.work_stat == "P"):
-        if sch.end_datetime_estimated:
-            uid = sch.work_userid or ""
+    for t in db.query(Task).filter(Task.task_stat == "P"):
+        if t.task_end_date_estimated:
+            uid = t.work_userid or ""
             cur = in_prog_end.get(uid)
-            if cur is None or sch.end_datetime_estimated > cur:
-                in_prog_end[uid] = sch.end_datetime_estimated
+            if cur is None or t.task_end_date_estimated > cur:
+                in_prog_end[uid] = t.task_end_date_estimated
 
     for key, items in groups.items():
-        items.sort(key=lambda x: (x[1].priority or 0, x[1].taskid))
+        items.sort(key=lambda x: (x.priority or 0, x.taskid))
         cursor = max(now, in_prog_end.get(key, now))
-        for sched, task in items:
-            uid = sched.work_userid or ""
-            if sched.start_fixed and sched.start_datetime:
+        for task in items:
+            uid = task.work_userid or ""
+            if task.start_fixed and task.task_start_date:
                 # 수동 고정 시작일시는 입력값 그대로 유지 (스냅 없음).
                 # 시작일이 휴일이면 그 날짜는 경과시간 그대로 작업시간 적용
-                cal_f = workday_cal(cal, sched.start_datetime.date())
-                start = sched.start_datetime
+                cal_f = workday_cal(cal, task.task_start_date.date())
+                start = task.task_start_date
             else:
                 cal_f = cal
                 start = next_work_start(cursor, cal, hol, uid)
-                sched.start_datetime = start
+                task.task_start_date = start
 
             est_hours = task.work_hours_estimated or 0
-            sched.end_datetime_estimated = add_work_hours(start, est_hours, cal_f, hol, uid)
+            task.task_end_date_estimated = add_work_hours(
+                start, est_hours, cal_f, hol, uid)
 
-            cursor = sched.end_datetime_estimated
+            cursor = task.task_end_date_estimated
             updated += 1
 
     db.commit()
-    return updated, created
+    return updated, 0

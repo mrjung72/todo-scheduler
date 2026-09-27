@@ -28,11 +28,13 @@ export const fmtDT = (iso) => {
 }
 
 export const STAT_LABEL = {
+  R: '작업요청',
+  C: '검토중',
   W: '대기중',
   P: '작업중',
-  D: '작업보류',
-  F: '완료',
-  C: '취소',
+  H: '작업중단',
+  F: '작업완료',
+  X: '작업반려',
 }
 
 // 화면별 검색조건 저장/복원 (localStorage)
@@ -43,13 +45,15 @@ export const loadFilter = key => {
 export const saveFilter = (key, obj) =>
   localStorage.setItem(`filter:${key}`, JSON.stringify(obj))
 
-// 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일)
+// 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일, 자기 상태 포함)
 export const NEXT_STAT = {
-  W: ['W', 'P', 'C'],
-  P: ['P', 'D', 'F'],
-  D: ['D', 'P', 'C'],
-  C: ['C', 'W'],
+  R: ['R', 'C', 'X'],
+  C: ['C', 'X', 'W', 'F'],
+  W: ['W', 'C', 'X', 'P', 'F'],
+  P: ['P', 'X', 'H', 'F'],
+  H: ['H', 'P', 'X', 'F'],
   F: ['F'],
+  X: ['X'],
 }
 
 export const DAY_STAT_LABEL = {

@@ -70,8 +70,8 @@ export default function Home() {
               <div className="kb-meta">
                 <span>우선순위 {t.priority}</span>
                 <span>{t.work_hours_estimated}h</span>
-                {t.start_datetime &&
-                  <span>{fmtDT(t.start_datetime)}~{fmtDT(t.end_datetime_estimated)}</span>}
+                {t.task_start_date &&
+                  <span>{fmtDT(t.task_start_date)}~{fmtDT(t.task_end_date_estimated)}</span>}
               </div>
               {open && (
                 <div className="home-detail">
@@ -80,9 +80,9 @@ export default function Home() {
                   <div><span>IT담당자</span>{t.itos_user_name || t.itos_userid || '-'}</div>
                   <div><span>작업자</span>{t.work_user_name || t.work_userid || '-'}</div>
                   <div><span>예상시간</span>{t.work_hours_estimated}h</div>
-                  <div><span>시작</span>{fmtDT(t.start_datetime) || '-'}
+                  <div><span>시작</span>{fmtDT(t.task_start_date) || '-'}
                     {t.start_fixed ? ' (고정)' : ''}</div>
-                  <div><span>종료(예상)</span>{fmtDT(t.end_datetime_estimated) || '-'}</div>
+                  <div><span>종료(예상)</span>{fmtDT(t.task_end_date_estimated) || '-'}</div>
                   {t.task_req_remark && <div><span>요청내용</span>{t.task_req_remark}</div>}
                 </div>
               )}

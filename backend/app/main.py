@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .database import Base, engine, SessionLocal
-from .models import User, Site, Task, CalendarDefine, WorkSchedule
+from .models import User, Site, Task, CalendarDefine, WorkScheduleLog
 from .routers import (users, sites, tasks, calendar, schedules,
                       user_holidays, auth, attach_files)
 from .security import hash_password, parse_token
@@ -119,9 +119,108 @@ def migrate(db):
         db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))
     if "task_req_filepath" in cols:   # 첨부파일은 task_attach_files 테이블로 이관
         db.execute(text("ALTER TABLE tasks DROP COLUMN task_req_filepath"))
-    cols = {r[1] for r in db.execute(text("PRAGMA table_info(work_schedule)"))}
-    if "work_filepath" in cols:
-        db.execute(text("ALTER TABLE work_schedule DROP COLUMN work_filepath"))
+    if "task_end_date_estimated" not in cols:
+        db.execute(text(
+            "ALTER TABLE tasks ADD COLUMN task_end_date_estimated DATETIME"))
+    if "start_fixed" not in cols:
+        db.execute(text(
+            "ALTER TABLE tasks ADD COLUMN start_fixed INTEGER DEFAULT 0"))
+    if "req_date" not in cols:
+        db.execute(text("ALTER TABLE tasks ADD COLUMN req_date DATETIME"))
+        db.execute(text("UPDATE tasks SET req_date = create_date "
+                        "WHERE req_date IS NULL"))
+
+    tables = {r[0] for r in db.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table'"))}
+    # work_schedule -> work_schedule_log : 일정/상태는 tasks 로 흡수,
+    # 스케줄 레코드는 작업이력(작업내용 로그)으로 축소
+    if "work_schedule" in tables:
+        # 대표 스케줄(taskid별 최소 workschid)의 일시/고정값을 tasks 로 이관
+        db.execute(text("""
+            UPDATE tasks SET
+              task_start_date = (SELECT w.start_datetime FROM work_schedule w
+                WHERE w.taskid = tasks.taskid ORDER BY w.workschid LIMIT 1),
+              task_end_date_estimated = (SELECT w.end_datetime_estimated
+                FROM work_schedule w WHERE w.taskid = tasks.taskid
+                ORDER BY w.workschid LIMIT 1),
+              task_end_date = COALESCE(task_end_date,
+                (SELECT w.end_datetime_real FROM work_schedule w
+                 WHERE w.taskid = tasks.taskid ORDER BY w.workschid LIMIT 1)),
+              start_fixed = (SELECT w.start_fixed FROM work_schedule w
+                WHERE w.taskid = tasks.taskid ORDER BY w.workschid LIMIT 1)
+            WHERE taskid IN (SELECT taskid FROM work_schedule)
+        """))
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS work_schedule_log (
+                workschid INTEGER PRIMARY KEY,
+                taskid INTEGER REFERENCES tasks(taskid),
+                work_remark TEXT,
+                work_userid TEXT,
+                create_date DATETIME
+            )
+        """))
+        db.execute(text("""
+            INSERT OR IGNORE INTO work_schedule_log
+                (workschid, taskid, work_remark, work_userid, create_date)
+            SELECT workschid, taskid, work_remark, work_userid, create_date
+            FROM work_schedule
+        """))
+        # work_schedule_his -> task_chg_log (workschid -> taskid 매핑은
+        # work_schedule 이 삭제되기 전의 값 사용)
+        if "work_schedule_his" in tables:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS task_chg_log (
+                    taskchgid INTEGER PRIMARY KEY,
+                    taskid INTEGER REFERENCES tasks(taskid),
+                    task_stat TEXT,
+                    work_hours REAL DEFAULT 0,
+                    remark TEXT,
+                    create_date DATETIME
+                )
+            """))
+            db.execute(text("""
+                INSERT OR IGNORE INTO task_chg_log
+                    (taskchgid, taskid, task_stat, work_hours, remark, create_date)
+                SELECT h.workschhisid,
+                       (SELECT w.taskid FROM work_schedule w
+                        WHERE w.workschid = h.workschid),
+                       CASE h.work_stat WHEN 'C' THEN 'X' WHEN 'D' THEN 'H'
+                            ELSE h.work_stat END,
+                       h.work_hours, h.remark, h.create_date
+                FROM work_schedule_his h
+            """))
+            db.execute(text("DROP TABLE work_schedule_his"))
+        db.execute(text("DROP TABLE work_schedule"))
+
+    # 작업상태 코드 체계 변경: 구 C(취소)->X(작업반려), D(보류)->H(작업중단)
+    db.execute(text("UPDATE tasks SET task_stat = 'X' WHERE task_stat = 'C'"))
+    db.execute(text("UPDATE tasks SET task_stat = 'H' WHERE task_stat = 'D'"))
+    # task_attach_files 의 workschid FK 대상을 work_schedule_log 로 재구성
+    cols = {r[1] for r in db.execute(
+        text("PRAGMA table_info(task_attach_files)"))}
+    if cols:
+        fk = db.execute(text(
+            "SELECT sql FROM sqlite_master WHERE name='task_attach_files'")
+        ).scalar() or ""
+        if "work_schedule" in fk and "work_schedule_log" not in fk:
+            db.execute(text("""
+                CREATE TABLE task_attach_files_new (
+                    fileid INTEGER PRIMARY KEY,
+                    file_name TEXT NOT NULL,
+                    taskid INTEGER REFERENCES tasks(taskid),
+                    workschid INTEGER REFERENCES work_schedule_log(workschid),
+                    task_filepath TEXT,
+                    create_date DATETIME
+                )
+            """))
+            db.execute(text("""
+                INSERT INTO task_attach_files_new
+                SELECT fileid, file_name, taskid, workschid, task_filepath,
+                       create_date FROM task_attach_files
+            """))
+            db.execute(text("DROP TABLE task_attach_files"))
+            db.execute(text(
+                "ALTER TABLE task_attach_files_new RENAME TO task_attach_files"))
     db.commit()
 
 

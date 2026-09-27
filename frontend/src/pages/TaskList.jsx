@@ -39,12 +39,12 @@ export default function TaskList() {
       t.work_hours_estimated, t.req_user_name || t.req_userid || '',
       t.itos_user_name || t.itos_userid || '',
       t.work_user_name || t.work_userid || '',
-      fmtDT(t.start_datetime), fmtDT(t.end_datetime_estimated),
+      fmtDT(t.task_start_date), fmtDT(t.task_end_date_estimated),
       STAT_LABEL[t.task_stat] || t.task_stat,
     ].map(esc).join(','))
     const fields = ['site_name', 'priority', 'task_csrid', 'task_name',
       'work_hours_estimated', 'req_userid', 'itos_userid', 'work_userid',
-      'start_datetime', 'end_datetime_estimated', 'task_stat']
+      'task_start_date', 'task_end_date_estimated', 'task_stat']
     const csv = '\uFEFF' + [header.map(esc).join(','),
       fields.map(esc).join(','),   // 테이블 컬럼명 라인
       ...lines].join('\r\n')
@@ -110,10 +110,10 @@ export default function TaskList() {
               <td className="c">{t.itos_user_name || t.itos_userid}</td>
               <td className="c">{t.work_user_name || t.work_userid || '-'}</td>
               <td className="c">
-                {fmtDT(t.start_datetime)}
+                {fmtDT(t.task_start_date)}
                 {t.start_fixed ? <span className="badge">고정</span> : null}
               </td>
-              <td className="c">{fmtDT(t.end_datetime_estimated)}</td>
+              <td className="c">{fmtDT(t.task_end_date_estimated)}</td>
               <td className="c">{STAT_LABEL[t.task_stat] || t.task_stat}</td>
             </tr>
           ))}
