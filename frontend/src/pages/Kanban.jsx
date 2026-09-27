@@ -23,8 +23,8 @@ export default function Kanban() {
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
 
   // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
-  const canMove = t => me && (me.user_grade === 0 ||
-    (me.user_grade === 1 && t.work_userid === me.userid))
+  const canMove = t => me && ([0, 1].includes(me.user_grade) ||
+    t.work_userid === me.userid)
 
   const load = useCallback(async () => {
     const params = {}

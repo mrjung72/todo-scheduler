@@ -5,8 +5,8 @@ import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor } from './api'
 // task: /api/tasks 의 TaskDetail 형태 (task_start_date, task_stat 등 포함)
 export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
-  const canEdit = me && (me.user_grade === 0 ||
-    (me.user_grade === 1 && task.work_userid === me.userid))
+  const canEdit = me && ([0, 1].includes(me.user_grade) ||
+    task.work_userid === me.userid)
   const canAttach = me && [0, 1].includes(me.user_grade)
   const [pview, setPview] = useState('req')   // req(기본: 요청상세) | info | his
   const [editForm, setEditForm] = useState(null)

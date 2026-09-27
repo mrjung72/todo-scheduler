@@ -103,8 +103,8 @@ const fmtLocal = d => {
 
 export default function CalendarView() {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
-  const admin = me?.user_grade === 0
-  // 휴일/휴가 등록: 관리자(0)·개발자(1)·IT담당자(2) (비관리자는 본인 휴가만)
+  const staff = me && [0, 1].includes(me.user_grade)
+  // 휴일/휴가 등록: 관리자(0)·개발자(1)·IT담당자(2) (비스태프는 본인 휴가만)
   const canReg = me && [0, 1, 2].includes(me.user_grade)
   const [users, setUsers] = useState([])          // 휴가 등록 폼용
   const [events, setEvents] = useState([])
@@ -175,7 +175,7 @@ export default function CalendarView() {
     const date = info.dateStr.slice(0, 10)
     const day = dayMap[date.replaceAll('-', '')]
     setHolForm({ date, ...emptyHol,
-      work_userid: admin ? '' : me.userid,   // 개발자는 본인 고정
+      work_userid: staff ? '' : me.userid,   // 비스태프는 본인 고정
       date_stat: 'H',
       holiday_remark: day?.holiday_remark || '' })
   }
@@ -329,7 +329,7 @@ export default function CalendarView() {
               {holForm.kind === 'user' ? (
                 <>
                   <label>작업자
-                    {admin ? (
+                    {staff ? (
                       <select required value={holForm.work_userid}
                         onChange={e => setHolForm({ ...holForm, work_userid: e.target.value })}>
                         <option value="">선택</option>

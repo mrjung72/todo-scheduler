@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, aliased
 from ..database import get_db
 from ..models import WorkScheduleLog, TaskChgLog, Task, User, Site
 from ..schemas import WorkLogCreate, WorkLogUpdate, WorkLogOut
-from ..security import get_current_user, check_owner_or_admin, require_admin
+from ..security import get_current_user, check_owner_or_admin, require_staff
 from ..scheduler import (
     get_calendar_map, get_holiday_map, workday_cal, daily_breakdown,
 )
@@ -102,16 +102,16 @@ def all_chg_logs(db: Session = Depends(get_db)):
 
 @router.delete("/his", status_code=204)
 def delete_all_chg_logs(db: Session = Depends(get_db),
-                        me: User = Depends(require_admin)):
-    """작업 상태변경이력 전체 삭제 (관리자 전용)."""
+                        me: User = Depends(require_staff)):
+    """작업 상태변경이력 전체 삭제 (관리자/개발자)."""
     db.query(TaskChgLog).delete()
     db.commit()
 
 
 @router.delete("/his/{taskchgid}", status_code=204)
 def delete_chg_log(taskchgid: int, db: Session = Depends(get_db),
-                   me: User = Depends(require_admin)):
-    """작업 상태변경이력 단건 삭제 (관리자 전용)."""
+                   me: User = Depends(require_staff)):
+    """작업 상태변경이력 단건 삭제 (관리자/개발자)."""
     obj = db.get(TaskChgLog, taskchgid)
     if not obj:
         raise HTTPException(404, "이력을 찾을 수 없습니다")

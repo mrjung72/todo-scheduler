@@ -3,10 +3,11 @@ import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL, NEXT_STAT,
   loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
+// 관리자(0)/개발자(1) 모두 전체 탭 접근 가능 (admin 계정 보호는 별도 처리)
 const TABS = [
-  { key: 'users', label: '사용자', adminOnly: true },
-  { key: 'sites', label: '사이트', adminOnly: true },
-  { key: 'calendar', label: '달력', adminOnly: true },
+  { key: 'users', label: '사용자' },
+  { key: 'sites', label: '사이트' },
+  { key: 'calendar', label: '달력' },
   { key: 'holidays', label: '작업자휴가' },
   { key: 'tasks', label: '작업스케쥴' },
   { key: 'schedules', label: '작업이력' },
@@ -14,18 +15,17 @@ const TABS = [
   { key: 'files', label: '첨부파일' },
 ]
 
-// 개발자(등급 1)도 접근 가능한 탭. 비관리자는 자기 작업만 수정 가능.
-const isAdmin = () => JSON.parse(localStorage.getItem('user') || 'null')?.user_grade === 0
+const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') || 'null')?.user_grade)
 const myId = () => JSON.parse(localStorage.getItem('user') || 'null')?.userid
+// admin 계정은 본인 외에는 수정 불가 (개발자 포함)
+const isProtectedUser = u => u.userid === 'admin' && myId() !== 'admin'
 
 export default function Admin() {
-  const admin = isAdmin()
-  const visibleTabs = admin ? TABS : TABS.filter(t => !t.adminOnly)
-  const [tab, setTab] = useState(admin ? 'users' : 'tasks')
+  const [tab, setTab] = useState('users')
   return (
     <div>
       <div className="tabs">
-        {visibleTabs.map(t => (
+        {TABS.map(t => (
           <button key={t.key} className={tab === t.key ? 'tab active' : 'tab'}
             onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
@@ -300,21 +300,30 @@ function UsersTab() {
           <th>이메일</th><th>등급</th><th>기본사이트</th><th>비밀번호</th><th>상태</th><th></th>
         </tr></thead>
         <tbody>
-          {shown.map(u => (
+          {shown.map(u => {
+            const locked = isProtectedUser(u)
+            return (
             <tr key={u.userid}>
-              <td>{u.userid}</td>
-              <td className="c"><EditableCell value={u.user_name} onSave={v => save(u.userid, { user_name: v })} /></td>
-              <td><EditableCell value={u.dept_name} onSave={v => save(u.userid, { dept_name: v })} /></td>
-              <td><EditableCell value={u.job_title} onSave={v => save(u.userid, { job_title: v })} /></td>
-              <td><EditableCell value={u.user_tel} onSave={v => save(u.userid, { user_tel: v })} /></td>
-              <td><EditableCell value={u.user_email} onSave={v => save(u.userid, { user_email: v })} /></td>
-              <td><EditableCell value={u.user_grade} onSave={v => save(u.userid, { user_grade: v })}
+              <td>{u.userid}{locked && <span className="badge">보호</span>}</td>
+              <td className="c"><EditableCell value={u.user_name} disabled={locked}
+                onSave={v => save(u.userid, { user_name: v })} /></td>
+              <td><EditableCell value={u.dept_name} disabled={locked}
+                onSave={v => save(u.userid, { dept_name: v })} /></td>
+              <td><EditableCell value={u.job_title} disabled={locked}
+                onSave={v => save(u.userid, { job_title: v })} /></td>
+              <td><EditableCell value={u.user_tel} disabled={locked}
+                onSave={v => save(u.userid, { user_tel: v })} /></td>
+              <td><EditableCell value={u.user_email} disabled={locked}
+                onSave={v => save(u.userid, { user_email: v })} /></td>
+              <td><EditableCell value={u.user_grade} disabled={locked}
+                onSave={v => save(u.userid, { user_grade: v })}
                 options={Object.entries(GRADE_LABEL).map(([k, l]) => ({ value: +k, label: l }))} /></td>
-              <td className="c"><EditableCell value={u.default_siteid}
+              <td className="c"><EditableCell value={u.default_siteid} disabled={locked}
                 onSave={v => save(u.userid, { default_siteid: v || null })}
                 options={[{ value: '', label: '-' },
                   ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]} /></td>
               <td className="c">
+                {!locked && <>
                 <button onClick={() => {
                   const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
                   if (pw) save(u.userid, { password: pw })
@@ -325,13 +334,15 @@ function UsersTab() {
                     .then(() => alert('비밀번호가 초기화되었습니다 (1234)'))
                     .catch(e => alert(e.response?.data?.detail || '초기화 실패'))
                 }>초기화</button>
+                </>}
               </td>
               <td className="c" title={u.reject_remark ? `승인불가 사유: ${u.reject_remark}` : ''}>
-                <EditableCell value={u.user_stat} onSave={v => save(u.userid, { user_stat: v })}
+                <EditableCell value={u.user_stat} disabled={locked}
+                  onSave={v => save(u.userid, { user_stat: v })}
                   options={[{ value: 'Y', label: 'Y' }, { value: 'A', label: '승인대기(A)' },
                             { value: 'R', label: '승인불가(R)' }, { value: 'N', label: 'N' }]} /></td>
               <td>
-                {u.user_stat === 'A' && <>
+                {!locked && u.user_stat === 'A' && <>
                   <button onClick={() => save(u.userid, { user_stat: 'Y' })}>승인</button>
                   <button onClick={() => {
                     const r = window.prompt('승인불가 사유를 입력하세요 (빈칸 가능)')
@@ -341,7 +352,8 @@ function UsersTab() {
                 </>}
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -497,13 +509,13 @@ function TasksTab() {
   const del = id => window.confirm(`작업 #${id} 삭제?`) &&
     api.delete(`/tasks/${id}`).then(load).catch(e => alert(errMsg(e)))
 
-  const admin = isAdmin()
-  const can = t => admin || t.work_userid === myId()
+  const staff = isStaff()
+  const can = t => staff || t.work_userid === myId()
   const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
-  const devOpt = admin ? uopt([1])
+  const devOpt = staff ? uopt([1])
     : uopt([1]).filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
@@ -517,7 +529,7 @@ function TasksTab() {
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
-    .filter(t => admin || t.work_userid === myId())  // 비관리자: 본인 작업만
+    .filter(t => staff || t.work_userid === myId())  // 비관리자: 본인 작업만
 
   const revStat = revMap(STAT_LABEL)
   const cols = [
@@ -580,7 +592,7 @@ function TasksTab() {
         <input type="number" className="num" step="0.5" placeholder="예상시간"
           value={form.work_hours_estimated}
           onChange={e => setForm({ ...form, work_hours_estimated: +e.target.value })} />
-        {admin && (
+        {staff && (
           <select value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자(개발자)</option>
@@ -605,7 +617,7 @@ function TasksTab() {
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <ExcelButtons name="작업" cols={cols} rows={filtered}
-          onUpload={admin ? upload : null} onDone={load} />
+          onUpload={staff ? upload : null} onDone={load} />
         <button className="primary" onClick={recalc}>재적용(재계산)</button>
         {msg && <span className="msg">{msg}</span>}
       </div>
@@ -640,7 +652,7 @@ function TasksTab() {
               <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { itos_userid: v })}
                 options={uopt([0, 2])} /></td>
-              <td className="c"><EditableCell value={t.work_userid} disabled={!admin}
+              <td className="c"><EditableCell value={t.work_userid} disabled={!staff}
                 onSave={v => save(t.taskid, { work_userid: v })}
                 options={devOpt} /></td>
               <td className={`c${can(t) ? ' clickable' : ''}`}
@@ -758,9 +770,9 @@ function HolidaysTab() {
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
   const [filterUser, setFilterUser] = useState('')
-  const admin = isAdmin()
-  const can = h => admin || h.work_userid === myId()
-  const empty = { date: '', work_userid: admin ? '' : (myId() || ''),
+  const staff = isStaff()
+  const can = h => staff || h.work_userid === myId()
+  const empty = { date: '', work_userid: staff ? '' : (myId() || ''),
     holiday_category: 'A', holiday_hours: 4, holiday_remark: '' }
   const [form, setForm] = useState(empty)
 
@@ -770,10 +782,10 @@ function HolidaysTab() {
       start: `${year}0101`,
       end: `${year}1231`,
     }
-    const uid = admin ? filterUser : myId()   // 비관리자: 본인 휴가만 조회
+    const uid = staff ? filterUser : myId()   // 비관리자: 본인 휴가만 조회
     if (uid) params.work_userid = uid
     api.get('/user-holidays', { params }).then(r => setRows(r.data))
-  }, [year, filterUser, admin])
+  }, [year, filterUser, staff])
   useEffect(() => {
     load()
     api.get('/users').then(r => setUsers(r.data))
@@ -809,7 +821,7 @@ function HolidaysTab() {
       <form className="newtask" onSubmit={add}>
         <input type="date" required value={form.date}
           onChange={e => setForm({ ...form, date: e.target.value })} />
-        {admin && (
+        {staff && (
           <select required value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자 선택</option>
@@ -834,7 +846,7 @@ function HolidaysTab() {
         <input type="number" className="num" value={year}
           onChange={e => setYear(+e.target.value)} style={{ width: 90 }} />
         <span className="hint">년</span>
-        {admin && (
+        {staff && (
           <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
             {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -880,9 +892,9 @@ function SchedulesTab() {
   const [savedF] = useState(() => loadFilter('admin-schedules'))
   const [q, setQ] = useState(savedF.q || '')
   const [siteF, setSiteF] = useState(savedF.site || '')
-  const admin = isAdmin()
-  const can = s => admin || s.work_userid === myId()
-  const empty = { taskid: '', work_userid: admin ? '' : (myId() || ''),
+  const staff = isStaff()
+  const can = s => staff || s.work_userid === myId()
+  const empty = { taskid: '', work_userid: staff ? '' : (myId() || ''),
     work_remark: '' }
   const [form, setForm] = useState(empty)
 
@@ -931,7 +943,7 @@ function SchedulesTab() {
       s.work_remark,
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(s => !siteF || taskOf(s.taskid)?.siteid === siteF)
-    .filter(s => admin || s.work_userid === myId())  // 비관리자: 본인 이력만
+    .filter(s => staff || s.work_userid === myId())  // 비관리자: 본인 이력만
 
   const cols = [
     { label: 'ID', field: 'workschid' },
@@ -962,7 +974,7 @@ function SchedulesTab() {
           <option value="">작업 선택</option>
           {topt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        {admin && (
+        {staff && (
           <select value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자</option>
@@ -985,7 +997,7 @@ function SchedulesTab() {
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <ExcelButtons name="작업이력" cols={cols} rows={filtered}
-          onUpload={admin ? upload : null} onDone={load} />
+          onUpload={staff ? upload : null} onDone={load} />
       </div>
       <table className="grid">
         <thead><tr>
@@ -997,10 +1009,10 @@ function SchedulesTab() {
             return (
               <tr key={s.workschid}>
                 <td className="r">{s.workschid}</td>
-                <td><EditableCell value={s.taskid} disabled={!admin}
+                <td><EditableCell value={s.taskid} disabled={!staff}
                   onSave={v => saveSched(s.workschid, { taskid: v })}
                   options={topt} /></td>
-                <td className="c"><EditableCell value={s.work_userid} disabled={!admin}
+                <td className="c"><EditableCell value={s.work_userid} disabled={!staff}
                   onSave={v => saveSched(s.workschid, { work_userid: v })}
                   options={woptFor(s.work_userid)} /></td>
                 <td><EditableCell value={s.work_remark} disabled={!can(s)}
@@ -1028,7 +1040,7 @@ function SchedulesTab() {
 
 /* ---------------- 작업상태변경이력 (task_chg_log) ---------------- */
 function SchedHisTab() {
-  const admin = isAdmin()
+  const staff = isStaff()
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [q, setQ] = useState('')
@@ -1071,14 +1083,14 @@ function SchedHisTab() {
         <input placeholder="검색 (작업/작업자/상태/비고)" value={q}
           onChange={e => setQ(e.target.value)} />
         <ExcelButtons name="작업상태변경이력" cols={cols} rows={filtered} />
-        {admin && rows.length > 0 &&
+        {staff && rows.length > 0 &&
           <button className="danger" onClick={delAll}>전체삭제</button>}
       </div>
       <table className="grid">
         <thead><tr>
           <th>이력ID</th><th>작업</th><th>작업자</th>
           <th>변경상태</th><th className="r">작업기간<br/>(Hour)</th><th>비고</th><th>등록일시</th>
-          {admin && <th></th>}
+          {staff && <th></th>}
         </tr></thead>
         <tbody>
           {filtered.map(r => (
@@ -1093,13 +1105,13 @@ function SchedHisTab() {
               <td className="r">{r.work_hours || 0}</td>
               <td>{r.remark || ''}</td>
               <td className="c">{fmtDT(r.create_date)}</td>
-              {admin &&
+              {staff &&
                 <td><button className="danger"
                   onClick={() => delHis(r.taskchgid)}>삭제</button></td>}
             </tr>
           ))}
           {filtered.length === 0 &&
-            <tr><td colSpan={admin ? 8 : 7} className="empty">이력이 없습니다</td></tr>}
+            <tr><td colSpan={staff ? 8 : 7} className="empty">이력이 없습니다</td></tr>}
         </tbody>
       </table>
       <p className="hint">
@@ -1114,7 +1126,7 @@ function SchedHisTab() {
 
 /* ---------------- 첨부파일 ---------------- */
 function AttachFilesTab() {
-  const admin = isAdmin(), me = myId()
+  const staff = isStaff(), me = myId()
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [scheds, setScheds] = useState([])
@@ -1134,7 +1146,7 @@ function AttachFilesTab() {
   }, [])
 
   const taskOf = id => tasks.find(t => t.taskid === id)
-  const canEdit = f => admin || (f.work_userid && f.work_userid === me)
+  const canEdit = f => staff || (f.work_userid && f.work_userid === me)
   const kw = q.trim().toLowerCase()
   const filtered = rows.filter(f => !kw ||
     [f.file_name, f.task_name, f.task_filepath, f.taskid, f.workschid]
@@ -1203,7 +1215,7 @@ function AttachFilesTab() {
     <div>
       <div className="toolbar">
         <ExcelButtons name="첨부파일" cols={cols} rows={filtered}
-          onUpload={admin ? uploadCsv : null} onDone={load} />
+          onUpload={staff ? uploadCsv : null} onDone={load} />
         <input placeholder="검색 (파일명/작업/경로)" value={q}
           onChange={e => setQ(e.target.value)} />
       </div>

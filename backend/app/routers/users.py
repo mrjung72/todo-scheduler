@@ -6,10 +6,24 @@ from ..database import get_db
 from ..models import User, Site
 from ..schemas import UserCreate, UserUpdate, UserOut
 from ..security import (
-    hash_password, verify_password, get_current_user, require_admin,
+    hash_password, verify_password, get_current_user,
 )
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+ADMIN_USERID = "admin"
+
+
+def _check_staff(me: User):
+    """사용자 관리 권한: 관리자(0)/개발자(1)."""
+    if me.user_grade not in (0, 1):
+        raise HTTPException(403, "권한이 없습니다")
+
+
+def _check_not_admin_account(userid: str, me: User):
+    """admin 계정은 본인 외에는 어떤 수정도 불가."""
+    if userid == ADMIN_USERID and me.userid != ADMIN_USERID:
+        raise HTTPException(403, "admin 계정은 수정할 수 없습니다")
 
 
 @router.get("", response_model=list[UserOut])
@@ -40,7 +54,11 @@ def change_my_password(body: PasswordChange, db: Session = Depends(get_db),
 
 
 @router.post("", response_model=UserOut, status_code=201)
-def create_user(body: UserCreate, db: Session = Depends(get_db)):
+def create_user(body: UserCreate, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
+    _check_staff(me)
+    if body.userid == ADMIN_USERID:
+        raise HTTPException(400, "admin 계정은 생성할 수 없습니다")
     if db.get(User, body.userid):
         raise HTTPException(409, "이미 존재하는 사용자ID입니다")
     if body.default_siteid and not db.get(Site, body.default_siteid):
@@ -55,10 +73,13 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{userid}", response_model=UserOut)
-def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db)):
+def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
     obj = db.get(User, userid)
     if not obj:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
+    _check_not_admin_account(userid, me)
+    _check_staff(me)
     data = body.model_dump(exclude_unset=True)
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
@@ -76,8 +97,10 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db)):
 
 @router.post("/{userid}/password-reset", status_code=204)
 def reset_password(userid: str, db: Session = Depends(get_db),
-                   me: User = Depends(require_admin)):
-    """관리자: 사용자 비밀번호를 초기값(1234)으로 초기화."""
+                   me: User = Depends(get_current_user)):
+    """관리자/개발자: 사용자 비밀번호를 초기값(1234)으로 초기화."""
+    _check_not_admin_account(userid, me)
+    _check_staff(me)
     obj = db.get(User, userid)
     if not obj:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
@@ -86,10 +109,13 @@ def reset_password(userid: str, db: Session = Depends(get_db),
 
 
 @router.delete("/{userid}", status_code=204)
-def delete_user(userid: str, db: Session = Depends(get_db)):
+def delete_user(userid: str, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
     obj = db.get(User, userid)
     if not obj:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
+    _check_not_admin_account(userid, me)
+    _check_staff(me)
     if obj.user_grade == 0:
         raise HTTPException(400, "관리자 등급 사용자는 삭제할 수 없습니다")
     db.delete(obj)
