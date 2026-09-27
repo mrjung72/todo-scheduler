@@ -300,14 +300,15 @@ table.grid td.clickable:hover { background: #eff6ff; }
 button.logout { padding: 3px 10px; font-size: 12px; }
 
 /* 메인(모바일 스타일) */
-.home-wrap { max-width: 480px; margin: 0 auto; }
+.home-wrap { max-width: 820px; margin: 0 auto; }
 .home-card {
   background: #fff; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08); cursor: pointer;
 }
 .home-card.open { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
 .home-card .kb-title { display: flex; align-items: baseline; }
-.home-card .kb-title .home-stat { margin-left: auto; flex-shrink: 0; }
+.home-card .kb-row1 { display: flex; align-items: baseline; }
+.home-card .kb-row1 .home-stat { margin-left: auto; flex-shrink: 0; }
 .home-stat {
   flex-shrink: 0; font-size: 11px; padding: 2px 8px; border-radius: 10px;
   background: #e5e7eb; color: #374151;

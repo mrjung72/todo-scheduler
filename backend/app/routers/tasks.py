@@ -74,7 +74,8 @@ def list_tasks(
         query = query.filter(Task.siteid == siteid)
 
     if task_stat:
-        query = query.filter(Task.task_stat == task_stat)
+        stats = [s for s in str(task_stat).split(',') if s]
+        query = query.filter(Task.task_stat.in_(stats))
 
     if q:
         like = f"%{q}%"
