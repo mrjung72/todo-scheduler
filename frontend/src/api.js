@@ -45,6 +45,15 @@ export const loadFilter = key => {
 export const saveFilter = (key, obj) =>
   localStorage.setItem(`filter:${key}`, JSON.stringify(obj))
 
+// 작업유형
+export const TASK_TYPE_LABEL = {
+  SQ: '단순문의',
+  FI: '기능개선',
+  BF: '오류수정',
+  DE: '데이터추출',
+  DM: '데이터변경',
+}
+
 // 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일, 자기 상태 포함)
 export const NEXT_STAT = {
   R: ['R', 'C', 'X'],

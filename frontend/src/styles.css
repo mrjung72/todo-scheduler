@@ -304,6 +304,9 @@ table.grid td.clickable:hover { background: #eff6ff; }
 button.logout { padding: 3px 10px; font-size: 12px; }
 
 /* 메인(모바일 스타일) */
+td.type-col select { min-width: 110px; }
+td.req-col input { width: 120px; }
+
 .pager { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
 .pager .pager-count { font-weight: 600; color: #374151; }
 .pager button:disabled { color: #9ca3af; }

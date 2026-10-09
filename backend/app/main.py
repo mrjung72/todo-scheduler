@@ -129,6 +129,8 @@ def migrate(db):
         db.execute(text("ALTER TABLE tasks ADD COLUMN req_date DATETIME"))
         db.execute(text("UPDATE tasks SET req_date = create_date "
                         "WHERE req_date IS NULL"))
+    if "task_type" not in cols:
+        db.execute(text("ALTER TABLE tasks ADD COLUMN task_type TEXT"))
 
     tables = {r[0] for r in db.execute(
         text("SELECT name FROM sqlite_master WHERE type='table'"))}

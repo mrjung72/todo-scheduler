@@ -39,6 +39,8 @@ class Task(Base):
     work_hours_real = Column(REAL, default=0)
     # R-작업요청, C-검토중, W-대기중, P-작업중, H-작업중단, F-작업완료, X-작업반려
     task_stat = Column(Text, default="R")
+    # SQ-단순문의, FI-기능개선, BF-오류수정, DE-데이터추출, DM-데이터변경
+    task_type = Column(Text)
     task_csrid = Column(Text)
     task_req_remark = Column(Text)
     req_userid = Column(Text, ForeignKey("users.userid"))

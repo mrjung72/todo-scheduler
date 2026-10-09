@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, DAY_STAT_LABEL, GRADE_LABEL, NEXT_STAT,
-  loadFilter, saveFilter } from '../api'
+import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL, GRADE_LABEL,
+  NEXT_STAT, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
 // 관리자(0)/개발자(1) 모두 전체 탭 접근 가능 (admin 계정 보호는 별도 처리)
@@ -504,7 +504,7 @@ function SitesTab() {
 /* ---------------- 작업스케쥴 ---------------- */
 function TasksTab() {
   const empty = { task_name: '', siteid: '', priority: 0, work_hours_estimated: 8,
-    task_stat: 'R', task_csrid: '', task_req_remark: '', req_userid: '',
+    task_stat: 'R', task_type: '', task_csrid: '', task_req_remark: '', req_userid: '',
     itos_userid: '', work_userid: '' }
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
@@ -566,6 +566,8 @@ function TasksTab() {
   const staff = isStaff()
   const can = t => staff || t.work_userid === myId()
   const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
+  const typeOpt = [{ value: '', label: '-' },
+    ...Object.entries(TASK_TYPE_LABEL).map(([k, l]) => ({ value: k, label: `${l}(${k})` }))]
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
@@ -582,6 +584,7 @@ function TasksTab() {
       t.task_name, t.task_csrid, t.task_req_remark, t.site_name, t.siteid,
       t.req_userid, t.req_user_name, t.itos_userid, t.itos_user_name,
       t.work_userid, t.work_user_name, STAT_LABEL[t.task_stat],
+      TASK_TYPE_LABEL[t.task_type], t.task_type,
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
@@ -589,6 +592,7 @@ function TasksTab() {
   const { paged, pager } = usePager(filtered, [q, siteF, statF])
 
   const revStat = revMap(STAT_LABEL)
+  const revType = revMap(TASK_TYPE_LABEL)
   const cols = [
     { label: 'ID', field: 'taskid' },
     { label: '사이트ID', field: 'siteid' },
@@ -598,6 +602,7 @@ function TasksTab() {
     { label: '예상 작업시간(H)', field: 'work_hours_estimated' },
     { label: '실제 작업시간(H)', field: 'work_hours_real' },
     { label: '상태', field: 'task_stat', get: t => STAT_LABEL[t.task_stat] ?? t.task_stat },
+    { label: '유형', field: 'task_type', get: t => TASK_TYPE_LABEL[t.task_type] ?? t.task_type },
     { label: 'CSR 번호', field: 'task_csrid' },
     { label: '현업 담당자(참조)', field: '_req_name', get: t => t.req_user_name || '' },
     { label: '현업 담당자ID', field: 'req_userid' },
@@ -620,6 +625,7 @@ function TasksTab() {
       work_hours_estimated: +o['work_hours_estimated'] || 0,
       work_hours_real: +o.work_hours_real || 0,
       task_stat: revStat[o.task_stat] ?? o.task_stat ?? 'R',
+      task_type: revType[o.task_type] ?? o.task_type ?? null,
       task_csrid: o.task_csrid || null,
       task_req_remark: o.task_req_remark || null,
       task_start_date: dtOf(o.task_start_date),
@@ -669,6 +675,12 @@ function TasksTab() {
         <select value={form.siteid} onChange={e => setForm({ ...form, siteid: e.target.value })}>
           {sopt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select value={form.task_type}
+          onChange={e => setForm({ ...form, task_type: e.target.value })}>
+          <option value="">유형</option>
+          {Object.entries(TASK_TYPE_LABEL).map(([k, l]) =>
+            <option key={k} value={k}>{l}({k})</option>)}
+        </select>
         <input type="number" className="num" placeholder="우선순위" value={form.priority}
           onChange={e => setForm({ ...form, priority: +e.target.value })} />
         <input type="number" className="num" step="0.5" placeholder="예상시간"
@@ -686,7 +698,7 @@ function TasksTab() {
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>사이트</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">예상 작업<br/>시간(H)</th><th className="fit">실제 작업<br/>시간(H)</th>
-          <th>상태</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
+          <th>상태</th><th>유형</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
           <th>시작일시</th><th>종료일시<br/>(예상)</th><th>종료일시<br/>(실제)</th><th></th>
         </tr></thead>
         <tbody>
@@ -705,9 +717,12 @@ function TasksTab() {
               <td className="c"><EditableCell value={t.task_stat} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_stat: v })}
                 options={statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
+              <td className="c type-col"><EditableCell value={t.task_type} disabled={!can(t)}
+                onSave={v => save(t.taskid, { task_type: v || null })}
+                options={typeOpt} /></td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
-              <td className="c"><SearchUserCell value={t.req_userid} disabled={!can(t)}
+              <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t)}
                 users={reqUsers} listId="req-user-dl"
                 onSave={v => save(t.taskid, { req_userid: v })} /></td>
               <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t)}

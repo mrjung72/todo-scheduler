@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, NEXT_STAT, taskColor } from './api'
+import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor } from './api'
 
 // 달력 작업 팝업과 동일한 스타일의 작업 상세 팝업 (칸반/작업목록 공용)
 // task: /api/tasks 의 TaskDetail 형태 (task_start_date, task_stat 등 포함)
@@ -32,6 +32,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     work_hours_estimated: task.work_hours_estimated ?? 0,
     work_userid: task.work_userid || '',
     task_stat: task.task_stat || 'W',
+    task_type: task.task_type || '',
     req_remark: task.task_req_remark || '',
     start: toLocalInput(task.task_start_date),
     unfix: false,
@@ -46,6 +47,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         work_userid: editForm.work_userid || null,
         task_req_remark: editForm.req_remark || null,
         task_stat: editForm.task_stat,
+        task_type: editForm.task_type || null,
       })
       if (editForm.unfix) {
         await api.patch(`/tasks/${task.taskid}/unfix`)
@@ -118,6 +120,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                   <option value="">-</option>
                   {users.filter(u => u.user_grade === 1)
                     .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+                </select></p>
+              <p><b>유형</b>
+                <select value={editForm.task_type}
+                  onChange={e => setEditForm({ ...editForm, task_type: e.target.value })}>
+                  <option value="">-</option>
+                  {Object.entries(TASK_TYPE_LABEL)
+                    .map(([k, l]) => <option key={k} value={k}>{l}({k})</option>)}
                 </select></p>
               <p><b>상태</b>
                 <select value={editForm.task_stat}
@@ -208,6 +217,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             <p><b>우선순위</b> {task.priority}</p>
             <p><b>예상시간</b> {task.work_hours_estimated}h
               {workDays != null && ` (총 ${workDays}일)`}</p>
+            <p><b>유형</b> {TASK_TYPE_LABEL[task.task_type] || '-'}</p>
             <p><b>상태</b> {STAT_LABEL[task.task_stat] || '-'}</p>
             <p><b>시작</b> {fmtDT(task.task_start_date) || '-'}</p>
             <p><b>종료(예상)</b> {fmtDT(task.task_end_date_estimated) || '-'}</p>

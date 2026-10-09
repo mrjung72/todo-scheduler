@@ -65,6 +65,7 @@ class TaskBase(BaseModel):
     work_hours_estimated: Optional[float] = 0
     work_hours_real: Optional[float] = 0
     task_stat: Optional[str] = "R"
+    task_type: Optional[str] = None
     task_csrid: Optional[str] = None
     task_req_remark: Optional[str] = None
     req_userid: Optional[str] = None
@@ -87,6 +88,7 @@ class TaskUpdate(BaseModel):
     work_hours_estimated: Optional[float] = None
     work_hours_real: Optional[float] = None
     task_stat: Optional[str] = None
+    task_type: Optional[str] = None
     task_csrid: Optional[str] = None
     task_req_remark: Optional[str] = None
     req_userid: Optional[str] = None
