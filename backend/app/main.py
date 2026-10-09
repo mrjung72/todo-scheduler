@@ -114,16 +114,30 @@ def migrate(db):
             "ALTER TABLE users ADD COLUMN default_siteid TEXT REFERENCES sites(siteid)"))
     if "reject_remark" not in cols:
         db.execute(text("ALTER TABLE users ADD COLUMN reject_remark TEXT"))
-    # 사용자 등급 체계 개편: 구 2(IT담당자)->5, 3(현업담당자)->7, 4(일반개발자)->2
-    # 신 체계에는 3/4 등급이 없으므로 존재 여부로 구 체계 판별 (재실행 안전)
-    if db.execute(text(
-            "SELECT 1 FROM users WHERE user_grade IN (3, 4) LIMIT 1")).first():
-        db.execute(text("""
-            UPDATE users SET user_grade = CASE user_grade
-                WHEN 2 THEN 5 WHEN 3 THEN 7 WHEN 4 THEN 2
-                ELSE user_grade END
-            WHERE user_grade IN (2, 3, 4)
-        """))
+    # 사용자 등급 체계 개편 마이그레이션 (schema_meta 의 grade_scheme 버전으로 1회만 실행)
+    # v1: 2=IT담당자,3=현업담당자,4=일반개발자 -> v2: 2=일반개발자,5=IT,7=현업
+    # v3(현재): 3=개발매니저,4=일반개발자,5=IT,7=현업
+    db.execute(text(
+        "CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT)"))
+    if not db.execute(text(
+            "SELECT value FROM schema_meta WHERE key='grade_scheme'")).scalar():
+        # v1 체계 판별: 3·4 등급이 있고 5·7 등급이 없어야 함 (v3에도 3·4가 있으므로)
+        has_34 = db.execute(text(
+            "SELECT 1 FROM users WHERE user_grade IN (3, 4) LIMIT 1")).first()
+        has_57 = db.execute(text(
+            "SELECT 1 FROM users WHERE user_grade IN (5, 7) LIMIT 1")).first()
+        if has_34 and not has_57:
+            # v1 -> v2
+            db.execute(text("""
+                UPDATE users SET user_grade = CASE user_grade
+                    WHEN 2 THEN 5 WHEN 3 THEN 7 WHEN 4 THEN 2
+                    ELSE user_grade END
+                WHERE user_grade IN (2, 3, 4)
+            """))
+        # v2 -> v3: 일반개발자 2 -> 4 (신 체계에서 2는 미사용)
+        db.execute(text("UPDATE users SET user_grade = 4 WHERE user_grade = 2"))
+        db.execute(text(
+            "INSERT INTO schema_meta (key, value) VALUES ('grade_scheme', '3')"))
     cols = {r[1] for r in db.execute(text("PRAGMA table_info(tasks)"))}
     if "work_userid" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))

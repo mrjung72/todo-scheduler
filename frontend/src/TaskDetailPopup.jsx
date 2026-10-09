@@ -43,7 +43,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const canEdit = me && ([0, 1].includes(me.user_grade) ||
     task.work_userid === me.userid ||
-    (me.user_grade === 2 && me.default_siteid && task.siteid === me.default_siteid))
+    (me.user_grade === 4 && me.default_siteid && task.siteid === me.default_siteid))
   const canAttach = me && [0, 1].includes(me.user_grade)
   const [pview, setPview] = useState('info')  // info(기본: 작업정보+요청내용) | his
   const [daily, setDaily] = useState(null)

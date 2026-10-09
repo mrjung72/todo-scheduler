@@ -19,16 +19,25 @@ const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') ||
 const myId = () => JSON.parse(localStorage.getItem('user') || 'null')?.userid
 const myGrade = () => JSON.parse(localStorage.getItem('user') || 'null')?.user_grade
 const mySite = () => JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid
-const isJrDev = () => myGrade() === 2          // 일반개발자
+const isJrDev = () => myGrade() === 4          // 일반개발자
+const isViewer = () => [3, 5].includes(myGrade()) // 개발매니저·IT담당자: 관리자화면 조회 전용
 // 일반개발자는 지정사이트 또는 본인 작업만 변경 가능
 const canTask = t => isStaff() || t.work_userid === myId() ||
   (isJrDev() && mySite() && t.siteid === mySite())
-// admin 계정은 본인 외에는 수정 불가 (개발자 포함)
+// admin 계정은 본인 외에는 수정 불가 (수석개발자 포함)
 const isProtectedUser = u => u.userid === 'admin' && myId() !== 'admin'
 // 등급별 관리 가능한 대상 등급 (백엔드 MANAGED_GRADES와 동일)
-// 0-관리자: 전체 / 1-수석개발자: 하위등급 / 5-IT업무담당자: 현업담당자(7)
-const MANAGED_GRADES = { 0: [0, 1, 2, 5, 7, 9], 1: [2, 5, 7, 9], 5: [7] }
+// 0-관리자: 전체 / 1-수석개발자: 관리자(0) 외 전체 / 3-개발매니저: 일반개발자(4)만 / 5-IT담당자: 7·9
+const MANAGED_GRADES = { 0: [0, 1, 3, 4, 5, 7, 9], 1: [1, 3, 4, 5, 7, 9], 3: [4], 5: [7, 9] }
 const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_grade)
+
+// 비스태프 등급별 관리자 탭 접근
+// 3-개발매니저: 전체 조회 / 4-일반개발자: 기존과 동일 / 5-IT담당자: 지정 탭 조회
+const TAB_ACCESS = {
+  3: ['sites', 'tasks', 'schedules', 'schedhis', 'files', 'users', 'calendar', 'holidays'],
+  4: ['tasks', 'schedules', 'schedhis', 'files', 'users', 'holidays'],
+  5: ['sites', 'tasks', 'users', 'calendar', 'holidays'],
+}
 
 export default function Admin() {
   const [tab, setTab] = useState('tasks')
@@ -36,8 +45,7 @@ export default function Admin() {
     <div className="admin">
       <div className="tabs">
         {TABS.filter(t => isStaff() ||
-          ['tasks', 'schedules', 'users', 'holidays',
-           'schedhis', 'files'].includes(t.key)).map(t => (
+          (TAB_ACCESS[myGrade()] || []).includes(t.key)).map(t => (
           <button key={t.key} className={tab === t.key ? 'tab active' : 'tab'}
             onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
@@ -318,6 +326,8 @@ function UsersTab() {
   }
 
   const shown = rows.filter(u =>
+    // 자신보다 높은 등급(등급 번호가 작은)의 사용자는 목록에서 제외
+    u.user_grade >= myGrade() &&
     (!statF || u.user_stat === statF) &&
     (gradeF === '' || u.user_grade === +gradeF) &&
     (!q || [u.userid, u.user_name, u.dept_name, u.job_title, u.user_tel, u.user_email]
@@ -443,6 +453,7 @@ function UsersTab() {
 
 /* ---------------- 사이트 ---------------- */
 function SitesTab() {
+  const staff = isStaff()
   const empty = { siteid: '', site_name: '', site_stat: 'Y', site_remark: '', itos_userid: '' }
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
@@ -490,9 +501,9 @@ function SitesTab() {
     <div>
       <div className="toolbar">
         <ExcelButtons name="사이트" cols={cols} rows={rows}
-          onUpload={upload} onDone={load} />
+          onUpload={staff ? upload : null} onDone={load} />
       </div>
-      <form className="newtask" onSubmit={add}>
+      {staff && <form className="newtask" onSubmit={add}>
         <input required placeholder="사이트ID" value={form.siteid}
           onChange={e => setForm({ ...form, siteid: e.target.value })} />
         <input required placeholder="사이트명" value={form.site_name}
@@ -505,7 +516,7 @@ function SitesTab() {
           {itosOptions.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <button type="submit">추가</button>
-      </form>
+      </form>}
       <table className="grid">
         <thead><tr>
           <th>사이트ID</th><th>사이트명</th><th>설명</th><th>IT담당자</th><th>상태</th><th></th>
@@ -514,13 +525,13 @@ function SitesTab() {
           {paged.map(s => (
             <tr key={s.siteid}>
               <td>{s.siteid}</td>
-              <td><EditableCell value={s.site_name} onSave={v => save(s.siteid, { site_name: v })} /></td>
-              <td><EditableCell value={s.site_remark} onSave={v => save(s.siteid, { site_remark: v })} /></td>
-              <td className="c"><EditableCell value={s.itos_userid} onSave={v => save(s.siteid, { itos_userid: v })}
+              <td><EditableCell value={s.site_name} disabled={!staff} onSave={v => save(s.siteid, { site_name: v })} /></td>
+              <td><EditableCell value={s.site_remark} disabled={!staff} onSave={v => save(s.siteid, { site_remark: v })} /></td>
+              <td className="c"><EditableCell value={s.itos_userid} disabled={!staff} onSave={v => save(s.siteid, { itos_userid: v })}
                 options={itosOptions} /></td>
-              <td className="c"><EditableCell value={s.site_stat} onSave={v => save(s.siteid, { site_stat: v })}
+              <td className="c"><EditableCell value={s.site_stat} disabled={!staff} onSave={v => save(s.siteid, { site_stat: v })}
                 options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
-              <td><button className="danger" onClick={() => del(s.siteid)}>삭제</button></td>
+              <td>{staff && <button className="danger" onClick={() => del(s.siteid)}>삭제</button>}</td>
             </tr>
           ))}
         </tbody>
@@ -608,15 +619,16 @@ function TasksTab() {
     api.delete(`/tasks/${id}`).then(load).catch(e => alert(errMsg(e)))
 
   const staff = isStaff()
-  const can = canTask
+  const viewer = isViewer()   // 개발매니저·IT담당자: 조회 전용
+  const can = t => !viewer && canTask(t)
   const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const typeOpt = [{ value: '', label: '-' },
     ...Object.entries(TASK_TYPE_LABEL).map(([k, l]) => ({ value: k, label: `${l}(${k})` }))]
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
-  const devOpt = staff ? uopt([1, 2])
-    : uopt([1, 2]).filter(o => o.value === '' || o.value === myId())
+  const devOpt = staff ? uopt([1, 3, 4])
+    : uopt([1, 3, 4]).filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
   // 현업담당자 검색 리스트다운 대상 (현업담당자 7, 기타사용자 9)
@@ -633,7 +645,7 @@ function TasksTab() {
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
     (!typeF || t.task_type === typeF))
-    .filter(t => staff || t.work_userid === myId())  // 비스태프: 본인 작업만
+    .filter(t => staff || viewer || t.work_userid === myId())  // 조회전용·일반개발자 본인 작업만
   const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF])
 
   // 방금 추가한 작업이 보이는 페이지로 이동 + 행 강조
@@ -743,10 +755,10 @@ function TasksTab() {
         }}>검색조건 저장</button>
         <ExcelButtons name="작업" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
-        <button className="primary" onClick={recalc}>재적용(재계산)</button>
+        {!viewer && <button className="primary" onClick={recalc}>재적용(재계산)</button>}
         {msg && <span className="msg">{msg}</span>}
       </div>
-      <form className="newtask" onSubmit={add}>
+      {!viewer && <form className="newtask" onSubmit={add}>
         <input required placeholder="작업명" value={form.task_name}
           onChange={e => setForm({ ...form, task_name: e.target.value })} />
         <select value={form.siteid} onChange={e => {
@@ -781,7 +793,7 @@ function TasksTab() {
           휴일작업
         </label>
         <button type="submit">작업추가</button>
-      </form>
+      </form>}
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>사이트</th><th>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
@@ -816,7 +828,7 @@ function TasksTab() {
                 onSave={v => save(t.taskid, { req_userid: v })} /></td>
               <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { itos_userid: v })}
-                options={uopt([0, 2])} /></td>
+                options={uopt([0, 5])} /></td>
               <td className="c work-col"><EditableCell value={t.work_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { work_userid: v })}
                 options={devOpt} /></td>
@@ -896,6 +908,7 @@ function TasksTab() {
 
 /* ---------------- 달력 ---------------- */
 function CalendarTab() {
+  const staff = isStaff()   // 달력 상태/공휴일 변경은 관리자·수석개발자만
   const today = new Date()
   const [month, setMonth] = useState(
     `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
@@ -921,10 +934,12 @@ function CalendarTab() {
       <div className="toolbar">
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
         <span className="hint">휴일(H)로 지정된 날은 스케줄 계산에서 제외됩니다.</span>
+        {staff && <>
         <input type="number" className="num" value={year}
           onChange={e => setYear(+e.target.value)}
           style={{ width: 90, marginLeft: 'auto' }} />
         <button className="primary" onClick={generate}>해당 연도 달력 생성</button>
+        </>}
       </div>
       <table className="grid">
         <thead><tr><th>일자ID</th><th>일자</th><th>요일</th><th>상태</th><th>설명</th></tr></thead>
@@ -937,9 +952,9 @@ function CalendarTab() {
                 <td className="c">{d.dateid}</td>
                 <td className="c">{d.date_name}</td>
                 <td className="c">{wd}</td>
-                <td className="c"><EditableCell value={d.date_stat} onSave={v => save(d.dateid, { date_stat: v })}
+                <td className="c"><EditableCell value={d.date_stat} disabled={!staff} onSave={v => save(d.dateid, { date_stat: v })}
                   options={Object.entries(DAY_STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))} /></td>
-                <td><EditableCell value={d.holiday_remark}
+                <td><EditableCell value={d.holiday_remark} disabled={!staff}
                   onSave={v => save(d.dateid, { holiday_remark: v })} /></td>
               </tr>
             )
@@ -961,8 +976,12 @@ function HolidaysTab() {
   const [users, setUsers] = useState([])
   const [filterUser, setFilterUser] = useState('')
   const staff = isStaff()
-  const can = h => staff || h.work_userid === myId()
-  const empty = { date: '', work_userid: staff ? '' : (myId() || ''),
+  const mgr = myGrade() === 3          // 개발매니저: 일반개발자(4)의 휴가 변경 가능
+  const viewAll = staff || isViewer()  // 조회전용 등급도 전체 휴가 조회
+  const gradeOf = uid => users.find(u => u.userid === uid)?.user_grade
+  const can = h => staff || h.work_userid === myId() ||
+    (mgr && gradeOf(h.work_userid) === 4)
+  const empty = { date: '', work_userid: (staff || mgr) ? '' : (myId() || ''),
     holiday_category: 'A', holiday_hours: 4, holiday_remark: '' }
   const [form, setForm] = useState(empty)
 
@@ -972,10 +991,10 @@ function HolidaysTab() {
       start: `${year}0101`,
       end: `${year}1231`,
     }
-    const uid = staff ? filterUser : myId()   // 비관리자: 본인 휴가만 조회
+    const uid = viewAll ? filterUser : myId()   // 비관리자: 본인 휴가만 조회
     if (uid) params.work_userid = uid
     api.get('/user-holidays', { params }).then(r => setRows(r.data))
-  }, [year, filterUser, staff])
+  }, [year, filterUser, viewAll])
   useEffect(() => {
     load()
     api.get('/users').then(r => setUsers(r.data))
@@ -1003,7 +1022,7 @@ function HolidaysTab() {
 
   const catOptions = Object.entries(HOL_CAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const userOptions = [{ value: '', label: '작업자(전체)' },
-    ...users.filter(u => [1, 2].includes(u.user_grade))
+    ...users.filter(u => [1, 3, 4].includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
   const { paged, pager } = usePager(rows, [year, filterUser])
 
@@ -1013,7 +1032,7 @@ function HolidaysTab() {
         <input type="number" className="num" value={year}
           onChange={e => setYear(+e.target.value)} style={{ width: 90 }} />
         <span className="hint">년</span>
-        {staff && (
+        {viewAll && (
           <select value={filterUser} onChange={e => setFilterUser(e.target.value)}>
             {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -1023,14 +1042,15 @@ function HolidaysTab() {
           반영은 [작업목록]의 재적용 시 적용됩니다.
         </span>
       </div>
-      <form className="newtask" onSubmit={add}>
+      {myGrade() !== 5 && <form className="newtask" onSubmit={add}>
         <input type="date" required value={form.date}
           onChange={e => setForm({ ...form, date: e.target.value })} />
-        {staff && (
+        {(staff || mgr) && (
           <select required value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자 선택</option>
-            {users.filter(u => [1, 2].includes(u.user_grade))
+            {users.filter(u => (staff ? [1, 3, 4] : [4]).includes(u.user_grade)
+                || u.userid === myId())
               .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
           </select>
         )}
@@ -1046,7 +1066,7 @@ function HolidaysTab() {
         <input placeholder="설명 (예: 연차, 오후반차)" value={form.holiday_remark}
           onChange={e => setForm({ ...form, holiday_remark: e.target.value })} />
         <button type="submit">추가</button>
-      </form>
+      </form>}
       <table className="grid">
         <thead><tr>
           <th>일자</th><th>작업자</th><th>구분</th><th>휴가시간</th><th>설명</th><th></th>
@@ -1085,7 +1105,8 @@ function SchedulesTab() {
   const [q, setQ] = useState(savedF.q || '')
   const [siteF, setSiteF] = useState(savedF.site || '')
   const staff = isStaff()
-  const can = s => staff || s.work_userid === myId()
+  const viewer = isViewer()
+  const can = s => staff || (!viewer && s.work_userid === myId())
   const empty = { taskid: '', work_userid: staff ? '' : (myId() || ''),
     work_remark: '' }
   const [form, setForm] = useState(empty)
@@ -1114,9 +1135,9 @@ function SchedulesTab() {
   const del = id => window.confirm(`작업이력 #${id} 삭제?`) &&
     api.delete(`/schedules/${id}`).then(load).catch(e => alert(errMsg(e)))
 
-  // 작업자는 개발자(등급 1·2)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
+  // 작업자는 개발자(등급 1·3·4)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
   // 값이 깨지지 않도록 해당 작업자만 선택지에 포함
-  const devOpt = users.filter(u => [1, 2].includes(u.user_grade))
+  const devOpt = users.filter(u => [1, 3, 4].includes(u.user_grade))
     .map(u => ({ value: u.userid, label: u.user_name }))
   const uopt = [{ value: '', label: '-' }, ...devOpt]
   const topt = [{ value: '', label: '-' },
@@ -1131,7 +1152,7 @@ function SchedulesTab() {
       s.work_remark,
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(s => !siteF || taskOf(s.taskid)?.siteid === siteF)
-    .filter(s => staff || s.work_userid === myId())  // 비관리자: 본인 이력만
+    .filter(s => staff || viewer || s.work_userid === myId())  // 조회전용 전체·일반개발자 본인 이력만
   const { paged, pager } = usePager(filtered, [q, siteF])
 
   const cols = [
@@ -1171,7 +1192,7 @@ function SchedulesTab() {
         <ExcelButtons name="작업이력" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
       </div>
-      <form className="newtask" onSubmit={add}>
+      {!viewer && <form className="newtask" onSubmit={add}>
         <select required value={form.taskid}
           onChange={e => setForm({ ...form, taskid: e.target.value })}>
           <option value="">작업 선택</option>
@@ -1187,7 +1208,7 @@ function SchedulesTab() {
         <input placeholder="작업내용" value={form.work_remark}
           onChange={e => setForm({ ...form, work_remark: e.target.value })} />
         <button type="submit">추가</button>
-      </form>
+      </form>}
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>작업</th><th>작업자</th><th>작업내용</th><th>등록일시</th><th></th>
@@ -1265,7 +1286,7 @@ function SchedHisTab() {
   // 검색조건(사이트/상태)에 해당하는 작업만 선택 항목으로 제공
   // (비스태프는 본인 작업만)
   const taskOpt = tasks.filter(t =>
-    (staff || t.work_userid === myId()) &&
+    (staff || isViewer() || t.work_userid === myId()) &&
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
 
   const cols = [
@@ -1349,7 +1370,7 @@ function SchedHisTab() {
 
 /* ---------------- 첨부파일 ---------------- */
 function AttachFilesTab() {
-  const staff = isStaff(), me = myId()
+  const staff = isStaff(), me = myId(), viewer = isViewer()
   const [rows, setRows] = useState([])
   const [tasks, setTasks] = useState([])
   const [scheds, setScheds] = useState([])
@@ -1374,7 +1395,7 @@ function AttachFilesTab() {
   }, [])
 
   const taskOf = id => tasks.find(t => t.taskid === id)
-  const canEdit = f => staff || (f.work_userid && f.work_userid === me)
+  const canEdit = f => staff || (!viewer && f.work_userid && f.work_userid === me)
   const kw = q.trim().toLowerCase()
   const filtered = rows
     .filter(f => !kw ||
@@ -1463,7 +1484,7 @@ function AttachFilesTab() {
         <ExcelButtons name="첨부파일" cols={cols} rows={filtered}
           onUpload={staff ? uploadCsv : null} onDone={load} />
       </div>
-      <form className="newtask" onSubmit={upload}>
+      {!viewer && <form className="newtask" onSubmit={upload}>
         <select required value={form.taskid}
           onChange={e => setForm({ taskid: e.target.value, workschid: '' })}>
           <option value="">작업 선택</option>
@@ -1484,7 +1505,7 @@ function AttachFilesTab() {
         </select>
         <input type="file" ref={fileRef} required />
         <button type="submit">업로드</button>
-      </form>
+      </form>}
       <table className="grid">
         <thead><tr>
           <th>작업ID</th><th>작업명</th><th>작업자</th><th className="r">작업스케쥴ID</th>

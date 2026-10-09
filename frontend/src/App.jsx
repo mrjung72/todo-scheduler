@@ -108,7 +108,7 @@ export default function App() {
           <NavLink to="/kanban">칸반</NavLink>
           <NavLink to="/calendar">달력</NavLink>
           <NavLink to="/tasks">작업목록</NavLink>
-          {[0, 1, 2, 5].includes(me.user_grade) && <NavLink to="/admin">관리자</NavLink>}
+          {[0, 1, 3, 4, 5].includes(me.user_grade) && <NavLink to="/admin">관리자</NavLink>}
         </nav>
         {cfg && (
           <span className="workhours" title={`WORK_SEGMENTS=${cfg.work_segments}`}>
@@ -129,7 +129,7 @@ export default function App() {
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/docs/:name" element={<DocView />} />
           <Route path="/admin" element={
-            [0, 1, 2, 5].includes(me.user_grade) ? <Admin /> : <Navigate to="/tasks" replace />
+            [0, 1, 3, 4, 5].includes(me.user_grade) ? <Admin /> : <Navigate to="/tasks" replace />
           } />
         </Routes>
       </main>

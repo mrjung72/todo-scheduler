@@ -77,7 +77,8 @@ export const DAY_STAT_LABEL = {
 export const GRADE_LABEL = {
   0: '관리자',
   1: '수석개발자',
-  2: '일반개발자',
+  3: '개발매니저',
+  4: '일반개발자',
   5: 'IT업무담당자',
   7: '현업담당자',
   9: '기타사용자',

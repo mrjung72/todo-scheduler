@@ -10,6 +10,13 @@ from ..security import get_current_user, check_owner_or_admin
 router = APIRouter(prefix="/api/user-holidays", tags=["user-holidays"])
 
 
+def _check_holiday_write(me: User, work_userid: str, db: Session):
+    """스태프/본인 외 개발매니저(3)는 일반개발자(4)의 휴가만 변경 가능."""
+    target = db.get(User, work_userid)
+    check_owner_or_admin(me, work_userid,
+                         target_grade=target.user_grade if target else None)
+
+
 def _query(db: Session):
     return (
         db.query(UserHoliday, User.user_name)
@@ -57,7 +64,7 @@ def list_holidays(
 @router.post("", response_model=UserHolidayOut, status_code=201)
 def create_holiday(body: UserHolidayCreate, db: Session = Depends(get_db),
                    me: User = Depends(get_current_user)):
-    check_owner_or_admin(me, body.work_userid)
+    _check_holiday_write(me, body.work_userid, db)
     obj = db.get(UserHoliday, (body.dateid, body.work_userid))
     if obj:
         raise HTTPException(409, "해당 일자/작업자의 휴가가 이미 존재합니다")
@@ -77,7 +84,7 @@ def create_holiday(body: UserHolidayCreate, db: Session = Depends(get_db),
 def update_holiday(dateid: str, work_userid: str, body: UserHolidayUpdate,
                    db: Session = Depends(get_db),
                    me: User = Depends(get_current_user)):
-    check_owner_or_admin(me, work_userid)
+    _check_holiday_write(me, work_userid, db)
     obj = db.get(UserHoliday, (dateid, work_userid))
     if not obj:
         raise HTTPException(404, "휴가를 찾을 수 없습니다")
@@ -95,7 +102,7 @@ def update_holiday(dateid: str, work_userid: str, body: UserHolidayUpdate,
 @router.delete("/{dateid}/{work_userid}", status_code=204)
 def delete_holiday(dateid: str, work_userid: str, db: Session = Depends(get_db),
                    me: User = Depends(get_current_user)):
-    check_owner_or_admin(me, work_userid)
+    _check_holiday_write(me, work_userid, db)
     obj = db.get(UserHoliday, (dateid, work_userid))
     if not obj:
         raise HTTPException(404, "휴가를 찾을 수 없습니다")

@@ -28,7 +28,7 @@ export default function Kanban() {
   // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
   const canMove = t => me && ([0, 1].includes(me.user_grade) ||
     t.work_userid === me.userid ||
-    (me.user_grade === 2 && me.default_siteid && t.siteid === me.default_siteid))
+    (me.user_grade === 4 && me.default_siteid && t.siteid === me.default_siteid))
 
   const load = useCallback(async () => {
     const params = {}
@@ -88,7 +88,7 @@ export default function Kanban() {
         </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
-          {users.filter(u => [1, 2].includes(u.user_grade))
+          {users.filter(u => [1, 3, 4].includes(u.user_grade))
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input

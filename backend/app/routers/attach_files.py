@@ -55,8 +55,9 @@ def list_files(taskid: int | None = None, workschid: int | None = None,
                me: object = Depends(get_current_user)):
     q = _list_query(db)
     # 전체 목록(관리자화면 첨부파일 탭)은 비스태프에게 본인 작업만 노출.
+    # 개발매니저(3)는 관리자화면 전체 조회 권한으로 전체 목록 조회 가능.
     # taskid/workschid 지정 조회는 작업 팝업과 동일한 접근 수준으로 허용.
-    if me.user_grade not in (0, 1) and taskid is None and workschid is None:
+    if me.user_grade not in (0, 1, 3) and taskid is None and workschid is None:
         q = q.filter(Task.work_userid == me.userid)
     if taskid is not None:
         q = q.filter(TaskAttachFile.taskid == taskid)

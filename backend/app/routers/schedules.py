@@ -109,12 +109,12 @@ def calendar_events(db: Session = Depends(get_db)):
 def all_chg_logs(db: Session = Depends(get_db),
                  me: User = Depends(get_current_user)):
     """전체 작업 상태변경이력 (최근 이력 순, 관리자화면용).
-    비스태프(일반개발자)는 본인 작업의 이력만 조회."""
+    비스태프(일반개발자 등)는 본인 작업의 이력만 조회. 개발매니저(3)는 전체 조회."""
     WorkUser = aliased(User)
     q = (db.query(TaskChgLog, Task.task_name, WorkUser.user_name)
          .outerjoin(Task, Task.taskid == TaskChgLog.taskid)
          .outerjoin(WorkUser, WorkUser.userid == TaskChgLog.work_userid))
-    if me.user_grade not in (0, 1):
+    if me.user_grade not in (0, 1, 3):
         q = q.filter(Task.work_userid == me.userid)
     rows = q.order_by(TaskChgLog.taskchgid.desc()).all()
     return [{
@@ -156,8 +156,8 @@ def create_work_log(body: WorkLogCreate, db: Session = Depends(get_db),
     data = body.model_dump()
     if not data.get("taskid") or not db.get(Task, data["taskid"]):
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    if me.user_grade != 0:
-        data["work_userid"] = me.userid  # 비관리자는 자기 이력만 등록 가능
+    if me.user_grade not in (0, 1):
+        data["work_userid"] = me.userid  # 비스태프는 자기 이력만 등록 가능
     obj = WorkScheduleLog(**data)
     db.add(obj)
     db.commit()
