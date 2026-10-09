@@ -16,7 +16,7 @@ export default function DocView() {
 
   useEffect(() => {
     if (!doc) return
-    fetch(`/docs/${doc.file}`)
+    fetch(`/${encodeURIComponent(doc.file)}`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text() })
       .then(md => setHtml(marked.parse(md)))
       .catch(() => setHtml('<p class="err">문서를 불러오지 못했습니다</p>'))
