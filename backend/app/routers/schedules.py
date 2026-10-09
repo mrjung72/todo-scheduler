@@ -106,13 +106,17 @@ def calendar_events(db: Session = Depends(get_db)):
 
 
 @router.get("/his")
-def all_chg_logs(db: Session = Depends(get_db)):
-    """전체 작업 상태변경이력 (최근 이력 순, 관리자화면용)."""
+def all_chg_logs(db: Session = Depends(get_db),
+                 me: User = Depends(get_current_user)):
+    """전체 작업 상태변경이력 (최근 이력 순, 관리자화면용).
+    비스태프(일반개발자)는 본인 작업의 이력만 조회."""
     WorkUser = aliased(User)
-    rows = (db.query(TaskChgLog, Task.task_name, WorkUser.user_name)
-            .outerjoin(Task, Task.taskid == TaskChgLog.taskid)
-            .outerjoin(WorkUser, WorkUser.userid == TaskChgLog.work_userid)
-            .order_by(TaskChgLog.taskchgid.desc()).all())
+    q = (db.query(TaskChgLog, Task.task_name, WorkUser.user_name)
+         .outerjoin(Task, Task.taskid == TaskChgLog.taskid)
+         .outerjoin(WorkUser, WorkUser.userid == TaskChgLog.work_userid))
+    if me.user_grade not in (0, 1):
+        q = q.filter(Task.work_userid == me.userid)
+    rows = q.order_by(TaskChgLog.taskchgid.desc()).all()
     return [{
         "taskchgid": h.taskchgid,
         "taskid": h.taskid,

@@ -32,7 +32,8 @@ export default function Admin() {
     <div className="admin">
       <div className="tabs">
         {TABS.filter(t => isStaff() ||
-          ['tasks', 'schedules', 'users', 'holidays'].includes(t.key)).map(t => (
+          ['tasks', 'schedules', 'users', 'holidays',
+           'schedhis', 'files'].includes(t.key)).map(t => (
           <button key={t.key} className={tab === t.key ? 'tab active' : 'tab'}
             onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
@@ -118,7 +119,8 @@ function usePager(list, deps) {
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
   const cur = Math.min(page, pages - 1)
   const paged = list.slice(cur * PAGE_SIZE, (cur + 1) * PAGE_SIZE)
-  return { paged, pager: <Pager total={list.length} page={cur} setPage={setPage} /> }
+  return { paged, pager: <Pager total={list.length} page={cur} setPage={setPage} />,
+           page: cur, setPage }
 }
 
 /* ---------------- 엑셀 다운/업로드 공통 ---------------- */
@@ -529,6 +531,7 @@ function TasksTab() {
   const [selTask, setSelTask] = useState(null)
   const [startForm, setStartForm] = useState(null)  // {taskid, start, fixed} 시작일시 팝업
   const [endForm, setEndForm] = useState(null)      // {taskid, end} 휴일작업 종료일시 팝업
+  const [newId, setNewId] = useState(null)          // 방금 추가한 작업 ID (강조용)
   const [msg, setMsg] = useState('')
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
   useEffect(() => {
@@ -580,7 +583,8 @@ function TasksTab() {
   const add = async e => {
     e.preventDefault()
     try {
-      await api.post('/tasks', form)
+      const { data } = await api.post('/tasks', form)
+      setNewId(data.taskid)   // 방금 추가한 작업을 목록에서 찾아 강조
       setForm(empty); load()
     } catch (e) { alert(errMsg(e)) }
   }
@@ -614,7 +618,35 @@ function TasksTab() {
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
     (!typeF || t.task_type === typeF))
     .filter(t => staff || t.work_userid === myId())  // 비스태프: 본인 작업만
-  const { paged, pager } = usePager(filtered, [q, siteF, statF, typeF])
+  const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF])
+
+  // 방금 추가한 작업이 보이는 페이지로 이동 + 행 강조
+  // (필터/검색어에 걸리면 필터를 해제해 반드시 보이게 한다)
+  const newHandled = useRef(false)
+  useEffect(() => {
+    if (newId == null) { newHandled.current = false; return }
+    if (newHandled.current) return
+    const idx = filtered.findIndex(t => t.taskid === newId)
+    if (idx < 0) {
+      if (siteF || statF || typeF || q) {
+        setSiteF(''); setStatF(''); setTypeF(''); setQ('')
+      } else {
+        setNewId(null)
+      }
+      return
+    }
+    newHandled.current = true
+    setPage(Math.floor(idx / PAGE_SIZE))
+    setTimeout(() =>
+      document.querySelector(`tr[data-taskid="${newId}"]`)
+        ?.scrollIntoView({ block: 'center' }), 50)
+  }, [newId, filtered])
+  // 강조 표시는 잠시 후 해제
+  useEffect(() => {
+    if (newId == null) return
+    const t = setTimeout(() => setNewId(null), 5000)
+    return () => clearTimeout(t)
+  }, [newId])
 
   const revStat = revMap(STAT_LABEL)
   const revType = revMap(TASK_TYPE_LABEL)
@@ -742,7 +774,8 @@ function TasksTab() {
         </tr></thead>
         <tbody>
           {paged.map(t => (
-            <tr key={t.taskid}>
+            <tr key={t.taskid} data-taskid={t.taskid}
+              className={t.taskid === newId ? 'row-new' : ''}>
               <td className="r">{t.taskid}</td>
               <td>{t.site_name || t.siteid || '-'}</td>
               <td className="c type-col"><EditableCell value={t.task_type} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
@@ -1214,7 +1247,9 @@ function SchedHisTab() {
     .filter(r => !taskF || r.taskid === +taskF)
   const { paged, pager } = usePager(filtered, [q, siteF, statF, taskF])
   // 검색조건(사이트/상태)에 해당하는 작업만 선택 항목으로 제공
+  // (비스태프는 본인 작업만)
   const taskOpt = tasks.filter(t =>
+    (staff || t.work_userid === myId()) &&
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
 
   const cols = [
@@ -1416,7 +1451,7 @@ function AttachFilesTab() {
         <select required value={form.taskid}
           onChange={e => setForm({ taskid: e.target.value, workschid: '' })}>
           <option value="">작업 선택</option>
-          {tasks.map(t => (
+          {tasks.filter(t => staff || t.work_userid === me).map(t => (
             <option key={t.taskid} value={t.taskid}>
               {t.site_name ? `${t.site_name} ` : ''}{t.task_name}
             </option>

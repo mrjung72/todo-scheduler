@@ -102,6 +102,9 @@ input.num { width: 64px; }
 .newtask label.chk { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; }
 
 table.grid { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+/* 방금 추가된 작업 행 강조 */
+.grid tr.row-new td { background: #fef3c7; }
+.grid tr.row-new td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
 table.grid th, table.grid td {
   border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; white-space: nowrap;
 }
