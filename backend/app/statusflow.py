@@ -102,3 +102,20 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
                       work_hours=0, remark=remark,
                       work_userid=actor_userid or task.work_userid,
                       create_date=now))
+
+
+def auto_start_due_tasks(db: Session) -> int:
+    """예정 시작일시가 지난 대기중(W) 작업을 작업중(P)으로 자동 전이.
+    전이된 작업 수를 반환한다."""
+    now = datetime.now().replace(microsecond=0)
+    due = (db.query(Task)
+           .filter(Task.task_stat == "W",
+                   Task.task_start_date.isnot(None),
+                   Task.task_start_date <= now)
+           .all())
+    for task in due:
+        apply_task_stat_change(db, task, "P",
+                               remark="예정시작 경과로 자동 시작")
+    if due:
+        db.commit()
+    return len(due)

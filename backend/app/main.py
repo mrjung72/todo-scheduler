@@ -249,7 +249,7 @@ def migrate(db):
 
 
 @app.on_event("startup")
-def startup():
+async def startup():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -257,6 +257,26 @@ def startup():
         seed(db)
     finally:
         db.close()
+    _start_auto_transition()
+
+
+def _start_auto_transition():
+    """예정 시작일시가 지난 대기중 작업을 60초 주기로 자동 작업중 전이."""
+    import asyncio
+    from .statusflow import auto_start_due_tasks
+
+    async def loop():
+        while True:
+            await asyncio.sleep(60)
+            db = SessionLocal()
+            try:
+                auto_start_due_tasks(db)
+            except Exception:
+                db.rollback()
+            finally:
+                db.close()
+
+    asyncio.get_event_loop().create_task(loop())
 
 
 @app.get("/api/health")
