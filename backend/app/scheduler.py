@@ -253,9 +253,9 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
     now = datetime.now().replace(second=0, microsecond=0)
     updated = 0
 
-    # 작업자별 작업중(P) 작업의 가장 늦은 종료예상시각 -> 대기 작업은 그 이후 배치
+    # 작업자별 진행중(P)/중단(H) 작업의 가장 늦은 종료예상시각 -> 대기 작업은 그 이후 배치
     in_prog_end: dict = {}
-    for t in db.query(Task).filter(Task.task_stat == "P"):
+    for t in db.query(Task).filter(Task.task_stat.in_(["P", "H"])):
         if t.task_end_date_estimated:
             uid = t.work_userid or ""
             cur = in_prog_end.get(uid)
@@ -265,22 +265,28 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
     for key, items in groups.items():
         items.sort(key=lambda x: (x.priority or 0, x.taskid))
         cursor = max(now, in_prog_end.get(key, now))
+        # 시작일시가 고정된 작업은 자리를 유지 — 먼저 종료시각을 계산해 기준선에 반영.
+        # 비고정 작업은 이 작업자의 가장 마지막 스케줄이 끝난 이후부터만 배치한다.
+        fixed_ids = {t.taskid for t in items
+                     if t.start_fixed and t.task_start_date}
         for task in items:
+            if task.taskid not in fixed_ids:
+                continue
             uid = task.work_userid or ""
-            if task.start_fixed and task.task_start_date:
-                # 수동 고정 시작일시는 입력값 그대로 유지 (스냅 없음).
-                # 시작일이 휴일이면 그 날짜는 경과시간 그대로 작업시간 적용
-                cal_f = workday_cal(cal, task.task_start_date.date())
-                start = task.task_start_date
-            else:
-                cal_f = cal
-                start = next_work_start(cursor, cal, hol, uid)
-                task.task_start_date = start
-
-            est_hours = task.work_hours_estimated or 0
+            cal_f = workday_cal(cal, task.task_start_date.date())
             task.task_end_date_estimated = add_work_hours(
-                start, est_hours, cal_f, hol, uid)
-
+                task.task_start_date, task.work_hours_estimated or 0,
+                cal_f, hol, uid)
+            cursor = max(cursor, task.task_end_date_estimated)
+            updated += 1
+        for task in items:
+            if task.taskid in fixed_ids:
+                continue
+            uid = task.work_userid or ""
+            start = next_work_start(cursor, cal, hol, uid)
+            task.task_start_date = start
+            task.task_end_date_estimated = add_work_hours(
+                start, task.work_hours_estimated or 0, cal, hol, uid)
             cursor = task.task_end_date_estimated
             updated += 1
 
