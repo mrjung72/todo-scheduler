@@ -74,11 +74,21 @@ function trimBarToWork(arg) {
   if (tr && elRect.width) {
     for (const td of tr.querySelectorAll('td.fc-daygrid-day')) {
       const r = td.getBoundingClientRect()
-      const x0 = Math.max(0, r.left - elRect.left)
+      const cellLeft = r.left - elRect.left
+      const x0 = Math.max(0, cellLeft)
       const x1 = Math.min(elRect.width, r.right - elRect.left)
-      if (x1 - x0 <= 0) continue
+      if (x1 - x0 <= 0 || !r.width) continue
       const dd = p.daily[td.dataset.date]
-      if (!dd || dd.free) light.push([x0 / elRect.width, x1 / elRect.width])
+      // 비작업 칸: 없거나 free(수동작업일)면 전체, 일부휴가면 뒤쪽 off 비율만 연하게
+      const offs = (!dd || dd.free) ? [[0, 1]]
+        : (dd.off ? [[1 - dd.off, 1]] : [])
+      const c0 = (x0 - cellLeft) / r.width, c1 = (x1 - cellLeft) / r.width
+      for (const [a, b] of offs) {
+        const lo = Math.max(c0, a), hi = Math.min(c1, b)
+        if (hi > lo) light.push([
+          (cellLeft + lo * r.width) / elRect.width,
+          (cellLeft + hi * r.width) / elRect.width])
+      }
     }
   }
   if (light.length) {

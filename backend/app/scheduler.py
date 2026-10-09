@@ -203,6 +203,10 @@ def daily_breakdown(start, end, cal, hol, uid):
         segs = worker_segments(d, cal, hol, uid)
         if segs:
             daylen = sum((e - s).total_seconds() for s, e in segs) or 1
+            # 일부휴가 등으로 차감된 뒤쪽 비율 (정상 근무시간 대비 비작업 꼬리)
+            nominal = sum((e - s).total_seconds()
+                          for s, e in worker_segments(d, cal, {}, uid)) or daylen
+            off = round(max(0.0, 1 - daylen / nominal), 3)
             hours, spans = 0.0, []
             offset = 0.0  # 이전 근무구간들의 누적 길이(초)
             for s, e in segs:
@@ -218,6 +222,7 @@ def daily_breakdown(start, end, cal, hol, uid):
             if hours > 0:
                 result[d.strftime("%Y-%m-%d")] = {
                     "hours": round(hours, 1), "spans": spans,
+                    "off": off,
                     # 'F'(휴일 수동작업): 24h 기준 비율 -> 프론트에서 최소폭 보정
                     "free": cal.get(d.strftime("%Y%m%d")) == FREE_DAY_STAT}
         d += timedelta(days=1)
