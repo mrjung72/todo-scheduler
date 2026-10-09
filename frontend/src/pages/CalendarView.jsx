@@ -120,6 +120,7 @@ export default function CalendarView() {
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [showHol, setShowHol] = useState(savedF.holiday !== false)  // 작업자휴가 표시 여부
   // 달력은 대기중(W)/작업중(P) 스케줄만 표시 (서버에서도 W,P만 반환)
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
     holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
@@ -253,9 +254,13 @@ export default function CalendarView() {
           onChange={e => setQ(e.target.value)}
         />
         <button onClick={() => {
-          saveFilter('calendar', { site: siteFilter, q, type: typeFilter })
+          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, holiday: showHol })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <label className="hint-inline" style={{ cursor: 'pointer' }}>
+          <input type="checkbox" checked={showHol}
+            onChange={e => setShowHol(e.target.checked)} /> 작업자휴가
+        </label>
         <span className="hint-notice">대기중/작업중 작업만 표시</span>
       </div>
       <FullCalendar
@@ -270,7 +275,7 @@ export default function CalendarView() {
         locale="ko"
         height="100%"
         fixedWeekCount={false}
-        events={[...filtered, ...dayEvents, ...holEvents]}
+        events={[...filtered, ...dayEvents, ...(showHol ? holEvents : [])]}
         eventClick={onEventClick}
         dateClick={onDateClick}
         eventDidMount={trimBarToWork}

@@ -601,8 +601,7 @@ function TasksTab() {
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
     (!typeF || t.task_type === typeF))
-    .filter(t => staff || t.work_userid === myId() ||
-      (isJrDev() && mySite() && t.siteid === mySite()))  // 일반개발자: 지정사이트+본인 작업
+    .filter(t => staff || t.work_userid === myId())  // 비스태프: 본인 작업만
   const { paged, pager } = usePager(filtered, [q, siteF, statF, typeF])
 
   const revStat = revMap(STAT_LABEL)
