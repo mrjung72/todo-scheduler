@@ -1,7 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL, GRADE_LABEL,
   NEXT_STAT, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
+
+// 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
+const highlightCode = text => {
+  if (!text) return { __html: '' }
+  const r = hljs.highlightAuto(text)
+  if (r.relevance < 5) return null   // 일반 텍스트로 판단
+  return { __html: r.value }
+}
+
+// 팝업 드래그 이동: 타이틀 mousedown -> 창 기준 오프셋을 transform으로 적용
+function useDrag() {
+  const [pos, setPos] = useState({ x: 0, y: 0 })
+  const onDown = e => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const base = { x: e.clientX - pos.x, y: e.clientY - pos.y }
+    const move = ev => setPos({ x: ev.clientX - base.x, y: ev.clientY - base.y })
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+  return { pos, onDown }
+}
 
 // 관리자(0)/개발자(1) 모두 전체 탭 접근 가능 (admin 계정 보호는 별도 처리)
 const TABS = [
@@ -1104,6 +1132,11 @@ function SchedulesTab() {
   const [savedF] = useState(() => loadFilter('admin-schedules'))
   const [q, setQ] = useState(savedF.q || '')
   const [siteF, setSiteF] = useState(savedF.site || '')
+  const [selRemark, setSelRemark] = useState(null)   // 작업내용 팝업 대상 이력
+  const [remarkEdit, setRemarkEdit] = useState(null) // 작업내용 편집 모드
+  const [remarkFiles, setRemarkFiles] = useState([]) // 팝업 대상 이력의 첨부파일
+  const remarkOverlay = useRef(false)                // 오버레이에서 눌렀는지
+  const { pos: remarkPos, onDown: remarkOnDown } = useDrag()
   const staff = isStaff()
   const viewer = isViewer()
   const can = s => staff || (!viewer && s.work_userid === myId())
@@ -1124,6 +1157,44 @@ function SchedulesTab() {
   const taskOf = id => tasks.find(t => t.taskid === id)
 
   const saveSched = (id, patch) => api.put(`/schedules/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
+
+  // 작업내용 팝업 (작업 상세 팝업의 작업내용 창과 동일)
+  const openRemark = s => {
+    setSelRemark(s); setRemarkEdit(null)
+    api.get('/attach-files', { params: { workschid: s.workschid } })
+      .then(r => setRemarkFiles(r.data)).catch(() => setRemarkFiles([]))
+  }
+  const saveRemark = async () => {
+    try {
+      await api.put(`/schedules/${selRemark.workschid}`, { work_remark: remarkEdit })
+      setSelRemark(v => ({ ...v, work_remark: remarkEdit }))
+      setRemarkEdit(null)
+      load()
+    } catch (e) { alert(errMsg(e)) }
+  }
+  const downloadRemarkFile = f =>
+    api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
+      .then(r => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(r.data)
+        a.download = f.file_name
+        a.click()
+        URL.revokeObjectURL(a.href)
+      }).catch(e => alert(errMsg(e)))
+  const uploadRemarkFile = async ev => {
+    const f = ev.target.files?.[0]
+    if (!f) return
+    const fd = new FormData()
+    fd.append('file', f)
+    fd.append('taskid', selRemark.taskid)
+    fd.append('workschid', selRemark.workschid)
+    try {
+      await api.post('/attach-files', fd)
+      ev.target.value = ''
+      api.get('/attach-files', { params: { workschid: selRemark.workschid } })
+        .then(r => setRemarkFiles(r.data))
+    } catch (e) { alert(errMsg(e)) }
+  }
 
   const add = async e => {
     e.preventDefault()
@@ -1211,28 +1282,34 @@ function SchedulesTab() {
       </form>}
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>작업</th><th>작업자</th><th>작업내용</th><th>등록일시</th><th></th>
+          <th>작업ID</th><th>작업명</th><th>작업스케쥴ID</th><th>작업자</th><th>작업내용</th><th>등록일시</th><th></th>
         </tr></thead>
         <tbody>
           {paged.map(s => {
             const t = taskOf(s.taskid)
             return (
               <tr key={s.workschid}>
+                <td className="r">{s.taskid || '-'}</td>
+                <td>{t
+                  ? <button className="link" onClick={() => setSelTask(t)}>{t.task_name}</button>
+                  : '-'}</td>
                 <td className="r">{s.workschid}</td>
-                <td>{t ? `#${t.taskid} ${t.task_name}` : (s.taskid || '-')}</td>
                 <td className="c">{userName(s.work_userid) || s.work_userid || '-'}</td>
-                <td><EditableCell value={s.work_remark} disabled={!can(s)}
-                  onSave={v => saveSched(s.workschid, { work_remark: v })} /></td>
+                <td>
+                  <button className="link clip" title="클릭하면 전체 내용을 봅니다"
+                    onClick={() => openRemark(s)}>
+                    {s.work_remark || '-'}
+                  </button>
+                </td>
                 <td className="c">{fmtDT(s.create_date)}</td>
                 <td>
-                  {t && <button onClick={() => setSelTask(t)}>상세</button>}
                   {can(s) &&
                     <button className="danger" onClick={() => del(s.workschid)}>삭제</button>}
                 </td>
               </tr>
             )
           })}
-          {filtered.length === 0 && <tr><td colSpan="6" className="empty">작업이력이 없습니다</td></tr>}
+          {filtered.length === 0 && <tr><td colSpan="7" className="empty">작업이력이 없습니다</td></tr>}
         </tbody>
       </table>
       {pager}
@@ -1241,6 +1318,74 @@ function SchedulesTab() {
         작업의 일정·상태는 [작업스케쥴] 탭에서 관리합니다.
       </p>
       {selTask && <TaskDetailPopup task={selTask} onClose={() => setSelTask(null)} onChanged={load} />}
+      {selRemark && (
+        <div className="popup log-pop"
+          onMouseDown={e => { if (e.target === e.currentTarget) remarkOverlay.current = true }}
+          onClick={e => {
+            if (e.target === e.currentTarget && remarkOverlay.current) {
+              setSelRemark(null); setRemarkEdit(null)
+            }
+            remarkOverlay.current = false
+          }}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}
+            style={{ transform: `translate(${remarkPos.x}px, ${remarkPos.y}px)` }}>
+            <b className="blk-title" onMouseDown={remarkOnDown}
+              style={{ marginTop: 0, cursor: 'move', userSelect: 'none' }}>작업내용</b>
+            {remarkEdit !== null ? (
+              <>
+                <textarea className="req-edit" rows="8" value={remarkEdit}
+                  placeholder="작업 내용을 입력하세요"
+                  onChange={e => setRemarkEdit(e.target.value)} />
+                <div className="popup-btns">
+                  <button className="primary" onClick={saveRemark}>저장</button>
+                  <button onClick={() => setRemarkEdit(null)}>취소</button>
+                </div>
+              </>
+            ) : (
+              <>
+                {(() => {
+                  const html = highlightCode(selRemark.work_remark)
+                  return html
+                    ? <pre className="log-detail hljs"
+                        dangerouslySetInnerHTML={html} />
+                    : <div className="log-detail">{selRemark.work_remark || ''}</div>
+                })()}
+                <div className="daily log-attach" style={{ borderTop: 'none', paddingTop: 0 }}>
+                  <b>첨부파일</b>
+                  <table>
+                    <tbody>
+                      {remarkFiles.map(f => (
+                        <tr key={f.fileid}>
+                          <td>
+                            <button className="link"
+                              onClick={() => downloadRemarkFile(f)}>{f.file_name}</button>
+                          </td>
+                          <td className="r">{fmtDT(f.create_date)}</td>
+                        </tr>
+                      ))}
+                      {!remarkFiles.length && (
+                        <tr><td className="empty">첨부파일이 없습니다</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  {can(selRemark) &&
+                    <div className="attach-add">
+                      <label className="btn-file">파일 첨부
+                        <input type="file" hidden onChange={uploadRemarkFile} />
+                      </label>
+                    </div>}
+                </div>
+                <div className="popup-btns">
+                  {can(selRemark) &&
+                    <button onClick={() =>
+                      setRemarkEdit(selRemark.work_remark || '')}>수정</button>}
+                  <button onClick={() => setSelRemark(null)}>닫기</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

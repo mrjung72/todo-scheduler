@@ -129,6 +129,16 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     } catch (e) { alert(e.response?.data?.detail || '업로드 실패') }
   }
 
+  // 작업이력/작업요청정보 뷰 토글
+  const toggleView = () => {
+    setPview(pview === 'his' ? 'info' : 'his')
+    if (pview !== 'his') {
+      if (!his) api.get(`/tasks/${task.taskid}/his`)
+        .then(r => setHis(r.data)).catch(console.error)
+      if (!logs) loadLogs()
+    }
+  }
+
   // 총 작업일수: 일별 배분이 있으면 실제 일수, 없으면 예상시간/하루작업시간으로 환산
   const workDays = (daily && daily.length) ? daily.length
     : (cfg?.work_hours_per_day && task.work_hours_estimated
@@ -256,6 +266,12 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           </div>
         )}
         {pview === 'info' && (
+          <div className="popup-btns">
+            <button onClick={toggleView}>작업이력</button>
+            <button onClick={onClose}>닫기</button>
+          </div>
+        )}
+        {pview === 'info' && (
           <>
           <div className="blk-title">
             작업요청내용
@@ -307,14 +323,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           </>
         )}
         <div className="popup-btns">
-          <button onClick={() => {
-            setPview(pview === 'his' ? 'info' : 'his')
-            if (pview !== 'his') {
-              if (!his) api.get(`/tasks/${task.taskid}/his`)
-                .then(r => setHis(r.data)).catch(console.error)
-              if (!logs) loadLogs()
-            }
-          }}>
+          <button onClick={toggleView}>
             {pview === 'his' ? '작업요청정보' : '작업이력'}
           </button>
           <button onClick={onClose}>닫기</button>

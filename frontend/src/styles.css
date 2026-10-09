@@ -80,6 +80,13 @@ button.link {
   text-decoration: underline; padding: 0 4px;
 }
 button.link:hover { background: none; color: #1d4ed8; }
+/* 표 셀 내 긴 텍스트를 한 줄 말줄임으로 표시 */
+button.clip {
+  display: inline-block; max-width: 280px; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: bottom; text-decoration: none; color: inherit;
+}
+button.clip:hover { color: #1d4ed8; text-decoration: underline; }
 /* label 타입의 파일첨부 버튼 (숨긴 file input 포함) */
 label.btn-file {
   display: inline-block; cursor: pointer; padding: 5px 12px;
@@ -285,7 +292,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .log-detail {
   white-space: pre-wrap; word-break: break-word;
   font-size: 13px; line-height: 1.6;
-  background: #fdf3e7; border: 1px solid #f3e0c3; border-radius: 8px;
+  background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
   padding: 10px 12px; min-height: 60px;
   max-height: 60vh; overflow-y: auto;
 }
