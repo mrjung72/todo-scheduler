@@ -11,7 +11,10 @@ router = APIRouter(prefix="/api/user-holidays", tags=["user-holidays"])
 
 
 def _check_holiday_write(me: User, work_userid: str, db: Session):
-    """스태프/본인 외 개발매니저(3)는 일반개발자(4)의 휴가만 변경 가능."""
+    """스태프/본인 외 개발매니저(3)는 일반개발자(4)의 휴가만 변경 가능.
+    IT업무담당자(5)는 휴가정보 조회 전용 — 등록/수정/삭제 불가."""
+    if me.user_grade == 5:
+        raise HTTPException(403, "휴가정보 변경 권한이 없습니다")
     target = db.get(User, work_userid)
     check_owner_or_admin(me, work_userid,
                          target_grade=target.user_grade if target else None)

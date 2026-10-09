@@ -116,7 +116,7 @@ export default function CalendarView() {
   const staff = me && [0, 1].includes(me.user_grade)
   // 휴가 등록: 관리자(0)·수석(1)·일반개발자(2)·IT담당자(5) (비스태프는 본인 휴가만)
   // 공통 휴일 등록: 0·1·5만
-  const canReg = me && [0, 1, 3, 4, 5].includes(me.user_grade)
+  const canReg = me && [0, 1, 3, 4].includes(me.user_grade)
   const canRegDay = me && [0, 1].includes(me.user_grade)
   const [users, setUsers] = useState([])          // 휴가 등록 폼용
   const [events, setEvents] = useState([])

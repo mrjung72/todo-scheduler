@@ -1033,7 +1033,8 @@ function HolidaysTab() {
   const mgr = myGrade() === 3          // 개발매니저: 일반개발자(4)의 휴가 변경 가능
   const viewAll = staff || isViewer()  // 조회전용 등급도 전체 휴가 조회
   const gradeOf = uid => users.find(u => u.userid === uid)?.user_grade
-  const can = h => staff || h.work_userid === myId() ||
+  // IT업무담당자(5)는 조회 전용 — 본인 휴가도 변경 불가
+  const can = h => staff || (myGrade() !== 5 && h.work_userid === myId()) ||
     (mgr && gradeOf(h.work_userid) === 4)
   const empty = { date: '', work_userid: (staff || mgr) ? '' : (myId() || ''),
     holiday_category: 'A', holiday_hours: 4, holiday_remark: '' }
