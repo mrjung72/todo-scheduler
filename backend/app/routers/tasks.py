@@ -10,6 +10,7 @@ from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail, TaskChgLogOut
 from ..scheduler import (
     recalculate, get_calendar_map, get_holiday_map,
     add_work_hours, workday_cal, daily_breakdown, has_workday_between,
+    is_working_day, FREE_DAY_STAT,
 )
 from ..statusflow import apply_task_stat_change, auto_start_due_tasks
 from ..security import get_current_user, check_task_access
@@ -28,6 +29,18 @@ def _norm_user_fks(data: dict):
     for k in _USER_FK_COLS:
         if data.get(k) == "":
             data[k] = None
+
+
+def _check_start_not_holiday(db, holiday_work, start):
+    """휴일작업이 아니면 시작일시를 휴일에 설정 불가.
+    달력 'F'(수동작업 허용일)는 명시적으로 작업 가능일이므로 허용."""
+    if holiday_work or not start:
+        return
+    cal = get_calendar_map(db)
+    d = start.date()
+    if not is_working_day(d, cal) and cal.get(d.strftime("%Y%m%d")) != FREE_DAY_STAT:
+        raise HTTPException(
+            400, "휴일에는 작업 시작일시를 설정할 수 없습니다 (휴일작업으로 등록하세요)")
 
 
 def _detail_query(db: Session):
@@ -165,6 +178,8 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
     now = datetime.now().replace(microsecond=0)
     if not data.get("req_date"):
         data["req_date"] = now          # 요청일자 = 등록 시각
+    _check_start_not_holiday(db, data.get("holiday_work"),
+                             data.get("task_start_date"))
     if data.get("holiday_work") and has_workday_between(
             get_calendar_map(db),
             data.get("task_start_date"), data.get("task_end_date_estimated")):
@@ -208,6 +223,9 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         raise HTTPException(400, "실제 작업시간은 자동 집계되므로 직접 수정할 수 없습니다")
     for k, v in data.items():
         setattr(obj, k, v)
+    # 일반 작업은 시작일시를 휴일에 설정 불가
+    if "task_start_date" in data:
+        _check_start_not_holiday(db, obj.holiday_work, obj.task_start_date)
     # 휴일작업은 기간에 근무일을 포함할 수 없음 (공휴일 등 H 등록일은 허용)
     if obj.holiday_work and has_workday_between(
             get_calendar_map(db), obj.task_start_date, obj.task_end_date_estimated):
@@ -264,6 +282,7 @@ def set_start(taskid: int, body: StartSet, db: Session = Depends(get_db),
     uid = task.work_userid or ""
     # 입력값 그대로 저장 (휴일/근무시간 스냅 없음). 지정일이 휴일이면
     # 근무구간을 무시하고 그날의 경과시간 그대로 작업시간을 적용해 종료를 계산
+    _check_start_not_holiday(db, task.holiday_work, body.start_datetime)
     task.task_start_date = body.start_datetime
     task.start_fixed = 1
     if task.holiday_work:
