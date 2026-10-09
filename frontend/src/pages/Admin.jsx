@@ -268,6 +268,7 @@ function UsersTab() {
   const [form, setForm] = useState(empty)
   const [q, setQ] = useState('')
   const [statF, setStatF] = useState('')
+  const [gradeF, setGradeF] = useState('')
   const load = useCallback(() => api.get('/users').then(r => setRows(r.data)), [])
   useEffect(() => {
     load()
@@ -314,15 +315,14 @@ function UsersTab() {
 
   const shown = rows.filter(u =>
     (!statF || u.user_stat === statF) &&
+    (gradeF === '' || u.user_grade === +gradeF) &&
     (!q || [u.userid, u.user_name, u.dept_name, u.job_title, u.user_tel, u.user_email]
       .some(v => (v || '').toLowerCase().includes(q.toLowerCase()))))
-  const { paged, pager } = usePager(shown, [q, statF])
+  const { paged, pager } = usePager(shown, [q, statF, gradeF])
 
   return (
     <div>
       <div className="toolbar">
-        <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
-          onChange={e => setQ(e.target.value)} />
         <select value={statF} onChange={e => setStatF(e.target.value)}>
           <option value="">전체 상태</option>
           <option value="Y">Y (활성)</option>
@@ -330,6 +330,12 @@ function UsersTab() {
           <option value="R">R (승인불가)</option>
           <option value="N">N (비활성)</option>
         </select>
+        <select value={gradeF} onChange={e => setGradeF(e.target.value)}>
+          <option value="">전체 등급</option>
+          {Object.entries(GRADE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
+          onChange={e => setQ(e.target.value)} />
         <ExcelButtons name="사용자" cols={cols} rows={shown}
           onUpload={staff ? upload : null} onDone={load} />
       </div>
