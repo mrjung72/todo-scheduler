@@ -7,6 +7,7 @@ const PAGE_SIZE = 20
 export default function TaskList() {
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
+  const [users, setUsers] = useState([])
   // 초기값 = 저장된 검색조건, 없으면 사용자 기본사이트
   const [savedF] = useState(() => loadFilter('tasks'))
   const [siteFilter, setSiteFilter] = useState(() =>
@@ -14,6 +15,7 @@ export default function TaskList() {
   const [q, setQ] = useState(savedF.q || '')
   const [statFilter, setStatFilter] = useState(savedF.stat || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [cfg, setCfg] = useState(null)
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
   const [page, setPage] = useState(0)
@@ -24,15 +26,17 @@ export default function TaskList() {
     if (statFilter) params.task_stat = statFilter
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
+    if (workerFilter) params.work_userid = workerFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, statFilter, siteFilter, typeFilter])
+  }, [q, statFilter, siteFilter, typeFilter, workerFilter])
 
   useEffect(() => { load().catch(console.error) }, [load])
-  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter])   // 검색조건 변경 시 1페이지로
+  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, workerFilter])   // 검색조건 변경 시 1페이지로
   useEffect(() => {
     api.get('/config').then(r => setCfg(r.data))
     api.get('/sites').then(r => setSites(r.data))
+    api.get('/users').then(r => setUsers(r.data))
   }, [])
 
   // 현재 조회 결과를 CSV(BOM 포함, 엑셀에서 바로 열림)로 다운로드
@@ -65,6 +69,8 @@ export default function TaskList() {
       q.trim(),
       statFilter && (STAT_LABEL[statFilter] || statFilter),
       typeFilter && (TASK_TYPE_LABEL[typeFilter] || typeFilter),
+      workerFilter &&
+        (users.find(u => u.userid === workerFilter)?.user_name || workerFilter),
     ].filter(Boolean).join('_')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
@@ -94,6 +100,11 @@ export default function TaskList() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
+          <option value="">작업자(전체)</option>
+          {users.filter(u => [1, 4].includes(u.user_grade))
+            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <input
           placeholder="검색어 (작업명/담당자명 또는 ID)"
           value={q}
@@ -101,7 +112,7 @@ export default function TaskList() {
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={() => {
-          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter })
+          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, worker: workerFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>

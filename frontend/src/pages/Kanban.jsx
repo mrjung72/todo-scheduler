@@ -13,12 +13,14 @@ export default function Kanban() {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
+  const [users, setUsers] = useState([])
   // 사이트 기본값 = 로그인 사용자의 기본사이트(default_siteid)
   const [savedF] = useState(() => loadFilter('kanban'))
   const [siteFilter, setSiteFilter] = useState(() =>
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
@@ -33,12 +35,16 @@ export default function Kanban() {
     if (q) params.q = q
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
+    if (workerFilter) params.work_userid = workerFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, siteFilter, typeFilter])
+  }, [q, siteFilter, typeFilter, workerFilter])
 
   useEffect(() => { load().catch(console.error) }, [load])
-  useEffect(() => { api.get('/sites').then(r => setSites(r.data)) }, [])
+  useEffect(() => {
+    api.get('/sites').then(r => setSites(r.data))
+    api.get('/users').then(r => setUsers(r.data))
+  }, [])
 
   const onDrop = async (e, st) => {
     e.preventDefault()
@@ -74,6 +80,11 @@ export default function Kanban() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
+          <option value="">작업자(전체)</option>
+          {users.filter(u => [1, 4].includes(u.user_grade))
+            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <input
           placeholder="검색어 (작업명/담당자명 또는 ID)"
           value={q}
@@ -81,7 +92,7 @@ export default function Kanban() {
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={() => {
-          saveFilter('kanban', { site: siteFilter, q, type: typeFilter })
+          saveFilter('kanban', { site: siteFilter, q, type: typeFilter, worker: workerFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         {err && <span className="err">{err}</span>}

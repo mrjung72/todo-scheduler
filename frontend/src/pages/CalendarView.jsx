@@ -120,6 +120,7 @@ export default function CalendarView() {
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [showHol, setShowHol] = useState(savedF.holiday !== false)  // 작업자휴가 표시 여부
   // 달력은 대기중(W)/작업중(P) 스케줄만 표시 (서버에서도 W,P만 반환)
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
@@ -231,7 +232,16 @@ export default function CalendarView() {
     const p = e.extendedProps || {}
     if (siteFilter && p.siteid !== siteFilter) return false
     if (typeFilter && p.task_type !== typeFilter) return false
+    if (workerFilter && p.work_userid !== workerFilter) return false
     if (kw && ![e.title, p.work_user_name, p.work_userid, p.site_name]
+      .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
+    return true
+  })
+  // 작업자 휴가도 작업자 필터/검색어(작업자명/ID/설명)로 필터링
+  const filteredHol = holEvents.filter(e => {
+    const p = e.extendedProps || {}
+    if (workerFilter && p.work_userid !== workerFilter) return false
+    if (kw && ![e.title, p.user_name, p.work_userid]
       .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
     return true
   })
@@ -248,13 +258,18 @@ export default function CalendarView() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
+          <option value="">작업자(전체)</option>
+          {users.filter(u => [1, 4].includes(u.user_grade))
+            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <input
           placeholder="검색어 (작업명/작업자/사이트)"
           value={q}
           onChange={e => setQ(e.target.value)}
         />
         <button onClick={() => {
-          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, holiday: showHol })
+          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, worker: workerFilter, holiday: showHol })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <label className="hint-inline" style={{ cursor: 'pointer' }}>
@@ -275,7 +290,7 @@ export default function CalendarView() {
         locale="ko"
         height="100%"
         fixedWeekCount={false}
-        events={[...filtered, ...dayEvents, ...(showHol ? holEvents : [])]}
+        events={[...filtered, ...dayEvents, ...(showHol ? filteredHol : [])]}
         eventClick={onEventClick}
         dateClick={onDateClick}
         eventDidMount={trimBarToWork}
