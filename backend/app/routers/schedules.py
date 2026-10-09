@@ -66,6 +66,7 @@ def calendar_events(db: Session = Depends(get_db)):
                 "work_userid": task.work_userid,
                 "work_user_name": work_user_name,
                 "task_stat": task.task_stat,
+                "task_type": task.task_type,
                 "work_hours_estimated": task.work_hours_estimated,
                 "req_userid": req_userid,
                 "req_user_name": req_user_name,

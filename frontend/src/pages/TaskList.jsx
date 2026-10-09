@@ -13,6 +13,7 @@ export default function TaskList() {
     savedF.site ?? JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [statFilter, setStatFilter] = useState(savedF.stat || '')
+  const [typeFilter, setTypeFilter] = useState(savedF.type || '')
   const [cfg, setCfg] = useState(null)
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
   const [page, setPage] = useState(0)
@@ -22,12 +23,13 @@ export default function TaskList() {
     if (q) params.q = q
     if (statFilter) params.task_stat = statFilter
     if (siteFilter) params.siteid = siteFilter
+    if (typeFilter) params.task_type = typeFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, statFilter, siteFilter])
+  }, [q, statFilter, siteFilter, typeFilter])
 
   useEffect(() => { load().catch(console.error) }, [load])
-  useEffect(() => setPage(0), [q, statFilter, siteFilter])   // 검색조건 변경 시 1페이지로
+  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter])   // 검색조건 변경 시 1페이지로
   useEffect(() => {
     api.get('/config').then(r => setCfg(r.data))
     api.get('/sites').then(r => setSites(r.data))
@@ -62,6 +64,7 @@ export default function TaskList() {
         (sites.find(s => s.siteid === siteFilter)?.site_name || siteFilter),
       q.trim(),
       statFilter && (STAT_LABEL[statFilter] || statFilter),
+      typeFilter && (TASK_TYPE_LABEL[typeFilter] || typeFilter),
     ].filter(Boolean).join('_')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
@@ -82,18 +85,23 @@ export default function TaskList() {
           <option value="">사이트(전체)</option>
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
+        <select value={statFilter} onChange={e => setStatFilter(e.target.value)}>
+          <option value="">상태(전체)</option>
+          {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+          <option value="">유형(전체)</option>
+          {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
+            <option key={k} value={k}>{v}({k})</option>)}
+        </select>
         <input
           placeholder="검색어 (작업명/담당자명 또는 ID)"
           value={q}
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
         />
-        <select value={statFilter} onChange={e => setStatFilter(e.target.value)}>
-          <option value="">상태(전체)</option>
-          {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
         <button onClick={() => {
-          saveFilter('tasks', { site: siteFilter, q, stat: statFilter })
+          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>

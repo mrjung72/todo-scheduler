@@ -54,6 +54,11 @@ main { padding: 16px 20px; flex: 1; }
 .err { color: #dc2626; font-size: 13px; }
 .hint { color: #6b7280; font-size: 12px; }
 .hint-inline { color: #6b7280; font-size: 12px; white-space: nowrap; }
+.hint-notice {
+  color: #d97706; font-size: 12px; font-weight: 600; white-space: nowrap;
+  background: #fef3c7; border: 1px solid #fcd34d; border-radius: 4px;
+  padding: 4px 10px;
+}
 
 input, select, button {
   font-size: 13px; padding: 5px 8px; border: 1px solid #d1d5db;

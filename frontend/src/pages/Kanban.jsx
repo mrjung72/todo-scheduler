@@ -18,6 +18,7 @@ export default function Kanban() {
   const [siteFilter, setSiteFilter] = useState(() =>
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
+  const [typeFilter, setTypeFilter] = useState(savedF.type || '')
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
@@ -31,9 +32,10 @@ export default function Kanban() {
     const params = {}
     if (q) params.q = q
     if (siteFilter) params.siteid = siteFilter
+    if (typeFilter) params.task_type = typeFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, siteFilter])
+  }, [q, siteFilter, typeFilter])
 
   useEffect(() => { load().catch(console.error) }, [load])
   useEffect(() => { api.get('/sites').then(r => setSites(r.data)) }, [])
@@ -67,6 +69,11 @@ export default function Kanban() {
           <option value="">사이트(전체)</option>
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+          <option value="">유형(전체)</option>
+          {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
+            <option key={k} value={k}>{v}({k})</option>)}
+        </select>
         <input
           placeholder="검색어 (작업명/담당자명 또는 ID)"
           value={q}
@@ -74,7 +81,7 @@ export default function Kanban() {
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={() => {
-          saveFilter('kanban', { site: siteFilter, q })
+          saveFilter('kanban', { site: siteFilter, q, type: typeFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         {err && <span className="err">{err}</span>}

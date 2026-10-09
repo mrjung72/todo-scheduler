@@ -66,12 +66,17 @@ def list_tasks(
     field: str = Query("all", description="all|task_name|req_user|itos_user|work_user"),
     task_stat: str = Query(None),
     siteid: str = Query(None),
+    task_type: str = Query(None),
     db: Session = Depends(get_db),
 ):
     query = _detail_query(db)
 
     if siteid:
         query = query.filter(Task.siteid == siteid)
+
+    if task_type:
+        types = [s for s in str(task_type).split(',') if s]
+        query = query.filter(Task.task_type.in_(types))
 
     if task_stat:
         stats = [s for s in str(task_stat).split(',') if s]

@@ -3,7 +3,7 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL,
+import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, TASK_TYPE_LABEL,
   loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
@@ -119,6 +119,7 @@ export default function CalendarView() {
   const [siteFilter, setSiteFilter] = useState(() =>
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
+  const [typeFilter, setTypeFilter] = useState(savedF.type || '')
   // 달력은 대기중(W)/작업중(P) 스케줄만 표시 (서버에서도 W,P만 반환)
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
     holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
@@ -228,6 +229,7 @@ export default function CalendarView() {
   const filtered = events.filter(e => {
     const p = e.extendedProps || {}
     if (siteFilter && p.siteid !== siteFilter) return false
+    if (typeFilter && p.task_type !== typeFilter) return false
     if (kw && ![e.title, p.work_user_name, p.work_userid, p.site_name]
       .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
     return true
@@ -240,16 +242,21 @@ export default function CalendarView() {
           <option value="">사이트(전체)</option>
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+          <option value="">유형(전체)</option>
+          {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
+            <option key={k} value={k}>{v}({k})</option>)}
+        </select>
         <input
           placeholder="검색어 (작업명/작업자/사이트)"
           value={q}
           onChange={e => setQ(e.target.value)}
         />
-        <span className="hint-inline">대기중/작업중 작업만 표시</span>
         <button onClick={() => {
-          saveFilter('calendar', { site: siteFilter, q })
+          saveFilter('calendar', { site: siteFilter, q, type: typeFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <span className="hint-notice">대기중/작업중 작업만 표시</span>
       </div>
       <FullCalendar
         ref={calRef}
