@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL, GRADE_LABEL,
-  NEXT_STAT, loadFilter, saveFilter } from '../api'
+  NEXT_STAT, USER_STAT_LABEL, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
@@ -347,8 +347,10 @@ function UsersTab() {
     { label: '등급', field: 'user_grade', get: u => GRADE_LABEL[u.user_grade] ?? u.user_grade },
     { label: '기본사이트ID', field: 'default_siteid' },
     { label: '하루작업시간', field: 'work_hours_day' },
-    { label: '상태', field: 'user_stat' },
+    { label: '상태', field: 'user_stat',
+      get: u => USER_STAT_LABEL[u.user_stat] ?? u.user_stat },
   ]
+  const revUStat = revMap(USER_STAT_LABEL)
   const upload = async o => {
     if (!o.userid) throw new Error('ID 없음')
     const body = {
@@ -358,7 +360,7 @@ function UsersTab() {
       user_tel: o.user_tel || null,
       user_email: o.user_email || null,
       user_grade: o.user_grade === '' ? 9 : +(revGrade[o.user_grade] ?? o.user_grade),
-      user_stat: o.user_stat || 'Y',
+      user_stat: revUStat[o.user_stat] ?? o.user_stat ?? 'Y',
       default_siteid: o.default_siteid || null,
       work_hours_day: o.work_hours_day === '' || o.work_hours_day == null
         ? null : +o.work_hours_day,
@@ -383,10 +385,8 @@ function UsersTab() {
       <div className="toolbar">
         <select value={statF} onChange={e => setStatF(e.target.value)}>
           <option value="">전체 상태</option>
-          <option value="Y">Y (활성)</option>
-          <option value="A">A (승인대기)</option>
-          <option value="R">R (승인불가)</option>
-          <option value="N">N (비활성)</option>
+          {Object.entries(USER_STAT_LABEL).map(([k, v]) =>
+            <option key={k} value={k}>{v}</option>)}
         </select>
         <select value={gradeF} onChange={e => setGradeF(e.target.value)}>
           <option value="">전체 등급</option>
@@ -483,8 +483,8 @@ function UsersTab() {
               <td className="c" title={u.reject_remark ? `승인불가 사유: ${u.reject_remark}` : ''}>
                 <EditableCell value={u.user_stat} disabled={lockPriv}
                   onSave={v => save(u.userid, { user_stat: v })}
-                  options={[{ value: 'Y', label: 'Y' }, { value: 'A', label: '승인대기(A)' },
-                            { value: 'R', label: '승인불가(R)' }, { value: 'N', label: 'N' }]} /></td>
+                  options={Object.entries(USER_STAT_LABEL)
+                    .map(([k, l]) => ({ value: k, label: l }))} /></td>
               <td>
                 {!lockPriv && u.user_stat === 'A' && <>
                   <button onClick={() => save(u.userid, { user_stat: 'Y' })}>승인</button>
@@ -597,7 +597,7 @@ function SitesTab() {
 
 /* ---------------- 작업스케쥴 ---------------- */
 function TasksTab() {
-  const empty = { task_name: '', siteid: '', priority: 0, work_hours_estimated: 8,
+  const empty = { task_name: '', siteid: '', urgent: false, work_hours_estimated: 4,
     task_stat: 'R', task_type: '', task_csrid: '', task_req_remark: '', req_userid: '',
     itos_userid: '', work_userid: '', holiday_work: 0 }
   const [rows, setRows] = useState([])
@@ -606,8 +606,9 @@ function TasksTab() {
   const [form, setForm] = useState(empty)
   const [savedF] = useState(() => loadFilter('admin-tasks'))
   const [q, setQ] = useState(savedF.q || '')
-  const [siteF, setSiteF] = useState(savedF.site || '')
-  const [statF, setStatF] = useState(savedF.stat || '')
+  // 저장된 검색조건이 없으면 기본값: 사이트=본인 기본사이트, 상태=작업요청
+  const [siteF, setSiteF] = useState(savedF.site ?? mySite() ?? '')
+  const [statF, setStatF] = useState(savedF.stat ?? 'R')
   const [typeF, setTypeF] = useState(savedF.type || '')
   const [selTask, setSelTask] = useState(null)
   const [startForm, setStartForm] = useState(null)  // {taskid, start, fixed} 시작일시 팝업
@@ -615,10 +616,16 @@ function TasksTab() {
   const [newId, setNewId] = useState(null)          // 방금 추가한 작업 ID (강조용)
   const [msg, setMsg] = useState('')
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
+  // 등록 폼 초기화 — 사이트는 본인 기본사이트(및 그 사이트의 IT담당자)로 적용
+  const resetForm = slist => {
+    const sid = mySite() || ''
+    const itos = (slist || sites).find(s => s.siteid === sid)?.itos_userid || ''
+    setForm({ ...empty, siteid: sid, itos_userid: itos })
+  }
   useEffect(() => {
     load()
     api.get('/users').then(r => setUsers(r.data))
-    api.get('/sites').then(r => setSites(r.data))
+    api.get('/sites').then(r => { setSites(r.data); resetForm(r.data) })
   }, [load])
 
   const save = (id, patch) => api.put(`/tasks/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
@@ -664,9 +671,15 @@ function TasksTab() {
   const add = async e => {
     e.preventDefault()
     try {
-      const { data } = await api.post('/tasks', form)
+      // 현업담당자 입력값 "이름 (ID)" 또는 이름/ID → userid로 변환
+      const rt = (form.req_userid || '').trim()
+      const rm = rt.match(/\(([^()]*)\)\s*$/)
+      const reqUid = !rt ? null : rm ? rm[1].trim()
+        : (reqUsers.find(u => u.user_name === rt)?.userid ?? rt)
+      const { data } = await api.post('/tasks', { ...form, req_userid: reqUid })
       setNewId(data.taskid)   // 방금 추가한 작업을 목록에서 찾아 강조
-      setForm(empty); load()
+      setStatF('R')           // 검색조건을 작업요청 상태로 적용
+      resetForm(); load()
     } catch (e) { alert(errMsg(e)) }
   }
   const del = id => window.confirm(`작업 #${id} 삭제?`) &&
@@ -703,19 +716,17 @@ function TasksTab() {
   const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF])
 
   // 방금 추가한 작업이 보이는 페이지로 이동 + 행 강조
-  // (필터/검색어에 걸리면 필터를 해제해 반드시 보이게 한다)
+  // (새 작업은 항상 작업요청(R) — 상태 필터는 R로 두고 나머지 조건만 해제)
   const newHandled = useRef(false)
   useEffect(() => {
     if (newId == null) { newHandled.current = false; return }
     if (newHandled.current) return
     const idx = filtered.findIndex(t => t.taskid === newId)
     if (idx < 0) {
-      if (siteF || statF || typeF || q) {
-        setSiteF(''); setStatF(''); setTypeF(''); setQ('')
-      } else {
-        setNewId(null)
+      if (siteF || (statF && statF !== 'R') || typeF || q) {
+        setSiteF(''); setStatF('R'); setTypeF(''); setQ('')
       }
-      return
+      return   // 목록 갱신 후 이펙트가 다시 실행됨
     }
     newHandled.current = true
     setPage(Math.floor(idx / PAGE_SIZE))
@@ -760,8 +771,9 @@ function TasksTab() {
     const body = {
       task_name: o.task_name,
       siteid: o.siteid || null,
-      priority: +o.priority || 0,
-      work_hours_estimated: +o['work_hours_estimated'] || 0,
+      priority: o.priority === '' || o.priority == null ? undefined : +o.priority,
+      work_hours_estimated: o['work_hours_estimated'] === '' ||
+        o['work_hours_estimated'] == null ? undefined : +o['work_hours_estimated'],
       // 실제 작업시간은 상태전이 시 자동 집계 — 업로드로 덮어쓰지 않음
       task_stat: revStat[o.task_stat] ?? o.task_stat ?? 'R',
       task_type: revType[o.task_type] ?? o.task_type ?? null,
@@ -813,9 +825,7 @@ function TasksTab() {
         {msg && <span className="msg">{msg}</span>}
       </div>
       {!viewer && <form className="newtask" onSubmit={add}>
-        <input required placeholder="작업명" value={form.task_name}
-          onChange={e => setForm({ ...form, task_name: e.target.value })} />
-        <select value={form.siteid} onChange={e => {
+        <select required value={form.siteid} onChange={e => {
           const sid = e.target.value
           // 사이트에 지정된 IT담당자를 기본값으로 적용
           const itos = sites.find(s => s.siteid === sid)?.itos_userid || ''
@@ -823,30 +833,38 @@ function TasksTab() {
         }}>
           {sopt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select value={form.task_type}
+        <select required value={form.task_type}
           onChange={e => setForm({ ...form, task_type: e.target.value })}>
           <option value="">유형</option>
           {Object.entries(TASK_TYPE_LABEL).map(([k, l]) =>
             <option key={k} value={k}>{l}({k})</option>)}
         </select>
-        <input type="number" className="num" placeholder="우선순위" value={form.priority}
-          onChange={e => setForm({ ...form, priority: +e.target.value })} />
-        <input type="number" className="num" step="0.5" placeholder="예상시간"
-          value={form.work_hours_estimated}
-          onChange={e => setForm({ ...form, work_hours_estimated: +e.target.value })} />
+        <input placeholder="CSR번호" value={form.task_csrid}
+          onChange={e => setForm({ ...form, task_csrid: e.target.value })} />
+        <input required list="req-user-dl" placeholder="현업담당자" value={form.req_userid}
+          onChange={e => setForm({ ...form, req_userid: e.target.value })} />
         {staff && (
-          <select value={form.work_userid}
+          <select required value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자(개발자)</option>
             {devOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         )}
+        <input required placeholder="작업명" value={form.task_name} maxLength={100}
+          style={{ minWidth: 300 }}
+          onChange={e => setForm({ ...form, task_name: e.target.value })} />
+        <label className="chk">
+          <input type="checkbox" checked={!!form.urgent}
+            onChange={e => setForm({ ...form, urgent: e.target.checked })} />
+          긴급
+        </label>
         <label className="chk">
           <input type="checkbox" checked={!!form.holiday_work}
             onChange={e => setForm({ ...form, holiday_work: e.target.checked ? 1 : 0 })} />
           휴일작업
         </label>
         <button type="submit">작업추가</button>
+        <span className="hint">상세내용은 작업 등록 후 상세화면에서 입력해 주세요.</span>
       </form>}
       <table className="grid">
         <thead><tr>

@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------- users ----------
@@ -62,8 +62,8 @@ class SiteOut(SiteBase):
 class TaskBase(BaseModel):
     task_name: str
     siteid: Optional[str] = None
-    priority: Optional[int] = 0
-    work_hours_estimated: Optional[float] = 0
+    priority: Optional[int] = None    # 미지정 시 등록 후 taskid로 자동 부여
+    work_hours_estimated: Optional[float] = 4    # 미지정 시 기본 4시간
     work_hours_real: Optional[float] = 0
     task_stat: Optional[str] = "R"
     task_type: Optional[str] = None
@@ -80,11 +80,12 @@ class TaskBase(BaseModel):
 
 
 class TaskCreate(TaskBase):
-    pass
+    task_name: str = Field(max_length=100)
+    urgent: Optional[bool] = False    # 긴급 체크 시 우선순위 0
 
 
 class TaskUpdate(BaseModel):
-    task_name: Optional[str] = None
+    task_name: Optional[str] = Field(default=None, max_length=100)
     siteid: Optional[str] = None
     priority: Optional[int] = None
     work_hours_estimated: Optional[float] = None

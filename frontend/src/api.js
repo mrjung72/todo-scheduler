@@ -74,6 +74,13 @@ export const DAY_STAT_LABEL = {
   H: '휴일',
 }
 
+export const USER_STAT_LABEL = {
+  Y: '활성',
+  A: '승인대기',
+  R: '승인불가',
+  N: '비활성',
+}
+
 export const GRADE_LABEL = {
   0: '관리자',
   1: '수석개발자',

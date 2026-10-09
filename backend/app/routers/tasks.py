@@ -171,6 +171,7 @@ def auto_schedule_one(taskid: int, db: Session = Depends(get_db),
 def create_task(body: TaskCreate, db: Session = Depends(get_db),
                 me: User = Depends(get_current_user)):
     data = body.model_dump()
+    urgent = data.pop("urgent", False)
     _norm_user_fks(data)
     if me.user_grade not in (0, 1):
         data["work_userid"] = me.userid  # 비스태프는 자기 작업만 등록 가능
@@ -185,9 +186,16 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
             get_calendar_map(db),
             data.get("task_start_date"), data.get("task_end_date_estimated")):
         raise HTTPException(400, "휴일작업은 근무일을 포함할 수 없습니다")
+    if data.get("task_csrid") and db.query(Task).filter(
+            Task.task_csrid == data["task_csrid"]).first():
+        raise HTTPException(409, f"이미 등록된 CSR번호입니다 ({data['task_csrid']})")
     task = Task(**data)
     db.add(task)
     db.flush()  # taskid 확보
+    if urgent:
+        task.priority = 0
+    elif data.get("priority") is None:
+        task.priority = task.taskid   # 우선순위 미지정 → 작업ID와 동일하게
     # 등록 상태를 상태변경이력 첫 행으로 기록
     db.add(TaskChgLog(taskid=task.taskid, task_stat=task.task_stat or "R",
                       work_hours=0, remark="등록",
@@ -210,6 +218,11 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
     new_stat = data.pop("task_stat", None)
     remark = data.pop("stat_remark", None)
+    # CSR번호 중복 체크 (자기 자신 제외)
+    if data.get("task_csrid") and db.query(Task).filter(
+            Task.task_csrid == data["task_csrid"],
+            Task.taskid != taskid).first():
+        raise HTTPException(409, f"이미 등록된 CSR번호입니다 ({data['task_csrid']})")
     # 유형/작업명/우선순위/현업담당자/IT업무담당자는 R·C·W 상태에서만 변경 가능
     restricted = {"task_name", "task_type", "priority", "req_userid", "itos_userid",
                   "work_hours_estimated", "work_userid"}
