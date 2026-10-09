@@ -24,7 +24,8 @@ export default function Kanban() {
 
   // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
   const canMove = t => me && ([0, 1].includes(me.user_grade) ||
-    t.work_userid === me.userid)
+    t.work_userid === me.userid ||
+    (me.user_grade === 4 && me.default_siteid && t.siteid === me.default_siteid))
 
   const load = useCallback(async () => {
     const params = {}

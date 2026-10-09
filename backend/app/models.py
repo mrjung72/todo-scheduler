@@ -11,7 +11,7 @@ class User(Base):
     job_title = Column(Text)
     user_tel = Column(Text)
     user_email = Column(Text)
-    user_grade = Column(Integer)          # 0-관리자, 1-개발자, 2-IT업무담당자, 3-현업담당자, 9-기타
+    user_grade = Column(Integer)          # 0-관리자, 1-수석개발자, 2-IT업무담당자, 3-현업담당자, 4-일반개발자, 9-기타
     password = Column(Text, nullable=False, default='')   # 비밀번호(pbkdf2 해시)
     user_stat = Column(Text, default="Y")
     reject_remark = Column(Text)          # 승인불가 사유 (user_stat='R')

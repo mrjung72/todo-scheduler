@@ -79,8 +79,16 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
     if not obj:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
     _check_not_admin_account(userid, me)
-    _check_staff(me)
     data = body.model_dump(exclude_unset=True)
+    if me.user_grade not in (0, 1):
+        # 비스태프: 본인 계정의 개인정보 항목만 수정 가능
+        # (등급/기본사이트/상태/비밀번호는 스태프만 변경 가능)
+        if userid != me.userid:
+            raise HTTPException(403, "권한이 없습니다")
+        allowed = {"user_name", "dept_name", "job_title", "user_tel", "user_email"}
+        data = {k: v for k, v in data.items() if k in allowed}
+        if not data:
+            raise HTTPException(400, "수정할 수 있는 항목이 없습니다")
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     # password는 값이 있을 때만 해시해서 반영 (빈 값은 무시)

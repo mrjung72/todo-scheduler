@@ -12,7 +12,7 @@ from ..scheduler import (
     add_work_hours, workday_cal, daily_breakdown,
 )
 from ..statusflow import apply_task_stat_change
-from ..security import get_current_user, check_owner_or_admin
+from ..security import get_current_user, check_task_access
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -116,7 +116,7 @@ def recalc(db: Session = Depends(get_db),
     """우선순위 기준으로 대기중 작업의 시작/종료일시를 재계산.
 
     관리자는 전체, 개발자는 본인 작업만 대상으로 한다."""
-    updated, created = recalculate(db, only_userid=None if me.user_grade == 0 else me.userid)
+    updated, created = recalculate(db, only_userid=None if me.user_grade in (0, 1) else me.userid)
     return {"updated": updated, "created": created}
 
 
@@ -127,7 +127,7 @@ def auto_schedule_one(taskid: int, db: Session = Depends(get_db),
     task = db.get(Task, taskid)
     if not task:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    recalculate(db, only_userid=None if me.user_grade == 0 else me.userid)
+    recalculate(db, only_userid=None if me.user_grade in (0, 1) else me.userid)
     row = _detail_query(db).filter(Task.taskid == taskid).first()
     return _to_detail(row)
 
@@ -137,8 +137,8 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
                 me: User = Depends(get_current_user)):
     data = body.model_dump()
     _norm_user_fks(data)
-    if me.user_grade != 0:
-        data["work_userid"] = me.userid  # 비관리자는 자기 작업만 등록 가능
+    if me.user_grade not in (0, 1):
+        data["work_userid"] = me.userid  # 비스태프는 자기 작업만 등록 가능
     if not data.get("req_userid"):
         data["req_userid"] = me.userid   # 요청자 미지정 시 등록자 본인
     now = datetime.now().replace(microsecond=0)
@@ -161,10 +161,10 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     obj = db.get(Task, taskid)
     if not obj:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    check_owner_or_admin(me, obj.work_userid)
+    check_task_access(me, obj.work_userid, obj.siteid)
     data = body.model_dump(exclude_unset=True)
     _norm_user_fks(data)
-    if me.user_grade != 0 and "work_userid" in data and data["work_userid"] != me.userid:
+    if me.user_grade not in (0, 1) and "work_userid" in data and data["work_userid"] != me.userid:
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
     new_stat = data.pop("task_stat", None)
     remark = data.pop("stat_remark", None)
@@ -205,7 +205,7 @@ def delete_task(taskid: int, db: Session = Depends(get_db),
     obj = db.get(Task, taskid)
     if not obj:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    check_owner_or_admin(me, obj.work_userid)
+    check_task_access(me, obj.work_userid, obj.siteid)
     db.query(WorkScheduleLog).filter(
         WorkScheduleLog.taskid == taskid).delete()
     db.query(TaskChgLog).filter(TaskChgLog.taskid == taskid).delete()
@@ -224,7 +224,7 @@ def set_start(taskid: int, body: StartSet, db: Session = Depends(get_db),
     task = db.get(Task, taskid)
     if not task:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    check_owner_or_admin(me, task.work_userid)
+    check_task_access(me, task.work_userid, task.siteid)
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
     uid = task.work_userid or ""
@@ -248,7 +248,7 @@ def unfix_start(taskid: int, db: Session = Depends(get_db),
     task = db.get(Task, taskid)
     if not task:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
-    check_owner_or_admin(me, task.work_userid)
+    check_task_access(me, task.work_userid, task.siteid)
     task.start_fixed = 0
     db.commit()
     db.refresh(task)

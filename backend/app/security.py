@@ -91,3 +91,14 @@ def check_owner_or_admin(user: User, work_userid):
     """스태프(0/1) 외에는 자기 작업(work_userid == 본인)만 수정 가능."""
     if user.user_grade not in (0, 1) and work_userid != user.userid:
         raise HTTPException(403, "자신의 작업만 수정할 수 있습니다")
+
+
+def check_task_access(user: User, work_userid, siteid=None):
+    """작업 변경 권한: 스태프(0/1) 전체, 일반개발자(4)는 지정사이트+본인 작업,
+    나머지는 본인 작업만."""
+    if user.user_grade in (0, 1) or work_userid == user.userid:
+        return
+    if (user.user_grade == 4 and siteid and user.default_siteid
+            and siteid == user.default_siteid):
+        return
+    raise HTTPException(403, "자신의 작업만 수정할 수 있습니다")

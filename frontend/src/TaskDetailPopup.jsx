@@ -6,7 +6,8 @@ import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor } from '.
 export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const canEdit = me && ([0, 1].includes(me.user_grade) ||
-    task.work_userid === me.userid)
+    task.work_userid === me.userid ||
+    (me.user_grade === 4 && me.default_siteid && task.siteid === me.default_siteid))
   const canAttach = me && [0, 1].includes(me.user_grade)
   // 유형/우선순위 등 핵심항목은 R·C·W 상태에서만 수정 가능
   const canCore = ['R', 'C', 'W'].includes(task.task_stat)
@@ -120,7 +121,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <select value={editForm.work_userid} disabled={!canCore}
                   onChange={e => setEditForm({ ...editForm, work_userid: e.target.value })}>
                   <option value="">-</option>
-                  {users.filter(u => u.user_grade === 1)
+                  {users.filter(u => [1, 4].includes(u.user_grade) &&
+                      (me.user_grade !== 4 || u.userid === me.userid))
                     .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
                 </select></p>
               <p><b>유형</b>

@@ -333,7 +333,7 @@ export default function CalendarView() {
                       <select required value={holForm.work_userid}
                         onChange={e => setHolForm({ ...holForm, work_userid: e.target.value })}>
                         <option value="">선택</option>
-                        {users.filter(u => u.user_grade === 1)
+                        {users.filter(u => [1, 4].includes(u.user_grade))
                           .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
                       </select>
                     ) : (

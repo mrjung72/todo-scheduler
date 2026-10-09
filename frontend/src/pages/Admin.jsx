@@ -17,6 +17,12 @@ const TABS = [
 
 const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') || 'null')?.user_grade)
 const myId = () => JSON.parse(localStorage.getItem('user') || 'null')?.userid
+const myGrade = () => JSON.parse(localStorage.getItem('user') || 'null')?.user_grade
+const mySite = () => JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid
+const isJrDev = () => myGrade() === 4          // 일반개발자
+// 일반개발자는 지정사이트 또는 본인 작업만 변경 가능
+const canTask = t => isStaff() || t.work_userid === myId() ||
+  (isJrDev() && mySite() && t.siteid === mySite())
 // admin 계정은 본인 외에는 수정 불가 (개발자 포함)
 const isProtectedUser = u => u.userid === 'admin' && myId() !== 'admin'
 
@@ -25,7 +31,8 @@ export default function Admin() {
   return (
     <div className="admin">
       <div className="tabs">
-        {TABS.map(t => (
+        {TABS.filter(t => isStaff() ||
+          ['tasks', 'schedules', 'users', 'holidays'].includes(t.key)).map(t => (
           <button key={t.key} className={tab === t.key ? 'tab active' : 'tab'}
             onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
@@ -250,6 +257,7 @@ const dtOf = v => {
 
 /* ---------------- 사용자 ---------------- */
 function UsersTab() {
+  const staff = isStaff()
   const empty = { userid: '', user_name: '', dept_name: '', job_title: '',
     user_tel: '', user_email: '', user_grade: 9, user_stat: 'Y', password: '',
     default_siteid: '' }
@@ -321,8 +329,9 @@ function UsersTab() {
           <option value="N">N (비활성)</option>
         </select>
         <ExcelButtons name="사용자" cols={cols} rows={shown}
-          onUpload={upload} onDone={load} />
+          onUpload={staff ? upload : null} onDone={load} />
       </div>
+      {staff && (
       <form className="newtask" onSubmit={add}>
         <input required placeholder="사용자ID" value={form.userid}
           onChange={e => setForm({ ...form, userid: e.target.value })} />
@@ -345,6 +354,7 @@ function UsersTab() {
         </select>
         <button type="submit">추가</button>
       </form>
+      )}
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
@@ -352,7 +362,8 @@ function UsersTab() {
         </tr></thead>
         <tbody>
           {paged.map(u => {
-            const locked = isProtectedUser(u)
+            const locked = isProtectedUser(u) || (!staff && u.userid !== myId())
+            const lockPriv = locked || !staff   // 등급·사이트·상태·비번은 스태프만
             return (
             <tr key={u.userid}>
               <td>{u.userid}{locked && <span className="badge">보호</span>}</td>
@@ -366,15 +377,15 @@ function UsersTab() {
                 onSave={v => save(u.userid, { user_tel: v })} /></td>
               <td><EditableCell value={u.user_email} disabled={locked}
                 onSave={v => save(u.userid, { user_email: v })} /></td>
-              <td><EditableCell value={u.user_grade} disabled={locked}
+              <td><EditableCell value={u.user_grade} disabled={lockPriv}
                 onSave={v => save(u.userid, { user_grade: v })}
                 options={Object.entries(GRADE_LABEL).map(([k, l]) => ({ value: +k, label: l }))} /></td>
-              <td className="c"><EditableCell value={u.default_siteid} disabled={locked}
+              <td className="c"><EditableCell value={u.default_siteid} disabled={lockPriv}
                 onSave={v => save(u.userid, { default_siteid: v || null })}
                 options={[{ value: '', label: '-' },
                   ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]} /></td>
               <td className="c">
-                {!locked && <>
+                {!lockPriv && <>
                 <button onClick={() => {
                   const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
                   if (pw) save(u.userid, { password: pw })
@@ -388,12 +399,12 @@ function UsersTab() {
                 </>}
               </td>
               <td className="c" title={u.reject_remark ? `승인불가 사유: ${u.reject_remark}` : ''}>
-                <EditableCell value={u.user_stat} disabled={locked}
+                <EditableCell value={u.user_stat} disabled={lockPriv}
                   onSave={v => save(u.userid, { user_stat: v })}
                   options={[{ value: 'Y', label: 'Y' }, { value: 'A', label: '승인대기(A)' },
                             { value: 'R', label: '승인불가(R)' }, { value: 'N', label: 'N' }]} /></td>
               <td>
-                {!locked && u.user_stat === 'A' && <>
+                {!lockPriv && u.user_stat === 'A' && <>
                   <button onClick={() => save(u.userid, { user_stat: 'Y' })}>승인</button>
                   <button onClick={() => {
                     const r = window.prompt('승인불가 사유를 입력하세요 (빈칸 가능)')
@@ -565,15 +576,15 @@ function TasksTab() {
     api.delete(`/tasks/${id}`).then(load).catch(e => alert(errMsg(e)))
 
   const staff = isStaff()
-  const can = t => staff || t.work_userid === myId()
+  const can = canTask
   const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const typeOpt = [{ value: '', label: '-' },
     ...Object.entries(TASK_TYPE_LABEL).map(([k, l]) => ({ value: k, label: `${l}(${k})` }))]
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
-  const devOpt = staff ? uopt([1])
-    : uopt([1]).filter(o => o.value === '' || o.value === myId())
+  const devOpt = staff ? uopt([1, 4])
+    : uopt([1, 4]).filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
   // 현업담당자 검색 리스트다운 대상 (일반사용자 3, 요청자 9)
@@ -590,7 +601,8 @@ function TasksTab() {
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
     (!typeF || t.task_type === typeF))
-    .filter(t => staff || t.work_userid === myId())  // 비관리자: 본인 작업만
+    .filter(t => staff || t.work_userid === myId() ||
+      (isJrDev() && mySite() && t.siteid === mySite()))  // 일반개발자: 지정사이트+본인 작업
   const { paged, pager } = usePager(filtered, [q, siteF, statF, typeF])
 
   const revStat = revMap(STAT_LABEL)
@@ -733,7 +745,7 @@ function TasksTab() {
               <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { itos_userid: v })}
                 options={uopt([0, 2])} /></td>
-              <td className="c work-col"><EditableCell value={t.work_userid} disabled={!staff || !['R', 'C', 'W'].includes(t.task_stat)}
+              <td className="c work-col"><EditableCell value={t.work_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { work_userid: v })}
                 options={devOpt} /></td>
               <td className={`c${can(t) ? ' clickable' : ''}`}
@@ -896,7 +908,7 @@ function HolidaysTab() {
 
   const catOptions = Object.entries(HOL_CAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const userOptions = [{ value: '', label: '작업자(전체)' },
-    ...users.filter(u => u.user_grade === 1)
+    ...users.filter(u => [1, 4].includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
   const { paged, pager } = usePager(rows, [year, filterUser])
 
@@ -923,7 +935,7 @@ function HolidaysTab() {
           <select required value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자 선택</option>
-            {users.filter(u => u.user_grade === 1)
+            {users.filter(u => [1, 4].includes(u.user_grade))
               .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
           </select>
         )}
@@ -1009,7 +1021,7 @@ function SchedulesTab() {
 
   // 작업자는 개발자(등급 1)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
   // 값이 깨지지 않도록 해당 작업자만 선택지에 포함
-  const devOpt = users.filter(u => u.user_grade === 1)
+  const devOpt = users.filter(u => [1, 4].includes(u.user_grade))
     .map(u => ({ value: u.userid, label: u.user_name }))
   const uopt = [{ value: '', label: '-' }, ...devOpt]
   const topt = [{ value: '', label: '-' },
