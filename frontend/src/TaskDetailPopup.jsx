@@ -3,6 +3,14 @@ import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor } from '.
 
 // 달력 작업 팝업과 동일한 스타일의 작업 상세 팝업 (칸반/작업목록 공용)
 // task: /api/tasks 의 TaskDetail 형태 (task_start_date, task_stat 등 포함)
+// 사용자 표기: 이름 직급/팀명 (없으면 ID)
+const fmtUser = (name, id, title, dept) => {
+  const base = name || id
+  if (!base) return '-'
+  const extra = [title, dept].filter(Boolean).join('/')
+  return extra ? `${base} (${extra})` : base
+}
+
 export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const canEdit = me && ([0, 1].includes(me.user_grade) ||
@@ -101,11 +109,17 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
 
   return (
     <div className="popup" onClick={onClose}>
-      <div className="popup-body" onClick={e => e.stopPropagation()}>
+      <div className="popup-body task-popup" onClick={e => e.stopPropagation()}>
         <h3 className="popup-title" style={{ background: taskColor(task.taskid) }}>
-          {(task.site_name || task.siteid) && `${task.site_name || task.siteid} `}
-          {task.task_csrid && <span className="csr">{task.task_csrid}</span>}
-          {task.task_name}
+          <div className="pt-row1">
+            {(task.site_name || task.siteid) &&
+              <span className="pt-chip">{task.site_name || task.siteid}</span>}
+            {task.task_type &&
+              <span className="pt-chip">{TASK_TYPE_LABEL[task.task_type] || task.task_type}</span>}
+            {task.task_csrid && <span className="csr">{task.task_csrid}</span>}
+            <span className="pt-chip">{STAT_LABEL[task.task_stat] || task.task_stat}</span>
+          </div>
+          <div className="pt-row2">{task.task_name}</div>
         </h3>
         {editForm ? (
           <form onSubmit={saveEdit}>
@@ -216,19 +230,21 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             </div>
           </div>
         ) : (
-          <div className="popup-info">
-            <p><b>요청자</b> {task.req_user_name || task.req_userid || '-'}</p>
-            <p><b>작업자</b> {task.work_user_name || task.work_userid || '-'}</p>
-            <p><b>우선순위</b> {task.priority}</p>
-            <p><b>예상시간</b> {task.work_hours_estimated}h
-              {workDays != null && ` (총 ${workDays}일)`}</p>
-            <p><b>유형</b> {TASK_TYPE_LABEL[task.task_type] || '-'}</p>
-            <p><b>상태</b> {STAT_LABEL[task.task_stat] || '-'}</p>
-            <p><b>시작</b> {fmtDT(task.task_start_date) || '-'}</p>
-            <p><b>종료(예상)</b> {fmtDT(task.task_end_date_estimated) || '-'}</p>
+          <div className="popup-info info-daily">
+            <div className="info-col">
+              <p><b>요청자</b> {fmtUser(task.req_user_name, task.req_userid,
+                task.req_user_title, task.req_user_dept)}</p>
+              <p><b>작업자</b> {fmtUser(task.work_user_name, task.work_userid,
+                task.work_user_title, task.work_user_dept)}</p>
+              <p><b>예상시간</b> {task.work_hours_estimated}h
+                {workDays != null && ` (총 ${workDays}일)`}</p>
+              <p><b>요청일자</b> {fmtDT(task.req_date) || '-'}</p>
+              <p><b>시작</b> {fmtDT(task.task_start_date) || '-'}</p>
+              <p><b>종료(예상)</b> {fmtDT(task.task_end_date_estimated) || '-'}</p>
+            </div>
             {daily && daily.length > 0 && (
               <div className="daily">
-                <b>일별 작업시간</b>
+                <b>일별 작업시간</b> ({daily.reduce((a, d) => a + d.hours, 0).toFixed(1)}h)
                 <table>
                   <tbody>
                     {daily.map(d => {
@@ -236,16 +252,14 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                       return (
                         <tr key={d.date}>
                           <td>{d.date} ({wd})</td>
-                          <td className="r">{d.hours}h</td>
+                          <td className="r">
+                            {d.hours}h
+                            {d.holiday &&
+                              <span className="badge hol-badge">휴가{d.holiday !== '종일' ? ` ${d.holiday}` : ''}</span>}
+                          </td>
                         </tr>
                       )
                     })}
-                    <tr className="sum">
-                      <td>합계</td>
-                      <td className="r">
-                        {daily.reduce((a, d) => a + d.hours, 0).toFixed(1)}h
-                      </td>
-                    </tr>
                   </tbody>
                 </table>
               </div>

@@ -146,6 +146,8 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .grid td.fit, .grid th.fit { white-space: nowrap; width: 1%; }
 /* width:1% 셀 안 입력칸이 0에 수렴하지 않도록 최소 너비 확보 */
 .grid td.fit input, .grid td.fit select { width: 70px; }
+.grid td .sub { font-size: 12px; color: #64748b; }  /* 예상/실제 통합 컬럼의 보조값 */
+.hol-badge { background: #fb8c00; color: #fff; border: none; margin-left: 4px; }  /* 일별 작업시간의 휴가 표시 */
 
 /* 칸반 보드 */
 .kanban-wrap { height: calc(100vh - 125px); display: flex; flex-direction: column; }
@@ -279,6 +281,16 @@ table.grid td.clickable:hover { background: #eff6ff; }
   color: #fff; padding: 8px 12px; border-radius: 6px;
   margin: -8px -8px 10px; font-size: 16px;
 }
+/* 작업 상세 팝업: 타이틀 한글 50자 이상 표시 가능한 너비 */
+.popup-body.task-popup { min-width: 860px; }
+.popup-title .pt-row1 {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 400;
+}
+.popup-title .pt-row2 { font-size: 17px; font-weight: 700; margin-top: 5px; }
+.popup-title .pt-chip {
+  background: rgba(255,255,255,.3); border-radius: 3px; padding: 0 6px;
+}
 .popup-body p {
   margin: 6px 0; font-size: 14px;
   display: flex; align-items: baseline;
@@ -301,6 +313,15 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .popup-info p.full { flex-wrap: wrap; }
 .popup-info p.full textarea, .popup-info p.full input { flex-basis: 100%; }
 
+/* 작업정보 + 일별작업시간 좌우 배치 */
+.popup-info.info-daily { display: flex; gap: 24px; align-items: flex-start; }
+.popup-info.info-daily .info-col { flex: 6 1 0; min-width: 0; }
+.popup-info.info-daily .daily {
+  flex: 4 1 0; min-width: 0;
+  margin-top: 0; border-top: none; padding-top: 0;
+  border-left: 1px solid #dbe7f4; padding-left: 16px;
+  font-size: 14px;   /* 작업정보 본문과 동일 크기 */
+}
 .daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }
 .daily table { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .daily td { padding: 2px 0; }

@@ -719,9 +719,9 @@ function TasksTab() {
       </form>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>사이트</th><th>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">예상 작업<br/>시간(H)</th><th className="fit">실제 작업<br/>시간(H)</th>
+          <th>ID</th><th>사이트</th><th>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
           <th>상태</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
-          <th>시작일시</th><th>종료일시<br/>(예상)</th><th>종료일시<br/>(실제)</th><th></th>
+          <th>요청일시</th><th>시작일시</th><th>종료일시</th><th></th>
         </tr></thead>
         <tbody>
           {paged.map(t => (
@@ -736,8 +736,8 @@ function TasksTab() {
               <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { priority: v })} /></td>
               <td className="r fit"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
-                onSave={v => save(t.taskid, { work_hours_estimated: v })} /></td>
-              <td className="r fit">{t.work_hours_real ?? '-'}</td>
+                onSave={v => save(t.taskid, { work_hours_estimated: v })} />
+                <span className="sub"> / {t.work_hours_real ?? '-'}</span></td>
               <td className="c stat-col"><EditableCell value={t.task_stat} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_stat: v })}
                 options={statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
@@ -752,6 +752,7 @@ function TasksTab() {
               <td className="c work-col"><EditableCell value={t.work_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { work_userid: v })}
                 options={devOpt} /></td>
+              <td className="c">{fmtDT(t.req_date)}</td>
               <td className={`c${can(t) ? ' clickable' : ''}`}
                 title={can(t) ? '클릭하면 시작일시를 수정합니다' : undefined}
                 onClick={() => can(t) && setStartForm({
@@ -762,8 +763,7 @@ function TasksTab() {
                 {fmtDT(t.task_start_date) || '-'}
                 {t.start_fixed ? <span className="badge">고정</span> : null}
               </td>
-              <td className="c">{fmtDT(t.task_end_date_estimated)}</td>
-              <td className="c">{fmtDT(t.task_end_date)}</td>
+              <td className="c">{fmtDT(t.task_end_date || t.task_end_date_estimated) || '-'}</td>
               <td>
                 <button onClick={() => setSelTask(t)}>상세</button>
                 {['R', 'C', 'W', 'H', 'X'].includes(t.task_stat) && can(t) &&
@@ -1143,6 +1143,7 @@ function SchedHisTab() {
   const [q, setQ] = useState(savedF.q || '')
   const [siteF, setSiteF] = useState(savedF.site || '')
   const [statF, setStatF] = useState(savedF.stat || '')
+  const [taskF, setTaskF] = useState(savedF.task || '')
   const [selTask, setSelTask] = useState(null)
   const load = useCallback(async () => {
     const { data } = await api.get('/schedules/his')
@@ -1168,11 +1169,15 @@ function SchedHisTab() {
         .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
     .filter(r => !siteF || taskOf(r.taskid)?.siteid === siteF)
     .filter(r => !statF || r.task_stat === statF)
-  const { paged, pager } = usePager(filtered, [q, siteF, statF])
+    .filter(r => !taskF || r.taskid === +taskF)
+  const { paged, pager } = usePager(filtered, [q, siteF, statF, taskF])
+  // 검색조건(사이트/상태)에 해당하는 작업만 선택 항목으로 제공
+  const taskOpt = tasks.filter(t =>
+    (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
 
   const cols = [
-    { label: '이력ID', field: 'taskchgid' },
     { label: '작업ID', field: 'taskid' },
+    { label: '이력ID', field: 'taskchgid' },
     { label: '작업명(참조)', field: '_task_name', get: r => r.task_name || '' },
     { label: '변경자(참조)', field: '_work_name', get: r => r.work_user_name || '' },
     { label: '변경자ID', field: 'work_userid' },
@@ -1194,10 +1199,15 @@ function SchedHisTab() {
           {Object.entries(STAT_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}</option>)}
         </select>
+        <select value={taskF} onChange={e => setTaskF(e.target.value)}>
+          <option value="">작업(전체)</option>
+          {taskOpt.map(t =>
+            <option key={t.taskid} value={t.taskid}>#{t.taskid} {t.task_name}</option>)}
+        </select>
         <input placeholder="검색 (작업/변경자/상태/비고)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
-          saveFilter('admin-schedhis', { site: siteF, stat: statF, q })
+          saveFilter('admin-schedhis', { site: siteF, stat: statF, task: taskF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <ExcelButtons name="작업상태변경이력" cols={cols} rows={filtered} />
@@ -1206,13 +1216,14 @@ function SchedHisTab() {
       </div>
       <table className="grid">
         <thead><tr>
-          <th>이력ID</th><th>작업</th><th>변경자</th>
+          <th>작업ID</th><th>이력ID</th><th>작업</th><th>변경자</th>
           <th>변경상태</th><th className="r">작업기간<br/>(Hour)</th><th>비고</th><th>등록일시</th>
           {staff && <th></th>}
         </tr></thead>
         <tbody>
           {paged.map(r => (
             <tr key={r.taskchgid}>
+              <td className="r">{r.taskid}</td>
               <td className="r">{r.taskchgid}</td>
               <td>{taskOf(r.taskid)
                 ? <button className="link" onClick={() => setSelTask(taskOf(r.taskid))}>
@@ -1229,7 +1240,7 @@ function SchedHisTab() {
             </tr>
           ))}
           {filtered.length === 0 &&
-            <tr><td colSpan={staff ? 8 : 7} className="empty">이력이 없습니다</td></tr>}
+            <tr><td colSpan={staff ? 9 : 8} className="empty">이력이 없습니다</td></tr>}
         </tbody>
       </table>
       {pager}

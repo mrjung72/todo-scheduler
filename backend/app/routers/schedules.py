@@ -38,8 +38,10 @@ def calendar_events(db: Session = Depends(get_db)):
     WorkUser = aliased(User)
     ReqUser = aliased(User)
     rows = (
-        db.query(Task, WorkUser.user_name, Site.site_name,
-                 Task.req_userid, ReqUser.user_name)
+        db.query(Task, WorkUser.user_name, WorkUser.dept_name,
+                 WorkUser.job_title, Site.site_name,
+                 Task.req_userid, ReqUser.user_name,
+                 ReqUser.dept_name, ReqUser.job_title)
         .outerjoin(WorkUser, WorkUser.userid == Task.work_userid)
         .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(Site, Site.siteid == Task.siteid)
@@ -49,7 +51,9 @@ def calendar_events(db: Session = Depends(get_db)):
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
     events = []
-    for task, work_user_name, site_name, req_userid, req_user_name in rows:
+    for (task, work_user_name, work_user_dept, work_user_title,
+         site_name, req_userid, req_user_name,
+         req_user_dept, req_user_title) in rows:
         if not task.task_start_date or not task.task_end_date_estimated:
             continue
         events.append({
@@ -65,11 +69,16 @@ def calendar_events(db: Session = Depends(get_db)):
                 "priority": task.priority,
                 "work_userid": task.work_userid,
                 "work_user_name": work_user_name,
+                "work_user_dept": work_user_dept,
+                "work_user_title": work_user_title,
                 "task_stat": task.task_stat,
                 "task_type": task.task_type,
                 "work_hours_estimated": task.work_hours_estimated,
                 "req_userid": req_userid,
                 "req_user_name": req_user_name,
+                "req_user_dept": req_user_dept,
+                "req_user_title": req_user_title,
+                "req_date": task.req_date.isoformat() if task.req_date else None,
                 "task_req_remark": task.task_req_remark,
                 "start_fixed": task.start_fixed,
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도

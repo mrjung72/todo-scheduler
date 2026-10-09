@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import or_
@@ -36,8 +36,12 @@ def _detail_query(db: Session):
         db.query(
             Task,
             ReqUser.user_name.label("req_user_name"),
+            ReqUser.dept_name.label("req_user_dept"),
+            ReqUser.job_title.label("req_user_title"),
             ItosUser.user_name.label("itos_user_name"),
             WorkUser.user_name.label("work_user_name"),
+            WorkUser.dept_name.label("work_user_dept"),
+            WorkUser.job_title.label("work_user_title"),
             Site.site_name.label("site_name"),
         )
         .select_from(Task)
@@ -49,12 +53,14 @@ def _detail_query(db: Session):
 
 
 def _to_detail(row) -> TaskDetail:
-    task, req_name, itos_name, work_name, site_name = row
+    (task, req_name, req_dept, req_title, itos_name,
+     work_name, work_dept, work_title, site_name) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
     data.update(
-        req_user_name=req_name,
+        req_user_name=req_name, req_user_dept=req_dept, req_user_title=req_title,
         itos_user_name=itos_name,
-        work_user_name=work_name,
+        work_user_name=work_name, work_user_dept=work_dept,
+        work_user_title=work_title,
         site_name=site_name,
     )
     return TaskDetail(**data)
@@ -280,7 +286,22 @@ def daily_hours(taskid: int, db: Session = Depends(get_db)):
     bd = daily_breakdown(
         task.task_start_date, task.task_end_date_estimated,
         workday_cal(cal, task.task_start_date.date()), hol, uid)
-    return [{"date": k, "hours": v["hours"]} for k, v in bd.items()]
+    out = {k: {"date": k, "hours": v["hours"]} for k, v in bd.items()}
+    # 작업자 휴가 반영: 범위 내 휴가일을 표시 (종일=작업불가, 일부=차감된 채로 표시)
+    d = task.task_start_date.date()
+    end_d = task.task_end_date_estimated.date()
+    while d <= end_d:
+        h = hol.get((uid, d.strftime("%Y%m%d")))
+        if h:
+            cat, hrs = h
+            key = d.strftime("%Y-%m-%d")
+            label = "종일" if cat == "A" or hrs >= 8 else f"{hrs}h"
+            if key in out:
+                out[key]["holiday"] = label
+            elif cat == "A":
+                out[key] = {"date": key, "hours": 0, "holiday": "종일"}
+        d += timedelta(days=1)
+    return [out[k] for k in sorted(out)]
 
 
 @router.get("/{taskid}/his", response_model=list[TaskChgLogOut])

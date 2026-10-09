@@ -204,7 +204,11 @@ class TaskAttachFileOut(BaseModel):
 # ---------- 조회용 확장 ----------
 class TaskDetail(TaskOut):
     req_user_name: Optional[str] = None
+    req_user_dept: Optional[str] = None
+    req_user_title: Optional[str] = None
     itos_user_name: Optional[str] = None
     site_name: Optional[str] = None
     work_user_name: Optional[str] = None
+    work_user_dept: Optional[str] = None
+    work_user_title: Optional[str] = None
     start_fixed: Optional[int] = 0
