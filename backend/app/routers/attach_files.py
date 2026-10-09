@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import TaskAttachFile, Task
+from ..models import TaskAttachFile, Task, User
 from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/attach-files", tags=["attach-files"])
@@ -32,18 +32,20 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def _list_query(db: Session):
-    return (db.query(TaskAttachFile, Task.task_name, Task.work_userid)
+    return (db.query(TaskAttachFile, Task.task_name, Task.work_userid,
+                     User.user_name)
             .outerjoin(Task, Task.taskid == TaskAttachFile.taskid)
+            .outerjoin(User, User.userid == Task.work_userid)
             .order_by(TaskAttachFile.fileid.desc()))
 
 
 def _to_out(row):
-    f, task_name, work_userid = row
+    f, task_name, work_userid, work_user_name = row
     return {
         "fileid": f.fileid, "file_name": f.file_name, "taskid": f.taskid,
         "workschid": f.workschid, "task_filepath": f.task_filepath,
         "create_date": f.create_date, "task_name": task_name,
-        "work_userid": work_userid,
+        "work_userid": work_userid, "work_user_name": work_user_name,
     }
 
 
@@ -88,7 +90,9 @@ def upload_file(file: UploadFile = File(...),
     # backend/ 기준 상대경로로 저장 (커스텀 UPLOAD_DIR 절대경로도 그대로 인식)
     obj.task_filepath = os.path.relpath(path, BACKEND_DIR)
     db.commit()
-    return _to_out((obj, task.task_name, task.work_userid))
+    wuser = db.get(User, task.work_userid) if task.work_userid else None
+    return _to_out((obj, task.task_name, task.work_userid,
+                    wuser.user_name if wuser else None))
 
 
 @router.post("/meta", status_code=201)
@@ -107,7 +111,7 @@ def register_meta(body: AttachMeta, db: Session = Depends(get_db),
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    return _to_out((obj, None, None))
+    return _to_out((obj, None, None, None))
 
 
 @router.put("/{fileid}")
@@ -127,7 +131,7 @@ def update_file(fileid: int, body: AttachMeta, db: Session = Depends(get_db),
     obj.task_filepath = body.task_filepath
     db.commit()
     db.refresh(obj)
-    return _to_out((obj, None, None))
+    return _to_out((obj, None, None, None))
 
 
 @router.get("/{fileid}/download")

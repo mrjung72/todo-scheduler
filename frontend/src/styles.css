@@ -296,11 +296,16 @@ table.grid td.clickable:hover { background: #eff6ff; }
   display: flex; align-items: baseline;
 }
 .popup-body p > b { flex: 0 0 90px; color: #475569; }   /* 라벨 컬럼 고정폭 */
-/* 라벨/값 정보 영역: 타이틀 색과 대조되는 연한 파스텔 배경 */
+/* 라벨/값 정보 영역: 따뜻한 주황 계열 배경 */
 .popup-info {
-  background: #eef4fb; border: 1px solid #dbe7f4; border-radius: 8px;
+  background: #fdf3e7; border: 1px solid #f3e0c3; border-radius: 8px;
   padding: 8px 12px; margin-bottom: 10px;
 }
+/* 요청정보(요청내용+첨부) 영역: 작업정보와 구분되는 파랑 톤 */
+.popup-info.req-info {
+  background: #f4f7fc; border-color: #dde6f2;
+}
+.popup-info.req-info .daily { border-top-color: #dde6f2; }
 .popup-info p:last-child { margin-bottom: 0; }
 /* 수정 폼의 입력 컨트롤도 값 컬럼에 맞춤 */
 .popup-info input:not([type="checkbox"]), .popup-info select,
@@ -319,7 +324,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .popup-info.info-daily .daily {
   flex: 4 1 0; min-width: 0;
   margin-top: 0; border-top: none; padding-top: 0;
-  border-left: 1px solid #dbe7f4; padding-left: 16px;
+  border-left: 1px solid #f3e0c3; padding-left: 16px;
   font-size: 14px;   /* 작업정보 본문과 동일 크기 */
 }
 .daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }

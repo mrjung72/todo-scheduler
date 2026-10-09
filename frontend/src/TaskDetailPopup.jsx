@@ -17,64 +17,19 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     task.work_userid === me.userid ||
     (me.user_grade === 4 && me.default_siteid && task.siteid === me.default_siteid))
   const canAttach = me && [0, 1].includes(me.user_grade)
-  // 유형/우선순위 등 핵심항목은 R·C·W 상태에서만 수정 가능
-  const canCore = ['R', 'C', 'W'].includes(task.task_stat)
-  const [pview, setPview] = useState('req')   // req(기본: 요청상세) | info | his
-  const [editForm, setEditForm] = useState(null)
-  const [users, setUsers] = useState([])
+  const [pview, setPview] = useState('info')  // info(기본: 작업정보+요청내용) | his
   const [daily, setDaily] = useState(null)
   const [his, setHis] = useState(null)
   const [files, setFiles] = useState(null)
   const [cfg, setCfg] = useState(null)
   const fileRef = useRef(null)
 
-  const toLocalInput = iso => iso ? String(iso).slice(0, 16) : ''
-
   useEffect(() => {
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => setDaily([]))
-    api.get('/users').then(r => setUsers(r.data)).catch(() => {})
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
-    loadFiles()   // 기본 보기(요청상세)의 첨부파일 목록
+    loadFiles()   // 첨부파일 목록
   }, [task.taskid])
-
-  const startEdit = () => setEditForm({
-    priority: task.priority ?? 0,
-    work_hours_estimated: task.work_hours_estimated ?? 0,
-    work_userid: task.work_userid || '',
-    task_stat: task.task_stat || 'W',
-    task_type: task.task_type || '',
-    req_remark: task.task_req_remark || '',
-    start: toLocalInput(task.task_start_date),
-    unfix: false,
-  })
-
-  const saveEdit = async e => {
-    e.preventDefault()
-    try {
-      await api.put(`/tasks/${task.taskid}`, {
-        priority: +editForm.priority,
-        work_hours_estimated: +editForm.work_hours_estimated,
-        work_userid: editForm.work_userid || null,
-        task_req_remark: editForm.req_remark || null,
-        task_stat: editForm.task_stat,
-        task_type: editForm.task_type || null,
-      })
-      if (editForm.unfix) {
-        await api.patch(`/tasks/${task.taskid}/unfix`)
-      } else if (editForm.start &&
-          editForm.start !== toLocalInput(task.task_start_date)) {
-        await api.patch(`/tasks/${task.taskid}/start`, {
-          start_datetime: editForm.start.length === 16
-            ? editForm.start + ':00' : editForm.start,
-        })
-      }
-      onChanged?.()
-      onClose()
-    } catch (ex) {
-      alert(ex.response?.data?.detail || '저장에 실패했습니다')
-    }
-  }
 
   const loadFiles = () => {
     api.get('/attach-files', { params: { taskid: task.taskid } })
@@ -121,89 +76,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           </div>
           <div className="pt-row2">{task.task_name}</div>
         </h3>
-        {editForm ? (
-          <form onSubmit={saveEdit}>
-            <div className="popup-info">
-              <p><b>우선순위</b>
-                <input type="number" value={editForm.priority} disabled={!canCore}
-                  onChange={e => setEditForm({ ...editForm, priority: e.target.value })} /></p>
-              <p><b>예상시간(h)</b>
-                <input type="number" min="0.5" step="0.5" required
-                  value={editForm.work_hours_estimated} disabled={!canCore}
-                  onChange={e => setEditForm({ ...editForm, work_hours_estimated: e.target.value })} /></p>
-              <p><b>작업자</b>
-                <select value={editForm.work_userid} disabled={!canCore}
-                  onChange={e => setEditForm({ ...editForm, work_userid: e.target.value })}>
-                  <option value="">-</option>
-                  {users.filter(u => [1, 4].includes(u.user_grade) &&
-                      (me.user_grade !== 4 || u.userid === me.userid))
-                    .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-                </select></p>
-              <p><b>유형</b>
-                <select value={editForm.task_type} disabled={!canCore}
-                  onChange={e => setEditForm({ ...editForm, task_type: e.target.value })}>
-                  <option value="">-</option>
-                  {Object.entries(TASK_TYPE_LABEL)
-                    .map(([k, l]) => <option key={k} value={k}>{l}({k})</option>)}
-                </select></p>
-              <p><b>상태</b>
-                <select value={editForm.task_stat}
-                  onChange={e => setEditForm({ ...editForm, task_stat: e.target.value })}>
-                  {Object.entries(STAT_LABEL)
-                    .filter(([k]) => NEXT_STAT[task.task_stat]?.includes(k))
-                    .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select></p>
-              <p><b>시작일시</b>
-                <input type="datetime-local" value={editForm.start}
-                  onChange={e => setEditForm({ ...editForm, start: e.target.value })} /></p>
-              <p className="full"><b>작업요청내용</b>
-                <textarea rows="12" value={editForm.req_remark}
-                  onChange={e => setEditForm({ ...editForm, req_remark: e.target.value })} /></p>
-              {!!task.start_fixed && (
-                <p className="chk">
-                  <input type="checkbox" checked={editForm.unfix}
-                    onChange={e => setEditForm({ ...editForm, unfix: e.target.checked })} />
-                  <span>시작일시 고정 해제 (재계산 시 자동 배치)</span>
-                </p>
-              )}
-            </div>
-            <div className="popup-btns">
-              <button type="submit" className="primary">저장</button>
-              <button type="button" onClick={() => setEditForm(null)}>취소</button>
-            </div>
-          </form>
-        ) : pview === 'req' ? (
-          <div className="popup-info">
-            <div className="req-detail">
-              {task.task_req_remark || '작업요청 내용이 없습니다'}
-            </div>
-            <div className="daily">
-              <b>첨부파일</b>
-              <table>
-                <tbody>
-                  {(files || []).map(f => (
-                    <tr key={f.fileid}>
-                      <td>
-                        <button className="link"
-                          onClick={() => downloadFile(f)}>{f.file_name}</button>
-                      </td>
-                      <td className="r">{fmtDT(f.create_date)}</td>
-                    </tr>
-                  ))}
-                  {files && !files.length && (
-                    <tr><td colSpan="2" className="empty">첨부파일이 없습니다</td></tr>
-                  )}
-                </tbody>
-              </table>
-              {canAttach && (
-                <div className="attach-add">
-                  <input type="file" ref={fileRef} />
-                  <button onClick={uploadFile}>첨부</button>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : pview === 'his' ? (
+        {pview === 'his' ? (
           <div className="popup-info">
             <div className="daily">
               <b>작업상태변경이력</b>
@@ -266,28 +139,50 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             )}
           </div>
         )}
-        {!editForm && (
-          <div className="popup-btns">
-            <button onClick={() => {
-              setPview(pview === 'req' ? 'info' : 'req')
-              if (pview !== 'req') loadFiles()
-            }}>
-              {pview === 'req' ? '작업정보' : '요청정보'}
-            </button>
-            <button onClick={() => {
-              setPview(pview === 'his' ? 'info' : 'his')
-              if (pview !== 'his' && !his) {
-                api.get(`/tasks/${task.taskid}/his`)
-                  .then(r => setHis(r.data)).catch(console.error)
-              }
-            }}>
-              {pview === 'his' ? '작업정보' : '상태변경이력'}
-            </button>
-            {canEdit && pview === 'info' &&
-              <button onClick={startEdit}>수정</button>}
-            <button onClick={onClose}>닫기</button>
+        {pview === 'info' && (
+          <div className="popup-info req-info">
+            <div className="req-detail">
+              {task.task_req_remark || '작업요청 내용이 없습니다'}
+            </div>
+            <div className="daily">
+              <b>첨부파일</b>
+              <table>
+                <tbody>
+                  {(files || []).map(f => (
+                    <tr key={f.fileid}>
+                      <td>
+                        <button className="link"
+                          onClick={() => downloadFile(f)}>{f.file_name}</button>
+                      </td>
+                      <td className="r">{fmtDT(f.create_date)}</td>
+                    </tr>
+                  ))}
+                  {files && !files.length && (
+                    <tr><td colSpan="2" className="empty">첨부파일이 없습니다</td></tr>
+                  )}
+                </tbody>
+              </table>
+              {canAttach && (
+                <div className="attach-add">
+                  <input type="file" ref={fileRef} />
+                  <button onClick={uploadFile}>첨부</button>
+                </div>
+              )}
+            </div>
           </div>
         )}
+        <div className="popup-btns">
+          <button onClick={() => {
+            setPview(pview === 'his' ? 'info' : 'his')
+            if (pview !== 'his' && !his) {
+              api.get(`/tasks/${task.taskid}/his`)
+                .then(r => setHis(r.data)).catch(console.error)
+            }
+          }}>
+            {pview === 'his' ? '작업요청정보' : '상태변경이력'}
+          </button>
+          <button onClick={onClose}>닫기</button>
+        </div>
       </div>
     </div>
   )

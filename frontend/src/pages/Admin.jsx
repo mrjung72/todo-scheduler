@@ -1285,16 +1285,13 @@ function AttachFilesTab() {
   const kw = q.trim().toLowerCase()
   const filtered = rows
     .filter(f => !kw ||
-      [f.file_name, f.task_name, f.task_filepath, f.taskid, f.workschid]
+      [f.file_name, f.task_name, f.task_filepath, f.taskid, f.workschid,
+       f.work_userid, f.work_user_name]
         .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
     .filter(f => !siteF || taskOf(f.taskid)?.siteid === siteF)
     .filter(f => !statF || taskOf(f.taskid)?.task_stat === statF)
   const { paged, pager } = usePager(filtered, [q, siteF, statF])
   const taskScheds = scheds.filter(s => s.taskid === +form.taskid)
-
-  const save = (fileid, patch) =>
-    api.put(`/attach-files/${fileid}`, patch).then(load)
-      .catch(e => alert(errMsg(e)))
 
   const upload = async e => {
     e.preventDefault()
@@ -1329,11 +1326,13 @@ function AttachFilesTab() {
   }
 
   const cols = [
-    { label: '파일ID', field: 'fileid' },
-    { label: '파일명', field: 'file_name' },
     { label: '작업ID', field: 'taskid' },
     { label: '작업명(참조)', field: '_task_name', get: f => f.task_name || '' },
-    { label: '스케줄ID', field: 'workschid' },
+    { label: '작업자(참조)', field: '_work_name', get: f => f.work_user_name || '' },
+    { label: '작업자ID', field: 'work_userid' },
+    { label: '작업스케쥴ID', field: 'workschid' },
+    { label: '파일ID', field: 'fileid' },
+    { label: '파일명', field: 'file_name' },
     { label: '첨부파일경로', field: 'task_filepath' },
     { label: '등록일시', field: 'create_date', get: f => fmtDT(f.create_date) },
   ]
@@ -1395,39 +1394,33 @@ function AttachFilesTab() {
       </form>
       <table className="grid">
         <thead><tr>
-          <th>파일ID</th><th>파일명</th><th>작업</th><th className="r">스케줄ID</th>
-          <th>첨부파일경로</th><th>등록일시</th><th></th>
+          <th>작업ID</th><th>작업명</th><th>작업자</th><th className="r">작업스케쥴ID</th>
+          <th>파일ID</th><th>파일명</th><th>첨부파일경로</th><th>등록일시</th><th></th>
         </tr></thead>
         <tbody>
           {paged.map(f => (
             <tr key={f.fileid}>
-              <td className="r">{f.fileid}</td>
-              <td><EditableCell value={f.file_name} disabled={!canEdit(f)}
-                onSave={v => save(f.fileid, {
-                  file_name: v, taskid: f.taskid,
-                  workschid: f.workschid, task_filepath: f.task_filepath,
-                })} /></td>
+              <td className="r">{f.taskid || '-'}</td>
               <td>{taskOf(f.taskid)
                 ? <button className="link" onClick={() => setSelTask(taskOf(f.taskid))}>
                     {f.task_name || `작업#${f.taskid}`}</button>
                 : (f.task_name || (f.taskid ? `작업#${f.taskid}` : '-'))}</td>
+              <td>{f.work_user_name || f.work_userid || '-'}</td>
               <td className="r">{f.workschid || '-'}</td>
-              <td><EditableCell value={f.task_filepath} disabled={!canEdit(f)}
-                onSave={v => save(f.fileid, {
-                  file_name: f.file_name, taskid: f.taskid,
-                  workschid: f.workschid, task_filepath: v,
-                })} /></td>
+              <td className="r">{f.fileid}</td>
+              <td>{f.task_filepath
+                ? <button className="link" onClick={() => download(f)}>{f.file_name}</button>
+                : f.file_name}</td>
+              <td>{f.task_filepath || '-'}</td>
               <td className="c">{fmtDT(f.create_date)}</td>
               <td>
-                {f.task_filepath &&
-                  <button onClick={() => download(f)}>다운로드</button>}
                 {canEdit(f) &&
                   <button className="danger" onClick={() => del(f)}>삭제</button>}
               </td>
             </tr>
           ))}
           {filtered.length === 0 &&
-            <tr><td colSpan="7" className="empty">첨부파일이 없습니다</td></tr>}
+            <tr><td colSpan="9" className="empty">첨부파일이 없습니다</td></tr>}
         </tbody>
       </table>
       {pager}
