@@ -74,15 +74,15 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 
 
 def require_staff(user: User = Depends(get_current_user)) -> User:
-    """관리자(0)/개발자(1) — 관리자 화면 전체 권한."""
+    """관리자(0)/수석개발자(1) — 관리자 화면 전체 권한."""
     if user.user_grade not in (0, 1):
         raise HTTPException(403, "관리자 권한이 필요합니다")
     return user
 
 
 def require_planner(user: User = Depends(get_current_user)) -> User:
-    """공통 휴일 관리: 관리자(0)/개발자(1)/IT업무담당자(2)."""
-    if user.user_grade not in (0, 1, 2):
+    """공통 휴일 관리: 관리자(0)/수석개발자(1)/IT업무담당자(5)."""
+    if user.user_grade not in (0, 1, 5):
         raise HTTPException(403, "권한이 없습니다")
     return user
 
@@ -94,11 +94,11 @@ def check_owner_or_admin(user: User, work_userid):
 
 
 def check_task_access(user: User, work_userid, siteid=None):
-    """작업 변경 권한: 스태프(0/1) 전체, 일반개발자(4)는 지정사이트+본인 작업,
+    """작업 변경 권한: 스태프(0/1) 전체, 일반개발자(2)는 지정사이트+본인 작업,
     나머지는 본인 작업만."""
     if user.user_grade in (0, 1) or work_userid == user.userid:
         return
-    if (user.user_grade == 4 and siteid and user.default_siteid
+    if (user.user_grade == 2 and siteid and user.default_siteid
             and siteid == user.default_siteid):
         return
     raise HTTPException(403, "자신의 작업만 수정할 수 있습니다")

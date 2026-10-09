@@ -114,10 +114,10 @@ const fmtLocal = d => {
 export default function CalendarView() {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const staff = me && [0, 1].includes(me.user_grade)
-  // 휴가 등록: 관리자(0)·개발자(1)·IT담당자(2)·일반개발자(4) (비스태프는 본인 휴가만)
-  // 공통 휴일 등록: 0·1·2만
-  const canReg = me && [0, 1, 2, 4].includes(me.user_grade)
-  const canRegDay = me && [0, 1, 2].includes(me.user_grade)
+  // 휴가 등록: 관리자(0)·수석(1)·일반개발자(2)·IT담당자(5) (비스태프는 본인 휴가만)
+  // 공통 휴일 등록: 0·1·5만
+  const canReg = me && [0, 1, 2, 5].includes(me.user_grade)
+  const canRegDay = me && [0, 1, 5].includes(me.user_grade)
   const [users, setUsers] = useState([])          // 휴가 등록 폼용
   const [events, setEvents] = useState([])
   const [dayEvents, setDayEvents] = useState([])
@@ -317,7 +317,7 @@ export default function CalendarView() {
         </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
-          {users.filter(u => [1, 4].includes(u.user_grade))
+          {users.filter(u => [1, 2].includes(u.user_grade))
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input
@@ -449,7 +449,7 @@ export default function CalendarView() {
                             : { ...holForm, work_userid: uid, edit: false })
                         }}>
                         <option value="">선택</option>
-                        {users.filter(u => [1, 4].includes(u.user_grade))
+                        {users.filter(u => [1, 2].includes(u.user_grade))
                           .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
                       </select>
                     ) : (

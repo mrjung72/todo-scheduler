@@ -13,9 +13,29 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 ADMIN_USERID = "admin"
 
+# 등급별 관리 가능한 대상 등급
+# 0-관리자: 전체 / 1-수석개발자: 자신보다 하위등급만 / 5-IT업무담당자: 현업담당자(7)만
+MANAGED_GRADES = {
+    0: {0, 1, 2, 5, 7, 9},
+    1: {2, 5, 7, 9},
+    5: {7},
+}
+
+# 관리 대상이 아닐 때 본인 계정에 허용되는 개인정보 항목
+PERSONAL_FIELDS = {"user_name", "dept_name", "job_title", "user_tel", "user_email"}
+
+
+def _managed(me: User) -> set:
+    return MANAGED_GRADES.get(me.user_grade, set())
+
+
+def _can_manage(me: User, obj: User) -> bool:
+    """me 가 obj 사용자의 정보를 변경할 수 있는지."""
+    return obj.user_grade in _managed(me)
+
 
 def _check_staff(me: User):
-    """사용자 관리 권한: 관리자(0)/개발자(1)."""
+    """사용자 관리 권한: 관리자(0)/수석개발자(1)."""
     if me.user_grade not in (0, 1):
         raise HTTPException(403, "권한이 없습니다")
 
@@ -59,6 +79,8 @@ def create_user(body: UserCreate, db: Session = Depends(get_db),
     _check_staff(me)
     if body.userid == ADMIN_USERID:
         raise HTTPException(400, "admin 계정은 생성할 수 없습니다")
+    if body.user_grade not in _managed(me):
+        raise HTTPException(403, "해당 등급의 사용자를 생성할 수 없습니다")
     if db.get(User, body.userid):
         raise HTTPException(409, "이미 존재하는 사용자ID입니다")
     if body.default_siteid and not db.get(Site, body.default_siteid):
@@ -80,13 +102,17 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
     _check_not_admin_account(userid, me)
     data = body.model_dump(exclude_unset=True)
-    if me.user_grade not in (0, 1):
-        # 비스태프: 본인 계정의 개인정보 항목만 수정 가능
-        # (등급/기본사이트/상태/비밀번호는 스태프만 변경 가능)
+    if _can_manage(me, obj):
+        # 관리 대상: 등급 변경은 자신이 관리할 수 있는 등급 범위 내로만
+        if ("user_grade" in data and data["user_grade"] is not None
+                and data["user_grade"] not in _managed(me)):
+            raise HTTPException(403, "해당 등급으로 변경할 수 없습니다")
+    else:
+        # 관리 대상 아님: 본인 계정의 개인정보 항목만 수정 가능
+        # (등급/기본사이트/상태/비밀번호는 관리자만 변경 가능)
         if userid != me.userid:
             raise HTTPException(403, "권한이 없습니다")
-        allowed = {"user_name", "dept_name", "job_title", "user_tel", "user_email"}
-        data = {k: v for k, v in data.items() if k in allowed}
+        data = {k: v for k, v in data.items() if k in PERSONAL_FIELDS}
         if not data:
             raise HTTPException(400, "수정할 수 있는 항목이 없습니다")
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
@@ -106,12 +132,13 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
 @router.post("/{userid}/password-reset", status_code=204)
 def reset_password(userid: str, db: Session = Depends(get_db),
                    me: User = Depends(get_current_user)):
-    """관리자/개발자: 사용자 비밀번호를 초기값(1234)으로 초기화."""
+    """관리 가능한 대상 사용자의 비밀번호를 초기값(1234)으로 초기화."""
     _check_not_admin_account(userid, me)
-    _check_staff(me)
     obj = db.get(User, userid)
     if not obj:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
+    if not _can_manage(me, obj):
+        raise HTTPException(403, "권한이 없습니다")
     obj.password = hash_password("1234")
     db.commit()
 
@@ -124,6 +151,8 @@ def delete_user(userid: str, db: Session = Depends(get_db),
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
     _check_not_admin_account(userid, me)
     _check_staff(me)
+    if not _can_manage(me, obj):
+        raise HTTPException(403, "권한이 없습니다")
     if obj.user_grade == 0:
         raise HTTPException(400, "관리자 등급 사용자는 삭제할 수 없습니다")
     db.delete(obj)

@@ -19,12 +19,16 @@ const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') ||
 const myId = () => JSON.parse(localStorage.getItem('user') || 'null')?.userid
 const myGrade = () => JSON.parse(localStorage.getItem('user') || 'null')?.user_grade
 const mySite = () => JSON.parse(localStorage.getItem('user') || 'null')?.default_siteid
-const isJrDev = () => myGrade() === 4          // 일반개발자
+const isJrDev = () => myGrade() === 2          // 일반개발자
 // 일반개발자는 지정사이트 또는 본인 작업만 변경 가능
 const canTask = t => isStaff() || t.work_userid === myId() ||
   (isJrDev() && mySite() && t.siteid === mySite())
 // admin 계정은 본인 외에는 수정 불가 (개발자 포함)
 const isProtectedUser = u => u.userid === 'admin' && myId() !== 'admin'
+// 등급별 관리 가능한 대상 등급 (백엔드 MANAGED_GRADES와 동일)
+// 0-관리자: 전체 / 1-수석개발자: 하위등급 / 5-IT업무담당자: 현업담당자(7)
+const MANAGED_GRADES = { 0: [0, 1, 2, 5, 7, 9], 1: [2, 5, 7, 9], 5: [7] }
+const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_grade)
 
 export default function Admin() {
   const [tab, setTab] = useState('tasks')
@@ -351,7 +355,9 @@ function UsersTab() {
           onChange={e => setForm({ ...form, job_title: e.target.value })} />
         <select value={form.user_grade}
           onChange={e => setForm({ ...form, user_grade: +e.target.value })}>
-          {Object.entries(GRADE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          {Object.entries(GRADE_LABEL)
+            .filter(([k]) => (MANAGED_GRADES[myGrade()] || []).includes(+k))
+            .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <input type="password" placeholder="비밀번호(기본 1234)" value={form.password}
           onChange={e => setForm({ ...form, password: e.target.value })} />
@@ -370,8 +376,9 @@ function UsersTab() {
         </tr></thead>
         <tbody>
           {paged.map(u => {
-            const locked = isProtectedUser(u) || (!staff && u.userid !== myId())
-            const lockPriv = locked || !staff   // 등급·사이트·상태·비번은 스태프만
+            const manageable = canManageUser(u) && !isProtectedUser(u)
+            const locked = isProtectedUser(u) || (!manageable && u.userid !== myId())
+            const lockPriv = !manageable        // 등급·사이트·상태·비번은 관리 대상만
             return (
             <tr key={u.userid}>
               <td>{u.userid}{locked && <span className="badge">보호</span>}</td>
@@ -387,7 +394,10 @@ function UsersTab() {
                 onSave={v => save(u.userid, { user_email: v })} /></td>
               <td><EditableCell value={u.user_grade} disabled={lockPriv}
                 onSave={v => save(u.userid, { user_grade: v })}
-                options={Object.entries(GRADE_LABEL).map(([k, l]) => ({ value: +k, label: l }))} /></td>
+                options={Object.entries(GRADE_LABEL)
+                  .filter(([k]) => (MANAGED_GRADES[myGrade()] || []).includes(+k)
+                    || +k === u.user_grade)
+                  .map(([k, l]) => ({ value: +k, label: l }))} /></td>
               <td className="c"><EditableCell value={u.default_siteid} disabled={lockPriv}
                 onSave={v => save(u.userid, { default_siteid: v || null })}
                 options={[{ value: '', label: '-' },
@@ -472,7 +482,7 @@ function SitesTab() {
   }
 
   const itosOptions = [{ value: '', label: '-' },
-    ...users.filter(u => [0, 2].includes(u.user_grade))
+    ...users.filter(u => [0, 5].includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
   const { paged, pager } = usePager(rows, [])
 
@@ -605,12 +615,12 @@ function TasksTab() {
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
-  const devOpt = staff ? uopt([1, 4])
-    : uopt([1, 4]).filter(o => o.value === '' || o.value === myId())
+  const devOpt = staff ? uopt([1, 2])
+    : uopt([1, 2]).filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
-  // 현업담당자 검색 리스트다운 대상 (일반사용자 3, 요청자 9)
-  const reqUsers = users.filter(u => [3, 9].includes(u.user_grade))
+  // 현업담당자 검색 리스트다운 대상 (현업담당자 7, 기타사용자 9)
+  const reqUsers = users.filter(u => [7, 9].includes(u.user_grade))
 
   const filtered = (!q.trim() ? rows : rows.filter(t => {
     const kw = q.trim().toLowerCase()
@@ -993,7 +1003,7 @@ function HolidaysTab() {
 
   const catOptions = Object.entries(HOL_CAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const userOptions = [{ value: '', label: '작업자(전체)' },
-    ...users.filter(u => [1, 4].includes(u.user_grade))
+    ...users.filter(u => [1, 2].includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
   const { paged, pager } = usePager(rows, [year, filterUser])
 
@@ -1020,7 +1030,7 @@ function HolidaysTab() {
           <select required value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자 선택</option>
-            {users.filter(u => [1, 4].includes(u.user_grade))
+            {users.filter(u => [1, 2].includes(u.user_grade))
               .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
           </select>
         )}
@@ -1104,9 +1114,9 @@ function SchedulesTab() {
   const del = id => window.confirm(`작업이력 #${id} 삭제?`) &&
     api.delete(`/schedules/${id}`).then(load).catch(e => alert(errMsg(e)))
 
-  // 작업자는 개발자(등급 1)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
+  // 작업자는 개발자(등급 1·2)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
   // 값이 깨지지 않도록 해당 작업자만 선택지에 포함
-  const devOpt = users.filter(u => [1, 4].includes(u.user_grade))
+  const devOpt = users.filter(u => [1, 2].includes(u.user_grade))
     .map(u => ({ value: u.userid, label: u.user_name }))
   const uopt = [{ value: '', label: '-' }, ...devOpt]
   const topt = [{ value: '', label: '-' },

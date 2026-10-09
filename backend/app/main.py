@@ -69,9 +69,9 @@ def seed(db):
             User(userid="admin", user_name="관리자", dept_name="IT", job_title="팀장",
                  user_grade=0, password=pw, user_stat="Y"),
             User(userid="itos01", user_name="김아이티", dept_name="IT운영팀",
-                 job_title="대리", user_grade=2, password=pw, user_stat="Y"),
+                 job_title="대리", user_grade=5, password=pw, user_stat="Y"),
             User(userid="req01", user_name="박현업", dept_name="영업팀",
-                 job_title="과장", user_grade=3, password=pw, user_stat="Y"),
+                 job_title="과장", user_grade=7, password=pw, user_stat="Y"),
             User(userid="dev01", user_name="이개발", dept_name="개발팀",
                  job_title="선임", user_grade=1, password=pw, user_stat="Y"),
             User(userid="dev02", user_name="최코더", dept_name="개발팀",
@@ -114,6 +114,16 @@ def migrate(db):
             "ALTER TABLE users ADD COLUMN default_siteid TEXT REFERENCES sites(siteid)"))
     if "reject_remark" not in cols:
         db.execute(text("ALTER TABLE users ADD COLUMN reject_remark TEXT"))
+    # 사용자 등급 체계 개편: 구 2(IT담당자)->5, 3(현업담당자)->7, 4(일반개발자)->2
+    # 신 체계에는 3/4 등급이 없으므로 존재 여부로 구 체계 판별 (재실행 안전)
+    if db.execute(text(
+            "SELECT 1 FROM users WHERE user_grade IN (3, 4) LIMIT 1")).first():
+        db.execute(text("""
+            UPDATE users SET user_grade = CASE user_grade
+                WHEN 2 THEN 5 WHEN 3 THEN 7 WHEN 4 THEN 2
+                ELSE user_grade END
+            WHERE user_grade IN (2, 3, 4)
+        """))
     cols = {r[1] for r in db.execute(text("PRAGMA table_info(tasks)"))}
     if "work_userid" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))
