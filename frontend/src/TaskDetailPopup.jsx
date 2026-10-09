@@ -319,7 +319,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           </button>
           <button onClick={onClose}>닫기</button>
         </div>
-        {logView && (
+      </div>
+      {logView && (
           <div className="popup log-pop"
             onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
             onClick={e => {
@@ -389,8 +390,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               )}
             </div>
           </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }
