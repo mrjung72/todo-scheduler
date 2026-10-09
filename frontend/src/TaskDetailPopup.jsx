@@ -54,6 +54,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const isStaff = me && [0, 1].includes(me.user_grade)
   const [files, setFiles] = useState(null)
   const [cfg, setCfg] = useState(null)
+  // 작업자의 하루작업시간 — task 객체에 없으면 users 조회로 보완
+  const [workHr, setWorkHr] = useState(task.work_hours_day)
   const [reqText, setReqText] = useState(task.task_req_remark || '')
   const [reqEdit, setReqEdit] = useState(null)
   const fileRef = useRef(null)
@@ -65,6 +67,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => setDaily([]))
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
+    // 작업자의 하루시간은 항상 users 조회로 최신값 반영
+    // (목록 로딩 후 변경되었거나 필드가 없는 경로로 열린 경우 대비)
+    if (task.work_userid)
+      api.get('/users').then(r => {
+        const u = r.data.find(u => u.userid === task.work_userid)
+        if (u) setWorkHr(u.work_hours_day)
+      }).catch(() => {})
     loadFiles()   // 첨부파일 목록
   }, [task.taskid])
 
@@ -139,10 +148,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     }
   }
 
-  // 총 작업일수: 일별 배분이 있으면 실제 일수, 없으면 예상시간/하루작업시간으로 환산
-  const workDays = (daily && daily.length) ? daily.length
-    : (cfg?.work_hours_per_day && task.work_hours_estimated
-      ? +(task.work_hours_estimated / cfg.work_hours_per_day).toFixed(1) : null)
+  // 총 작업일수: 일별 배분이 있으면 실제 작업일수(작업시간이 있는 날),
+  // 없으면 예상시간/작업자 하루시간으로 환산
+  const dayHours = workHr || cfg?.work_hours_per_day
+  const workDays = (daily && daily.length)
+    ? (daily.filter(d => d.hours > 0).length || null)
+    : (dayHours && task.work_hours_estimated
+      ? +(task.work_hours_estimated / dayHours).toFixed(1) : null)
 
   return (
     <div className="popup"
@@ -236,7 +248,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               <p><b>작업자</b> {fmtUser(task.work_user_name, task.work_userid,
                 task.work_user_title, task.work_user_dept)}</p>
               <p><b>예상시간</b> {task.work_hours_estimated}h
-                {workDays != null && ` (총 ${workDays}일)`}</p>
+                {workDays != null && ` (총 ${workDays}일)`}
+                {dayHours != null && ` / 하루 ${dayHours}시간`}</p>
               <p><b>요청일자</b> {fmtDT(task.req_date) || '-'}</p>
               <p><b>시작</b> {fmtDT(task.task_start_date) || '-'}</p>
               <p><b>종료(예상)</b> {fmtDT(task.task_end_date_estimated) || '-'}</p>

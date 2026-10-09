@@ -91,11 +91,11 @@ export default function Admin() {
 }
 
 /* ---------------- 공통 ---------------- */
-function EditableCell({ value, onSave, type = 'text', options, disabled }) {
+function EditableCell({ value, onSave, type = 'text', options, disabled, min, max, step }) {
   const [v, setV] = useState(value ?? '')
   useEffect(() => setV(value ?? ''), [value])
   if (disabled) {
-    const label = options?.find(o => o.value === value)?.label
+    const label = options?.find(o => String(o.value) === String(value ?? ''))?.label
     return <span>{label ?? value ?? ''}</span>
   }
   if (options) {
@@ -107,6 +107,7 @@ function EditableCell({ value, onSave, type = 'text', options, disabled }) {
   }
   return (
     <input type={type} value={v} onChange={e => setV(e.target.value)}
+      min={min} max={max} step={step}
       onBlur={() => v !== (value ?? '') && onSave(type === 'number' ? +v : v)}
       onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
   )
@@ -302,9 +303,10 @@ function UsersTab() {
   const staff = isStaff()
   const empty = { userid: '', user_name: '', dept_name: '', job_title: '',
     user_tel: '', user_email: '', user_grade: 9, user_stat: 'Y', password: '',
-    default_siteid: '' }
+    default_siteid: '', work_hours_day: '' }
   const [rows, setRows] = useState([])
   const [sites, setSites] = useState([])
+  const [cfgHours, setCfgHours] = useState('')
   const [form, setForm] = useState(empty)
   const [q, setQ] = useState('')
   const [statF, setStatF] = useState('')
@@ -313,14 +315,25 @@ function UsersTab() {
   useEffect(() => {
     load()
     api.get('/sites').then(r => setSites(r.data))
+    // 근무구간 기본 하루시간을 신규 사용자 폼의 기본값으로 사용
+    api.get('/config').then(r => {
+      const h = r.data.work_hours_per_day
+      setCfgHours(h)
+      // 기본값이 허용 범위(2~8) 안일 때만 폼에 자동 입력
+      setForm(f => f.work_hours_day === ''
+        ? { ...f, work_hours_day: (h >= 2 && h <= 8) ? h : '' } : f)
+    })
   }, [load])
 
   const save = (id, patch) => api.put(`/users/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
   const add = async e => {
     e.preventDefault()
     try {
-      await api.post('/users', form)
-      setForm(empty); load()
+      await api.post('/users', {
+        ...form,
+        work_hours_day: form.work_hours_day === '' ? null : +form.work_hours_day,
+      })
+      setForm({ ...empty, work_hours_day: (cfgHours >= 2 && cfgHours <= 8) ? cfgHours : '' }); load()
     } catch (e) { alert(errMsg(e)) }
   }
   const revGrade = revMap(GRADE_LABEL)
@@ -333,6 +346,7 @@ function UsersTab() {
     { label: '이메일', field: 'user_email' },
     { label: '등급', field: 'user_grade', get: u => GRADE_LABEL[u.user_grade] ?? u.user_grade },
     { label: '기본사이트ID', field: 'default_siteid' },
+    { label: '하루작업시간', field: 'work_hours_day' },
     { label: '상태', field: 'user_stat' },
   ]
   const upload = async o => {
@@ -346,6 +360,8 @@ function UsersTab() {
       user_grade: o.user_grade === '' ? 9 : +(revGrade[o.user_grade] ?? o.user_grade),
       user_stat: o.user_stat || 'Y',
       default_siteid: o.default_siteid || null,
+      work_hours_day: o.work_hours_day === '' || o.work_hours_day == null
+        ? null : +o.work_hours_day,
     }
     const r = rows.some(u => u.userid === o.userid)
       ? await api.put(`/users/${o.userid}`, body)
@@ -404,13 +420,19 @@ function UsersTab() {
           <option value="">기본사이트</option>
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
+        <select value={form.work_hours_day} style={{ width: '130px' }}
+          title="하루작업시간"
+          onChange={e => setForm({ ...form, work_hours_day: e.target.value })}>
+          <option value="">하루작업시간(기본)</option>
+          {[2, 3, 4, 5, 6, 7, 8].map(h => <option key={h} value={h}>{h}시간</option>)}
+        </select>
         <button type="submit">추가</button>
       </form>
       )}
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
-          <th>이메일</th><th>등급</th><th>기본사이트</th><th>비밀번호</th><th>상태</th><th></th>
+          <th>이메일</th><th>등급</th><th>기본사이트</th><th title="2~8 정수, 빈칸이면 근무구간 기본값 적용">하루작업시간</th><th>비밀번호</th><th>상태</th><th></th>
         </tr></thead>
         <tbody>
           {paged.map(u => {
@@ -440,6 +462,10 @@ function UsersTab() {
                 onSave={v => save(u.userid, { default_siteid: v || null })}
                 options={[{ value: '', label: '-' },
                   ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]} /></td>
+              <td className="c"><EditableCell value={u.work_hours_day} disabled={locked}
+                onSave={v => save(u.userid, { work_hours_day: v === '' ? null : +v })}
+                options={[{ value: '', label: '기본' },
+                  ...[2, 3, 4, 5, 6, 7, 8].map(h => ({ value: h, label: `${h}시간` }))]} /></td>
               <td className="c">
                 {!lockPriv && <>
                 <button onClick={() => {

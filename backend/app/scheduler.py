@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, date, time
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-from .models import CalendarDefine, Task, UserHoliday
+from .models import CalendarDefine, Task, UserHoliday, User
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
@@ -63,6 +63,25 @@ def get_holiday_map(db: Session) -> dict:
     }
 
 
+def get_user_hours_map(db: Session) -> dict:
+    """{userid: 하루 개발시간} 맵 반환. 미설정(NULL/0) 사용자는 제외 → 근무구간 기본값 적용"""
+    return {r.userid: r.work_hours_day
+            for r in db.query(User).all() if r.work_hours_day}
+
+
+def _cap_day(segs: list, hours: float) -> list:
+    """하루 근무구간을 앞쪽부터 hours 시간까지만 사용하도록 절단.
+    개발자별 하루 개발시간이 근무구간 합계보다 짧을 때 적용."""
+    out, used = [], 0.0
+    for s, e in segs:
+        if used >= hours:
+            break
+        take = min((e - s).total_seconds() / 3600.0, hours - used)
+        out.append((s, s + timedelta(hours=take)))
+        used += take
+    return out
+
+
 def is_working_day(d: date, cal: dict) -> bool:
     stat = cal.get(d.strftime("%Y%m%d"))
     if stat is not None:
@@ -93,9 +112,11 @@ def _day_segments(d: date):
 FREE_DAY_STAT = "F"
 
 
-def worker_segments(d: date, cal: dict, hol: dict, userid) -> list:
-    """작업자의 해당 일 근무 구간 목록 (개인휴가 반영).
-    달력 값이 'F' 이면 근무구간 무시하고 00:00~24:00 전체를 작업가능으로 둔다."""
+def worker_segments(d: date, cal: dict, hol: dict, userid,
+                    uhours: dict = None) -> list:
+    """작업자의 해당 일 근무 구간 목록 (개인휴가 + 개발자별 하루시간 반영).
+    달력 값이 'F' 이면 근무구간 무시하고 00:00~24:00 전체를 작업가능으로 둔다
+    (하루 개발시간 제한도 적용하지 않음 — 경과시간 그대로)."""
     stat = cal.get(d.strftime("%Y%m%d"))
     if stat == FREE_DAY_STAT:
         base = datetime.combine(d, time(0, 0))
@@ -104,6 +125,15 @@ def worker_segments(d: date, cal: dict, hol: dict, userid) -> list:
         return []
     else:
         segs = _day_segments(d)
+        cap = (uhours or {}).get(userid or "")
+        if cap and cap > 0:
+            total = sum((e - s).total_seconds() for s, e in segs) / 3600.0
+            if cap < total:
+                segs = _cap_day(segs, cap)
+            elif cap > total:
+                # 하루시간이 근무구간보다 길면 마지막 구간의 끝을 연장
+                s, e = segs[-1]
+                segs[-1] = (s, e + timedelta(hours=cap - total))
     h = hol.get((userid or "", d.strftime("%Y%m%d")))
     if not h:
         return segs
@@ -138,13 +168,14 @@ def workday_cal(cal: dict, d: date) -> dict:
     return c
 
 
-def next_work_start(dt: datetime, cal: dict, hol: dict = None, userid=None) -> datetime:
+def next_work_start(dt: datetime, cal: dict, hol: dict = None, userid=None,
+                    uhours: dict = None) -> datetime:
     """dt 이후(포함) 가장 빠른 근무 시작 시각을 반환."""
     hol = hol or {}
     d = dt.date()
     # 최대 5년치만 탐색
     for _ in range(366 * 5):
-        for seg_s, seg_e in worker_segments(d, cal, hol, userid):
+        for seg_s, seg_e in worker_segments(d, cal, hol, userid, uhours):
             if dt <= seg_s:
                 return seg_s
             if seg_s < dt < seg_e:
@@ -154,16 +185,17 @@ def next_work_start(dt: datetime, cal: dict, hol: dict = None, userid=None) -> d
     raise RuntimeError("근무 가능한 날짜를 찾을 수 없습니다 (달력/휴가 설정 확인)")
 
 
-def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None, userid=None) -> datetime:
+def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None,
+                   userid=None, uhours: dict = None) -> datetime:
     """start 부터 근무시간 hours 만큼 경과한 시각을 반환."""
     hol = hol or {}
     if hours <= 0:
         return start
     remaining = float(hours)
-    cur = next_work_start(start, cal, hol, userid)
+    cur = next_work_start(start, cal, hol, userid, uhours)
     while True:
         d = cur.date()
-        for seg_s, seg_e in worker_segments(d, cal, hol, userid):
+        for seg_s, seg_e in worker_segments(d, cal, hol, userid, uhours):
             if cur >= seg_e:
                 continue
             s = max(cur, seg_s)
@@ -172,10 +204,12 @@ def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None, u
                 return s + timedelta(hours=remaining)
             remaining -= avail
             cur = seg_e
-        cur = next_work_start(datetime.combine(d + timedelta(days=1), time(0, 0)), cal, hol, userid)
+        cur = next_work_start(datetime.combine(d + timedelta(days=1), time(0, 0)),
+                              cal, hol, userid, uhours)
 
 
-def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = None, userid=None) -> float:
+def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = None,
+                       userid=None, uhours: dict = None) -> float:
     """start~end 사이 근무구간 겹침 시간 합계 (실제 작업시간 측정용).
     start 일이 'F'(휴일 수동작업)면 그 날은 경과시간 그대로 계산된다."""
     hol = hol or {}
@@ -184,7 +218,7 @@ def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = No
     total = 0.0
     d = start.date()
     while d <= end.date():
-        for seg_s, seg_e in worker_segments(d, cal, hol, userid):
+        for seg_s, seg_e in worker_segments(d, cal, hol, userid, uhours):
             s, e = max(start, seg_s), min(end, seg_e)
             if s < e:
                 total += (e - s).total_seconds() / 3600.0
@@ -192,7 +226,7 @@ def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = No
     return round(total, 2)
 
 
-def daily_breakdown(start, end, cal, hol, uid):
+def daily_breakdown(start, end, cal, hol, uid, uhours: dict = None):
     """시작~종료 구간을 일별로 분해.
     {date: {"hours": 작업시간, "spans": [[시작비율, 끝비율], ...]}} 반환.
     spans 비율은 그날 근무시간(구간별 실제 근무 합계) 기준 0~1.
@@ -200,12 +234,12 @@ def daily_breakdown(start, end, cal, hol, uid):
     result = {}
     d = start.date()
     while d <= end.date():
-        segs = worker_segments(d, cal, hol, uid)
+        segs = worker_segments(d, cal, hol, uid, uhours)
         if segs:
             daylen = sum((e - s).total_seconds() for s, e in segs) or 1
             # 일부휴가 등으로 차감된 뒤쪽 비율 (정상 근무시간 대비 비작업 꼬리)
             nominal = sum((e - s).total_seconds()
-                          for s, e in worker_segments(d, cal, {}, uid)) or daylen
+                          for s, e in worker_segments(d, cal, {}, uid, uhours)) or daylen
             off = round(max(0.0, 1 - daylen / nominal), 3)
             hours, spans = 0.0, []
             offset = 0.0  # 이전 근무구간들의 누적 길이(초)
@@ -236,6 +270,7 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
     """
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
+    uhours = get_user_hours_map(db)   # 개발자별 하루 개발시간
 
     # 대기중(W) 작업만 재계산, 휴일작업은 자동 스케줄링 대상에서 제외
     task_q = db.query(Task).filter(Task.task_stat == "W") \
@@ -276,17 +311,17 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
             cal_f = workday_cal(cal, task.task_start_date.date())
             task.task_end_date_estimated = add_work_hours(
                 task.task_start_date, task.work_hours_estimated or 0,
-                cal_f, hol, uid)
+                cal_f, hol, uid, uhours)
             cursor = max(cursor, task.task_end_date_estimated)
             updated += 1
         for task in items:
             if task.taskid in fixed_ids:
                 continue
             uid = task.work_userid or ""
-            start = next_work_start(cursor, cal, hol, uid)
+            start = next_work_start(cursor, cal, hol, uid, uhours)
             task.task_start_date = start
             task.task_end_date_estimated = add_work_hours(
-                start, task.work_hours_estimated or 0, cal, hol, uid)
+                start, task.work_hours_estimated or 0, cal, hol, uid, uhours)
             cursor = task.task_end_date_estimated
             updated += 1
 

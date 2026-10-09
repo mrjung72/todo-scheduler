@@ -14,6 +14,7 @@ class UserBase(BaseModel):
     user_stat: Optional[str] = "Y"
     reject_remark: Optional[str] = None    # 승인불가 사유
     default_siteid: Optional[str] = None   # 기본사이트ID
+    work_hours_day: Optional[float] = None  # 하루 개발시간(시간). None 이면 근무구간 기본값
 
 
 class UserCreate(UserBase):
@@ -214,5 +215,6 @@ class TaskDetail(TaskOut):
     work_user_name: Optional[str] = None
     work_user_dept: Optional[str] = None
     work_user_title: Optional[str] = None
+    work_hours_day: Optional[float] = None   # 작업자의 하루 개발시간 (None=기본 근무구간)
     start_fixed: Optional[int] = 0
     weekday_included: Optional[bool] = False   # 휴일작업 기간에 근무일 포함 여부(경고)

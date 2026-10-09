@@ -28,10 +28,22 @@ export default function App() {
   const [pw, setPw] = useState({ cur: '', next: '', confirm: '' })
   const [pwMsg, setPwMsg] = useState('')
   const [pwErr, setPwErr] = useState('')
+  const [whDay, setWhDay] = useState('')      // 프로필 팝업의 하루작업시간 입력값
 
   const openProfile = () => {
     setPwOpen(false)
-    api.get('/users/me').then(r => setProfile(r.data)).catch(() => setProfile(me))
+    api.get('/users/me')
+      .then(r => { setProfile(r.data); setWhDay(r.data.work_hours_day ?? '') })
+      .catch(() => setProfile(me))
+  }
+
+  const saveDayHours = v => {
+    if (!profile?.userid) return
+    const val = v === '' ? null : +v
+    if (val === (profile.work_hours_day ?? null)) return
+    api.put(`/users/${profile.userid}`, { work_hours_day: val })
+      .then(r => setProfile(r.data))
+      .catch(e => alert(e.response?.data?.detail || '저장에 실패했습니다'))
   }
 
   const openPw = () => {
@@ -112,7 +124,7 @@ export default function App() {
         </nav>
         {cfg && (
           <span className="workhours" title={`WORK_SEGMENTS=${cfg.work_segments}`}>
-            {cfg.work_hours_per_day} 시간/일 작업 기준
+            기본 {cfg.work_hours_per_day}시간/일 (사용자별 설정 가능)
           </span>
         )}
         <span className="me">
@@ -146,6 +158,14 @@ export default function App() {
             <p><b>이메일</b> {profile.user_email || '-'}</p>
             <p><b>등급</b> {GRADE_LABEL[profile.user_grade] ?? profile.user_grade}</p>
             <p><b>기본사이트</b> {profile.default_siteid || '-'}</p>
+            <p><b>하루작업시간</b>{' '}
+              <select value={whDay}
+                title="기본은 근무구간 기본값 적용"
+                onChange={e => { setWhDay(e.target.value); saveDayHours(e.target.value) }}>
+                <option value="">기본</option>
+                {[2, 3, 4, 5, 6, 7, 8].map(h => <option key={h} value={h}>{h}시간</option>)}
+              </select>
+            </p>
             <div className="popup-btns">
               <button onClick={openPw}>비밀번호 변경</button>
               <button onClick={() => setProfile(null)}>닫기</button>

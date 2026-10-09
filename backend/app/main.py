@@ -114,6 +114,8 @@ def migrate(db):
             "ALTER TABLE users ADD COLUMN default_siteid TEXT REFERENCES sites(siteid)"))
     if "reject_remark" not in cols:
         db.execute(text("ALTER TABLE users ADD COLUMN reject_remark TEXT"))
+    if "work_hours_day" not in cols:
+        db.execute(text("ALTER TABLE users ADD COLUMN work_hours_day REAL"))
     # 사용자 등급 체계 개편 마이그레이션 (schema_meta 의 grade_scheme 버전으로 1회만 실행)
     # v1: 2=IT담당자,3=현업담당자,4=일반개발자 -> v2: 2=일반개발자,5=IT,7=현업
     # v3(현재): 3=개발매니저,4=일반개발자,5=IT,7=현업

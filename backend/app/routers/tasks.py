@@ -8,9 +8,9 @@ from ..database import get_db
 from ..models import Task, User, Site, TaskChgLog, WorkScheduleLog
 from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail, TaskChgLogOut
 from ..scheduler import (
-    recalculate, get_calendar_map, get_holiday_map,
+    recalculate, get_calendar_map, get_holiday_map, get_user_hours_map,
     add_work_hours, workday_cal, daily_breakdown, has_workday_between,
-    is_working_day, FREE_DAY_STAT,
+    is_working_day, FREE_DAY_STAT, WORK_HOURS_PER_DAY,
 )
 from ..statusflow import apply_task_stat_change, auto_start_due_tasks
 from ..security import get_current_user, check_task_access
@@ -55,6 +55,7 @@ def _detail_query(db: Session):
             WorkUser.user_name.label("work_user_name"),
             WorkUser.dept_name.label("work_user_dept"),
             WorkUser.job_title.label("work_user_title"),
+            WorkUser.work_hours_day.label("work_hours_day"),
             Site.site_name.label("site_name"),
         )
         .select_from(Task)
@@ -67,13 +68,13 @@ def _detail_query(db: Session):
 
 def _to_detail(row, cal: dict = None) -> TaskDetail:
     (task, req_name, req_dept, req_title, itos_name,
-     work_name, work_dept, work_title, site_name) = row
+     work_name, work_dept, work_title, work_hours_day, site_name) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
     data.update(
         req_user_name=req_name, req_user_dept=req_dept, req_user_title=req_title,
         itos_user_name=itos_name,
         work_user_name=work_name, work_user_dept=work_dept,
-        work_user_title=work_title,
+        work_user_title=work_title, work_hours_day=work_hours_day,
         site_name=site_name,
     )
     # 휴일작업인데 기간에 근무일이 포함되면 경고 플래그
@@ -245,7 +246,7 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         cal_f = workday_cal(cal, obj.task_start_date.date())
         obj.task_end_date_estimated = add_work_hours(
             obj.task_start_date, obj.work_hours_estimated or 0,
-            cal_f, hol, uid)
+            cal_f, hol, uid, get_user_hours_map(db))
     db.commit()
     db.refresh(obj)
     return obj
@@ -293,7 +294,8 @@ def set_start(taskid: int, body: StartSet, db: Session = Depends(get_db),
     else:
         cal = workday_cal(cal, body.start_datetime.date())
         task.task_end_date_estimated = add_work_hours(
-            task.task_start_date, task.work_hours_estimated or 0, cal, hol, uid
+            task.task_start_date, task.work_hours_estimated or 0, cal, hol, uid,
+            get_user_hours_map(db)
         )
     db.commit()
     db.refresh(task)
@@ -325,11 +327,14 @@ def daily_hours(taskid: int, db: Session = Depends(get_db)):
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
     uid = task.work_userid or ""
+    uhours = get_user_hours_map(db)
     bd = daily_breakdown(
         task.task_start_date, task.task_end_date_estimated,
-        workday_cal(cal, task.task_start_date.date()), hol, uid)
+        workday_cal(cal, task.task_start_date.date()), hol, uid, uhours)
     out = {k: {"date": k, "hours": v["hours"]} for k, v in bd.items()}
     # 작업자 휴가 반영: 범위 내 휴가일을 표시 (종일=작업불가, 일부=차감된 채로 표시)
+    # 일부휴가(P)라도 작업자의 하루시간 이상이면 사실상 종일휴가로 표시
+    day_cap = uhours.get(uid) or WORK_HOURS_PER_DAY
     d = task.task_start_date.date()
     end_d = task.task_end_date_estimated.date()
     while d <= end_d:
@@ -337,10 +342,11 @@ def daily_hours(taskid: int, db: Session = Depends(get_db)):
         if h:
             cat, hrs = h
             key = d.strftime("%Y-%m-%d")
-            label = "종일" if cat == "A" or hrs >= 8 else f"{hrs}h"
+            full = cat == "A" or hrs >= day_cap
+            label = "종일" if full else f"{hrs}h"
             if key in out:
                 out[key]["holiday"] = label
-            elif cat == "A":
+            elif full:
                 out[key] = {"date": key, "hours": 0, "holiday": "종일"}
         d += timedelta(days=1)
     return [out[k] for k in sorted(out)]

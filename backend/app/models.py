@@ -16,6 +16,7 @@ class User(Base):
     user_stat = Column(Text, default="Y")
     reject_remark = Column(Text)          # 승인불가 사유 (user_stat='R')
     default_siteid = Column(Text, ForeignKey("sites.siteid"))   # 기본사이트ID
+    work_hours_day = Column(REAL)           # 하루 개발시간(시간). NULL 이면 근무구간(WORK_SEGMENTS) 합계 적용
     create_date = Column(DateTime, default=datetime.now)
 
 

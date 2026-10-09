@@ -164,7 +164,7 @@ export default function TaskList() {
       <p className="hint">
         우선순위 순 정렬. 작업 수정·삭제·일정 재적용은 [관리자 → 작업스케줄] 화면에서 합니다.
         {cfg
-          ? ` (근무 ${cfg.segments.map(s => `${s.start}~${s.end}`).join(', ')} = 하루 ${cfg.work_hours_per_day}시간, 토·일·휴일·휴가 제외)`
+          ? ` (근무 ${cfg.segments.map(s => `${s.start}~${s.end}`).join(', ')} = 기본 하루 ${cfg.work_hours_per_day}시간(개발자별 설정 가능), 토·일·휴일·휴가 제외)`
           : ''}
       </p>
     </div>

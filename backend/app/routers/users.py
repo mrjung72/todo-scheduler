@@ -8,6 +8,7 @@ from ..schemas import UserCreate, UserUpdate, UserOut
 from ..security import (
     hash_password, verify_password, get_current_user,
 )
+from ..scheduler import recalculate
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -23,8 +24,16 @@ MANAGED_GRADES = {
     5: {7, 9},
 }
 
-# 관리 대상이 아닐 때 본인 계정에 허용되는 개인정보 항목
-PERSONAL_FIELDS = {"user_name", "dept_name", "job_title", "user_tel", "user_email"}
+# 관리 대상이 아닐 때 본인 계정에 허용되는 개인정보 항목 (하루작업시간 포함)
+PERSONAL_FIELDS = {"user_name", "dept_name", "job_title", "user_tel",
+                   "user_email", "work_hours_day"}
+
+
+def _check_work_hours(data: dict):
+    """하루 개발시간 값 검증 — 2~8 사이 정수. None/미설정이면 근무구간 기본값."""
+    v = data.get("work_hours_day")
+    if v is not None and not (float(v).is_integer() and 2 <= v <= 8):
+        raise HTTPException(400, "하루 개발시간은 2~8 사이의 정수로 입력하세요")
 
 
 def _managed(me: User) -> set:
@@ -88,6 +97,7 @@ def create_user(body: UserCreate, db: Session = Depends(get_db),
     if body.default_siteid and not db.get(Site, body.default_siteid):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     data = body.model_dump()
+    _check_work_hours(data)
     data["password"] = hash_password(data.pop("password") or "1234")
     obj = User(**data)
     db.add(obj)
@@ -117,6 +127,7 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
         data = {k: v for k, v in data.items() if k in PERSONAL_FIELDS}
         if not data:
             raise HTTPException(400, "수정할 수 있는 항목이 없습니다")
+    _check_work_hours(data)
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     # password는 값이 있을 때만 해시해서 반영 (빈 값은 무시)
@@ -127,6 +138,9 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
     for k, v in data.items():
         setattr(obj, k, v)
     db.commit()
+    # 하루 개발시간 변경 시 해당 작업자의 대기 작업 스케줄 자동 재계산
+    if "work_hours_day" in data:
+        recalculate(db, only_userid=userid)
     db.refresh(obj)
     return obj
 

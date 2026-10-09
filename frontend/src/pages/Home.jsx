@@ -45,8 +45,9 @@ export default function Home() {
                 {(t.task_start_date || t.task_end_date_estimated) &&
                   <span>{fmtDT(t.task_start_date)} ~ {fmtDT(t.task_end_date_estimated)}</span>}
                 <span>{t.work_hours_estimated}h
-                  {(cfg?.work_hours_per_day && t.work_hours_estimated) ?
-                    ` (총 ${+(t.work_hours_estimated / cfg.work_hours_per_day).toFixed(1)}일)` : ''}
+                  {(t.work_hours_estimated &&
+                    (t.work_hours_day || cfg?.work_hours_per_day)) ?
+                    ` (총 ${+(t.work_hours_estimated / (t.work_hours_day || cfg.work_hours_per_day)).toFixed(1)}일)` : ''}
                 </span>
               </div>
               {open && (

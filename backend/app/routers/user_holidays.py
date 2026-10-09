@@ -19,17 +19,18 @@ def _check_holiday_write(me: User, work_userid: str, db: Session):
 
 def _query(db: Session):
     return (
-        db.query(UserHoliday, User.user_name)
+        db.query(UserHoliday, User.user_name, User.work_hours_day)
         .outerjoin(User, User.userid == UserHoliday.work_userid)
     )
 
 
 def _to_out(row) -> UserHolidayOut:
-    hol, user_name = row
+    hol, user_name, user_hours_day = row
+    day_hours = user_hours_day or WORK_HOURS_PER_DAY   # 작업자별 하루시간 우선
     hrs = hol.holiday_hours or 0
-    if hol.holiday_category == "P" and 0 < hrs < WORK_HOURS_PER_DAY:
+    if hol.holiday_category == "P" and 0 < hrs < day_hours:
         # 일부휴가는 하루 근무의 뒤쪽 hrs 시간을 차지 -> 뒤쪽 비율 구간
-        span = [round(1 - hrs / WORK_HOURS_PER_DAY, 3), 1.0]
+        span = [round(1 - hrs / day_hours, 3), 1.0]
     else:
         span = [0.0, 1.0]
     return UserHolidayOut(

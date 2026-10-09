@@ -28,7 +28,8 @@ from sqlalchemy.orm import Session
 
 from .models import TaskChgLog, Task
 from .scheduler import (
-    get_calendar_map, get_holiday_map, workday_cal, work_hours_between,
+    get_calendar_map, get_holiday_map, get_user_hours_map, workday_cal,
+    work_hours_between,
 )
 
 ALLOWED_STAT = {
@@ -94,7 +95,7 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
             cal = workday_cal(get_calendar_map(db), stint_start.date())
             hours = work_hours_between(
                 stint_start, now, cal, get_holiday_map(db),
-                task.work_userid or "")
+                task.work_userid or "", get_user_hours_map(db))
             last_p.work_hours = hours
             task.work_hours_real = round(
                 (task.work_hours_real or 0) + hours, 2)

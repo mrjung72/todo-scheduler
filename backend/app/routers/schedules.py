@@ -13,8 +13,8 @@ from ..models import WorkScheduleLog, TaskChgLog, Task, User, Site
 from ..schemas import WorkLogCreate, WorkLogUpdate, WorkLogOut
 from ..security import get_current_user, check_owner_or_admin, require_staff
 from ..scheduler import (
-    get_calendar_map, get_holiday_map, workday_cal, daily_breakdown,
-    has_workday_between,
+    get_calendar_map, get_holiday_map, get_user_hours_map, workday_cal,
+    daily_breakdown, has_workday_between,
 )
 from ..statusflow import auto_start_due_tasks
 
@@ -47,7 +47,7 @@ def calendar_events(db: Session = Depends(get_db)):
     ReqUser = aliased(User)
     rows = (
         db.query(Task, WorkUser.user_name, WorkUser.dept_name,
-                 WorkUser.job_title, Site.site_name,
+                 WorkUser.job_title, WorkUser.work_hours_day, Site.site_name,
                  Task.req_userid, ReqUser.user_name,
                  ReqUser.dept_name, ReqUser.job_title)
         .outerjoin(WorkUser, WorkUser.userid == Task.work_userid)
@@ -58,8 +58,9 @@ def calendar_events(db: Session = Depends(get_db)):
     )
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
+    uhours = get_user_hours_map(db)
     events = []
-    for (task, work_user_name, work_user_dept, work_user_title,
+    for (task, work_user_name, work_user_dept, work_user_title, work_hours_day,
          site_name, req_userid, req_user_name,
          req_user_dept, req_user_title) in rows:
         if not task.task_start_date or not task.task_end_date_estimated:
@@ -79,6 +80,7 @@ def calendar_events(db: Session = Depends(get_db)):
                 "work_user_name": work_user_name,
                 "work_user_dept": work_user_dept,
                 "work_user_title": work_user_title,
+                "work_hours_day": work_hours_day,
                 "task_stat": task.task_stat,
                 "task_type": task.task_type,
                 "work_hours_estimated": task.work_hours_estimated,
@@ -99,7 +101,7 @@ def calendar_events(db: Session = Depends(get_db)):
                 "daily": daily_breakdown(
                     task.task_start_date, task.task_end_date_estimated,
                     workday_cal(cal, task.task_start_date.date()),
-                    hol, task.work_userid or ""),
+                    hol, task.work_userid or "", uhours),
             },
         })
     return events
