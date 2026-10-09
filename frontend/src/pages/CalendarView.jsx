@@ -139,6 +139,7 @@ export default function CalendarView() {
     holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
   const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
   const calRef = useRef(null)
+  const downOnOverlay = useRef(false)  // 오버레이에서 눌러 오버레이에서 뗀 클릭만 닫기
 
   const load = useCallback(async () => {
     const [{ data: evs }, { data: days }, { data: hols }] = await Promise.all([
@@ -190,6 +191,20 @@ export default function CalendarView() {
     setSelected(null)
     const date = info.dateStr.slice(0, 10)
     const day = dayMap[date.replaceAll('-', '')]
+    // 비스태프: 해당 일자에 본인 휴가가 이미 있으면 수정 모드로 연다
+    if (!staff) {
+      const exist = holEvents.find(e => e.start === date &&
+        e.extendedProps.work_userid === me.userid)
+      if (exist) {
+        const h = exist.extendedProps
+        setHolForm({ date, ...emptyHol, edit: true,
+          work_userid: h.work_userid,
+          holiday_category: h.holiday_category,
+          holiday_hours: h.holiday_hours || 4,
+          holiday_remark: h.holiday_remark || '' })
+        return
+      }
+    }
     setHolForm({ date, ...emptyHol,
       work_userid: staff ? '' : me.userid,   // 비스태프는 본인 고정
       date_stat: 'H',
@@ -215,16 +230,43 @@ export default function CalendarView() {
       }
     } else {
       if (!holForm.work_userid) return
-      await api.post('/user-holidays', {
-        dateid,
-        work_userid: holForm.work_userid,
+      const body = {
         holiday_category: holForm.holiday_category,
         holiday_hours: holForm.holiday_category === 'P' ? +holForm.holiday_hours : 0,
         holiday_remark: holForm.holiday_remark,
-      })
+      }
+      // 수정 모드이거나 해당 일자+작업자의 휴가가 이미 있으면 갱신(PUT)
+      const exist = holForm.edit || holEvents.some(e =>
+        e.start === holForm.date &&
+        e.extendedProps.work_userid === holForm.work_userid)
+      if (exist) {
+        await api.put(`/user-holidays/${dateid}/${holForm.work_userid}`, body)
+      } else {
+        await api.post('/user-holidays', {
+          dateid, work_userid: holForm.work_userid, ...body })
+      }
     }
     setHolForm(null)
     load()
+  }
+
+  const delHoliday = async () => {
+    if (!window.confirm('휴가를 삭제할까요?')) return
+    await api.delete(`/user-holidays/${selected.dateid}/${selected.work_userid}`)
+    setSelected(null)
+    load()
+  }
+
+  // 휴가 조회 팝업에서 수정 모드로 전환
+  const editHoliday = () => {
+    const h = selected, d = h.dateid
+    setHolForm({ date: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
+      ...emptyHol, edit: true,
+      work_userid: h.work_userid,
+      holiday_category: h.holiday_category,
+      holiday_hours: h.holiday_hours || 4,
+      holiday_remark: h.holiday_remark || '' })
+    setSelected(null)
   }
 
   const onEventClick = (info) => {
@@ -338,7 +380,12 @@ export default function CalendarView() {
         datesSet={load}
       />
       {selected?.holiday && (
-        <div className="popup" onClick={() => setSelected(null)}>
+        <div className="popup"
+          onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
+          onClick={e => {
+            if (e.target === e.currentTarget && downOnOverlay.current) setSelected(null)
+            downOnOverlay.current = false
+          }}>
           <div className="popup-body" onClick={e => e.stopPropagation()}>
             <h3 className="popup-title" style={{ background: '#fb8c00' }}>
               {selected.start &&
@@ -351,6 +398,12 @@ export default function CalendarView() {
               {selected.holiday_remark && <p><b>설명</b> {selected.holiday_remark}</p>}
             </div>
             <div className="popup-btns">
+              {canReg && (staff || selected.work_userid === me?.userid) && (
+                <>
+                  <button className="primary" onClick={editHoliday}>수정</button>
+                  <button onClick={delHoliday}>삭제</button>
+                </>
+              )}
               <button onClick={() => setSelected(null)}>닫기</button>
             </div>
           </div>
@@ -359,11 +412,16 @@ export default function CalendarView() {
       {selTask && <TaskDetailPopup task={selTask}
         onClose={() => setSelTask(null)} onChanged={load} />}
       {holForm && (
-        <div className="popup" onClick={() => setHolForm(null)}>
+        <div className="popup"
+          onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
+          onClick={e => {
+            if (e.target === e.currentTarget && downOnOverlay.current) setHolForm(null)
+            downOnOverlay.current = false
+          }}>
           <div className="popup-body" onClick={e => e.stopPropagation()}>
-            <h3>{holForm.date.slice(5).replace('-', '/')} 휴일/휴가 등록</h3>
+            <h3>{holForm.date.slice(5).replace('-', '/')} {holForm.edit ? '휴가 수정' : '휴일/휴가 등록'}</h3>
             <form className="holiday-form" onSubmit={saveHoliday}>
-              {canRegDay && (
+              {!holForm.edit && canRegDay && (
                 <label>등록구분
                   <select value={holForm.kind}
                     onChange={e => setHolForm({ ...holForm, kind: e.target.value })}>
@@ -376,14 +434,27 @@ export default function CalendarView() {
                 <>
                   <label>작업자
                     {staff ? (
-                      <select required value={holForm.work_userid}
-                        onChange={e => setHolForm({ ...holForm, work_userid: e.target.value })}>
+                      <select required disabled={!!holForm.edit}
+                        value={holForm.work_userid}
+                        onChange={e => {
+                          const uid = e.target.value
+                          // 선택한 작업자가 해당일 휴가를 이미 등록했으면 수정 모드로
+                          const exist = holEvents.find(ev => ev.start === holForm.date &&
+                            ev.extendedProps.work_userid === uid)
+                          setHolForm(exist
+                            ? { ...holForm, work_userid: uid, edit: true,
+                                holiday_category: exist.extendedProps.holiday_category,
+                                holiday_hours: exist.extendedProps.holiday_hours || 4,
+                                holiday_remark: exist.extendedProps.holiday_remark || '' }
+                            : { ...holForm, work_userid: uid, edit: false })
+                        }}>
                         <option value="">선택</option>
                         {users.filter(u => [1, 4].includes(u.user_grade))
                           .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
                       </select>
                     ) : (
-                      <span>{users.find(u => u.userid === me.userid)?.user_name || me.userid}</span>
+                      <span>{users.find(u => u.userid === holForm.work_userid)?.user_name
+                        || holForm.work_userid}</span>
                     )}
                   </label>
                   <label>구분
@@ -415,7 +486,7 @@ export default function CalendarView() {
                   onChange={e => setHolForm({ ...holForm, holiday_remark: e.target.value })} />
               </label>
               <div className="popup-btns">
-                <button type="submit" className="primary">등록</button>
+                <button type="submit" className="primary">{holForm.edit ? '저장' : '등록'}</button>
                 <button type="button" onClick={() => setHolForm(null)}>취소</button>
               </div>
             </form>

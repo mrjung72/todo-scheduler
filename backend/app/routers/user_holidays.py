@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import UserHoliday, User
 from ..schemas import UserHolidayCreate, UserHolidayUpdate, UserHolidayOut
-from ..scheduler import WORK_HOURS_PER_DAY
+from ..scheduler import WORK_HOURS_PER_DAY, recalculate
 from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/user-holidays", tags=["user-holidays"])
@@ -64,6 +64,8 @@ def create_holiday(body: UserHolidayCreate, db: Session = Depends(get_db),
     obj = UserHoliday(**body.model_dump())
     db.add(obj)
     db.commit()
+    # 휴가 등록 시 해당 작업자의 대기 작업 스케줄 자동 재계산
+    recalculate(db, only_userid=body.work_userid)
     row = _query(db).filter(
         UserHoliday.dateid == body.dateid,
         UserHoliday.work_userid == body.work_userid,
@@ -82,6 +84,8 @@ def update_holiday(dateid: str, work_userid: str, body: UserHolidayUpdate,
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(obj, k, v)
     db.commit()
+    # 휴가 수정 시 해당 작업자의 대기 작업 스케줄 자동 재계산
+    recalculate(db, only_userid=work_userid)
     row = _query(db).filter(
         UserHoliday.dateid == dateid, UserHoliday.work_userid == work_userid
     ).first()
@@ -97,3 +101,5 @@ def delete_holiday(dateid: str, work_userid: str, db: Session = Depends(get_db),
         raise HTTPException(404, "휴가를 찾을 수 없습니다")
     db.delete(obj)
     db.commit()
+    # 휴가 삭제 시에도 해당 작업자의 대기 작업 스케줄 자동 재계산
+    recalculate(db, only_userid=work_userid)
