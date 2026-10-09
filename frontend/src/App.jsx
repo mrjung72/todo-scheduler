@@ -8,6 +8,7 @@ import CalendarView from './pages/CalendarView'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import DocView from './pages/DocView'
 
 export default function App() {
   const [cfg, setCfg] = useState(null)
@@ -59,6 +60,14 @@ export default function App() {
     setMe(null)
   }
 
+  const footer = (
+    <footer className="app-footer">
+      <span>Copyright © 클린소프트(Clean Soft). All rights reserved.</span>
+      <Link to="/docs/manual">사용자매뉴얼</Link>
+      <Link to="/docs/history">버전변경이력</Link>
+    </footer>
+  )
+
   // 비로그인: 홈 화면만 공개, [로그인] 버튼으로 로그인 화면 전환
   if (!me || !localStorage.getItem('token')) {
     if (signupInit !== null)
@@ -80,9 +89,11 @@ export default function App() {
         <main>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/docs/:name" element={<DocView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        {footer}
       </div>
     )
   }
@@ -116,11 +127,13 @@ export default function App() {
           <Route path="/tasks" element={<TaskList />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/calendar" element={<CalendarView />} />
+          <Route path="/docs/:name" element={<DocView />} />
           <Route path="/admin" element={
             [0, 1].includes(me.user_grade) ? <Admin /> : <Navigate to="/tasks" replace />
           } />
         </Routes>
       </main>
+      {footer}
       {profile && (
         <div className="popup" onClick={() => setProfile(null)}>
           <div className="popup-body" onClick={e => e.stopPropagation()}>
