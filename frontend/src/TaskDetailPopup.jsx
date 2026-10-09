@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor } from './api'
+
+// 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
+const highlightCode = text => {
+  if (!text) return { __html: '' }
+  const r = hljs.highlightAuto(text)
+  if (r.relevance < 5) return null   // 일반 텍스트로 판단
+  return { __html: r.value }
+}
 
 // 달력 작업 팝업과 동일한 스타일의 작업 상세 팝업 (칸반/작업목록 공용)
 // task: /api/tasks 의 TaskDetail 형태 (task_start_date, task_stat 등 포함)
@@ -127,7 +137,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         {pview === 'his' ? (
           <div className="his-cols">
           <div className="his-col">
-          <b className="blk-title">작업상태변경이력</b>
+          <b className="blk-title">상태변경이력</b>
           <div className="popup-info">
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
@@ -152,7 +162,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           </div>
           <div className="his-col">
           <div className="blk-title">
-            작업이력
+            <b className="blk-title">작업이력</b>
             <button className="link req-edit-btn"
               onClick={() => { setLogView({ work_remark: '' })
                 setLogForm({ work_remark: '' }) }}>등록</button>
@@ -282,12 +292,19 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               if (!logs) loadLogs()
             }
           }}>
-            {pview === 'his' ? '작업요청정보' : '상태변경이력'}
+            {pview === 'his' ? '작업요청정보' : '작업이력'}
           </button>
           <button onClick={onClose}>닫기</button>
         </div>
         {logView && (
-          <div className="popup log-pop" onClick={() => { setLogView(null); setLogForm(null) }}>
+          <div className="popup log-pop"
+            onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
+            onClick={e => {
+              if (e.target === e.currentTarget && downOnOverlay.current) {
+                setLogView(null); setLogForm(null)
+              }
+              downOnOverlay.current = false
+            }}>
             <div className="popup-body" onClick={e => e.stopPropagation()}>
               <b className="blk-title" style={{ marginTop: 0 }}>작업내용</b>
               {logForm ? (
@@ -304,8 +321,14 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 </>
               ) : (
                 <>
-                  <div className="log-detail">{logView.work_remark || ''}</div>
-                  <div className="daily" style={{ borderTop: 'none', paddingTop: 0 }}>
+                  {(() => {
+                    const html = highlightCode(logView.work_remark)
+                    return html
+                      ? <pre className="log-detail hljs"
+                          dangerouslySetInnerHTML={html} />
+                      : <div className="log-detail">{logView.work_remark || ''}</div>
+                  })()}
+                  <div className="daily log-attach" style={{ borderTop: 'none', paddingTop: 0 }}>
                     <b>첨부파일</b>
                     <table>
                       <tbody>

@@ -270,13 +270,27 @@ table.grid td.clickable:hover { background: #eff6ff; }
   text-overflow: ellipsis; white-space: nowrap; text-align: left;
 }
 .log-pop { z-index: 110; }
-.log-pop .popup-body { width: 560px; max-width: 90vw; }
+.log-pop .popup-body {
+  width: 560px; max-width: 90vw; max-height: 90vh;
+  resize: both; overflow: auto;
+}
 .log-detail {
   white-space: pre-wrap; word-break: break-word;
   font-size: 13px; line-height: 1.6;
   background: #fdf3e7; border: 1px solid #f3e0c3; border-radius: 8px;
   padding: 10px 12px; min-height: 60px;
   max-height: 60vh; overflow-y: auto;
+}
+/* 소스 하이라이트 적용 시 코드 스타일 */
+pre.log-detail.hljs {
+  margin: 0; font-family: Consolas, 'Courier New', monospace;
+  background: #f6f8fa; border-color: #d0d7de;
+}
+/* 작업내용 팝업의 첨부파일 영역 */
+.log-attach {
+  margin-top: 10px; font-size: 13px;
+  background: #f4f7fc; border: 1px solid #dde6f2; border-radius: 8px;
+  padding: 8px 12px;
 }
 .req-edit, .log-edit textarea {
   width: 100%; margin-top: 6px; padding: 6px 8px; font-size: 13px;
@@ -362,8 +376,8 @@ table.grid td.clickable:hover { background: #eff6ff; }
 /* 상태변경이력/작업이력 좌우 배치 */
 .his-cols { display: flex; gap: 16px; align-items: flex-start; }
 .his-cols .his-col { flex: 1 1 0; min-width: 0; }
-.his-cols .his-col:first-child { flex: 4 1 0; }
-.his-cols .his-col:last-child { flex: 6 1 0; }
+.his-cols .his-col:first-child { flex: 3 1 0; }
+.his-cols .his-col:last-child { flex: 7 1 0; }
 .his-cols .blk-title { margin-top: 0; }
 .daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }
 .daily table { width: 100%; border-collapse: collapse; margin-top: 4px; }
