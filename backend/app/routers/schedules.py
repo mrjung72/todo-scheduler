@@ -5,7 +5,7 @@
 - 변경이력: 상태 전이 시 statusflow에서 자동 기록된 로그 조회/삭제
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, aliased
 
 from ..database import get_db
@@ -53,7 +53,9 @@ def calendar_events(db: Session = Depends(get_db)):
         .outerjoin(WorkUser, WorkUser.userid == Task.work_userid)
         .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(Site, Site.siteid == Task.siteid)
-        .filter(or_(Task.task_stat.in_(["W", "P"]), Task.holiday_work == 1))
+        .filter(or_(Task.task_stat.in_(["W", "P"]),
+                    and_(Task.holiday_work == 1,
+                         Task.task_stat.notin_(["F", "X"]))))
         .all()
     )
     cal = get_calendar_map(db)
