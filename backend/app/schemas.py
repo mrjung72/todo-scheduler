@@ -186,6 +186,8 @@ class TaskChgLogOut(BaseModel):
     task_stat: Optional[str] = None
     work_hours: Optional[float] = 0
     remark: Optional[str] = None
+    work_userid: Optional[str] = None      # 이력 시점의 작업자
+    work_user_name: Optional[str] = None   # 조회용 (users 조인)
     create_date: Optional[datetime] = None
 
 

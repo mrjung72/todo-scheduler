@@ -89,6 +89,7 @@ class TaskChgLog(Base):
     task_stat = Column(Text)               # 변경된 작업상태
     work_hours = Column(REAL, default=0)   # 작업기간(시간), 작업중 구간에만 적용
     remark = Column(Text)                  # 비고
+    work_userid = Column(Text)             # 상태를 변경한 사용자ID
     create_date = Column(DateTime, default=datetime.now)
 
 

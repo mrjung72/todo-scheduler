@@ -131,6 +131,20 @@ def migrate(db):
                         "WHERE req_date IS NULL"))
     if "task_type" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN task_type TEXT"))
+    # task_chg_log.work_userid 추가 (기존 이력은 작업의 현재 작업자로 백필)
+    if "task_chg_log" in {r[0] for r in db.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table'"))}:
+        cols = {r[1] for r in db.execute(
+            text("PRAGMA table_info(task_chg_log)"))}
+        if "work_userid" not in cols:
+            db.execute(text(
+                "ALTER TABLE task_chg_log ADD COLUMN work_userid TEXT"))
+            db.execute(text("""
+                UPDATE task_chg_log SET work_userid =
+                  (SELECT t.work_userid FROM tasks t
+                   WHERE t.taskid = task_chg_log.taskid)
+                WHERE work_userid IS NULL
+            """))
 
     tables = {r[0] for r in db.execute(
         text("SELECT name FROM sqlite_master WHERE type='table'"))}
@@ -177,18 +191,23 @@ def migrate(db):
                     task_stat TEXT,
                     work_hours REAL DEFAULT 0,
                     remark TEXT,
+                    work_userid TEXT,
                     create_date DATETIME
                 )
             """))
             db.execute(text("""
                 INSERT OR IGNORE INTO task_chg_log
-                    (taskchgid, taskid, task_stat, work_hours, remark, create_date)
+                    (taskchgid, taskid, task_stat, work_hours, remark,
+                     work_userid, create_date)
                 SELECT h.workschhisid,
                        (SELECT w.taskid FROM work_schedule w
                         WHERE w.workschid = h.workschid),
                        CASE h.work_stat WHEN 'C' THEN 'X' WHEN 'D' THEN 'H'
                             ELSE h.work_stat END,
-                       h.work_hours, h.remark, h.create_date
+                       h.work_hours, h.remark,
+                       (SELECT w.work_userid FROM work_schedule w
+                        WHERE w.workschid = h.workschid),
+                       h.create_date
                 FROM work_schedule_his h
             """))
             db.execute(text("DROP TABLE work_schedule_his"))

@@ -86,19 +86,22 @@ def calendar_events(db: Session = Depends(get_db)):
 @router.get("/his")
 def all_chg_logs(db: Session = Depends(get_db)):
     """전체 작업 상태변경이력 (최근 이력 순, 관리자화면용)."""
-    rows = (db.query(TaskChgLog, Task.task_name, Task.work_userid)
+    WorkUser = aliased(User)
+    rows = (db.query(TaskChgLog, Task.task_name, WorkUser.user_name)
             .outerjoin(Task, Task.taskid == TaskChgLog.taskid)
+            .outerjoin(WorkUser, WorkUser.userid == TaskChgLog.work_userid)
             .order_by(TaskChgLog.taskchgid.desc()).all())
     return [{
         "taskchgid": h.taskchgid,
         "taskid": h.taskid,
         "task_name": task_name,
-        "work_userid": work_userid,
+        "work_userid": h.work_userid,
+        "work_user_name": work_user_name,
         "task_stat": h.task_stat,
         "work_hours": h.work_hours,
         "remark": h.remark,
         "create_date": h.create_date,
-    } for h, task_name, work_userid in rows]
+    } for h, task_name, work_user_name in rows]
 
 
 @router.delete("/his", status_code=204)

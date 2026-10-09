@@ -158,7 +158,8 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
     db.flush()  # taskid 확보
     # 등록 상태를 상태변경이력 첫 행으로 기록
     db.add(TaskChgLog(taskid=task.taskid, task_stat=task.task_stat or "R",
-                      work_hours=0, remark="등록", create_date=now))
+                      work_hours=0, remark="등록",
+                      work_userid=me.userid, create_date=now))
     db.commit()
     db.refresh(task)
     return task
@@ -192,7 +193,8 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         setattr(obj, k, v)
     # 작업상태 변경: 전이 규칙 검증 + 이력 기록
     if new_stat is not None:
-        apply_task_stat_change(db, obj, new_stat, remark)
+        apply_task_stat_change(db, obj, new_stat, remark,
+                               actor_userid=me.userid)
     # 예상 작업시간 변경 시 시작일시가 잡힌 작업의 종료예상일시 재계산
     if "work_hours_estimated" in data and obj.task_start_date:
         cal = get_calendar_map(db)
@@ -284,6 +286,9 @@ def daily_hours(taskid: int, db: Session = Depends(get_db)):
 @router.get("/{taskid}/his", response_model=list[TaskChgLogOut])
 def task_his(taskid: int, db: Session = Depends(get_db)):
     """작업 상태변경이력 (최근 이력 순)."""
-    return (db.query(TaskChgLog)
+    rows = (db.query(TaskChgLog, WorkUser.user_name)
+            .outerjoin(WorkUser, WorkUser.userid == TaskChgLog.work_userid)
             .filter(TaskChgLog.taskid == taskid)
             .order_by(TaskChgLog.taskchgid.desc()).all())
+    return [{**{c.name: getattr(h, c.name) for c in TaskChgLog.__table__.columns},
+             "work_user_name": name} for h, name in rows]

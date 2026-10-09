@@ -54,8 +54,9 @@ def _check(prev: str, new_stat: str):
 
 
 def apply_task_stat_change(db: Session, task: Task, new_stat: str,
-                           remark: str = None):
-    """작업 task_stat 전이 규칙 적용 + task_chg_log 이력 기록."""
+                           remark: str = None, actor_userid: str = None):
+    """작업 task_stat 전이 규칙 적용 + task_chg_log 이력 기록.
+    work_userid = 상태를 실제로 변경한 사용자(actor), 미지정 시 작업자."""
     prev = task.task_stat or "R"
     if prev == new_stat:
         return
@@ -95,4 +96,6 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
             task.work_hours_real = round(
                 (task.work_hours_real or 0) + hours, 2)
     db.add(TaskChgLog(taskid=task.taskid, task_stat=new_stat,
-                      work_hours=0, remark=remark, create_date=now))
+                      work_hours=0, remark=remark,
+                      work_userid=actor_userid or task.work_userid,
+                      create_date=now))

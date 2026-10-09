@@ -689,7 +689,12 @@ function TasksTab() {
       <form className="newtask" onSubmit={add}>
         <input required placeholder="작업명" value={form.task_name}
           onChange={e => setForm({ ...form, task_name: e.target.value })} />
-        <select value={form.siteid} onChange={e => setForm({ ...form, siteid: e.target.value })}>
+        <select value={form.siteid} onChange={e => {
+          const sid = e.target.value
+          // 사이트에 지정된 IT담당자를 기본값으로 적용
+          const itos = sites.find(s => s.siteid === sid)?.itos_userid || ''
+          setForm({ ...form, siteid: sid, itos_userid: itos })
+        }}>
           {sopt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <select value={form.task_type}
@@ -1158,7 +1163,7 @@ function SchedHisTab() {
   const kw = q.trim().toLowerCase()
   const filtered = rows
     .filter(r => !kw ||
-      [r.taskid, r.task_name, r.work_userid,
+      [r.taskid, r.task_name, r.work_userid, r.work_user_name,
        STAT_LABEL[r.task_stat], r.remark]
         .some(v => (v ?? '').toString().toLowerCase().includes(kw)))
     .filter(r => !siteF || taskOf(r.taskid)?.siteid === siteF)
@@ -1169,7 +1174,8 @@ function SchedHisTab() {
     { label: '이력ID', field: 'taskchgid' },
     { label: '작업ID', field: 'taskid' },
     { label: '작업명(참조)', field: '_task_name', get: r => r.task_name || '' },
-    { label: '작업자', field: 'work_userid' },
+    { label: '변경자(참조)', field: '_work_name', get: r => r.work_user_name || '' },
+    { label: '변경자ID', field: 'work_userid' },
     { label: '변경상태', field: 'task_stat', get: r => STAT_LABEL[r.task_stat] ?? r.task_stat },
     { label: '작업기간(H)', field: 'work_hours' },
     { label: '비고', field: 'remark' },
@@ -1188,7 +1194,7 @@ function SchedHisTab() {
           {Object.entries(STAT_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}</option>)}
         </select>
-        <input placeholder="검색 (작업/작업자/상태/비고)" value={q}
+        <input placeholder="검색 (작업/변경자/상태/비고)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
           saveFilter('admin-schedhis', { site: siteF, stat: statF, q })
@@ -1200,7 +1206,7 @@ function SchedHisTab() {
       </div>
       <table className="grid">
         <thead><tr>
-          <th>이력ID</th><th>작업</th><th>작업자</th>
+          <th>이력ID</th><th>작업</th><th>변경자</th>
           <th>변경상태</th><th className="r">작업기간<br/>(Hour)</th><th>비고</th><th>등록일시</th>
           {staff && <th></th>}
         </tr></thead>
@@ -1212,7 +1218,7 @@ function SchedHisTab() {
                 ? <button className="link" onClick={() => setSelTask(taskOf(r.taskid))}>
                     {r.task_name || `작업#${r.taskid}`}</button>
                 : (r.task_name || `작업#${r.taskid}` || '-')}</td>
-              <td>{r.work_userid || '-'}</td>
+              <td>{r.work_user_name || r.work_userid || '-'}</td>
               <td className="c">{STAT_LABEL[r.task_stat] ?? r.task_stat}</td>
               <td className="r">{r.work_hours || 0}</td>
               <td>{r.remark || ''}</td>

@@ -195,7 +195,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               <b>작업상태변경이력</b>
               <table>
                 <thead><tr>
-                  <th>등록일시</th><th>변경상태</th>
+                  <th>등록일시</th><th>변경상태</th><th>변경자</th>
                   <th className="r">작업기간</th><th>비고</th>
                 </tr></thead>
                 <tbody>
@@ -203,12 +203,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     <tr key={h.taskchgid}>
                       <td className="c">{fmtDT(h.create_date)}</td>
                       <td>{STAT_LABEL[h.task_stat] ?? h.task_stat}</td>
+                      <td>{h.work_user_name || h.work_userid || '-'}</td>
                       <td className="r">{h.work_hours ? `${h.work_hours}h` : '-'}</td>
                       <td>{h.remark || ''}</td>
                     </tr>
                   ))}
                   {(!his || !his.length) && (
-                    <tr><td colSpan="4" className="empty">이력이 없습니다</td></tr>
+                    <tr><td colSpan="5" className="empty">이력이 없습니다</td></tr>
                   )}
                 </tbody>
               </table>
