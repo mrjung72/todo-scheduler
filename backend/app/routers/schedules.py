@@ -24,12 +24,16 @@ def list_work_logs(
     work_userid: str = Query(None),
     db: Session = Depends(get_db),
 ):
-    q = db.query(WorkScheduleLog)
+    q = (db.query(WorkScheduleLog, User.user_name)
+           .outerjoin(User, User.userid == WorkScheduleLog.work_userid))
     if taskid is not None:
         q = q.filter(WorkScheduleLog.taskid == taskid)
     if work_userid:
         q = q.filter(WorkScheduleLog.work_userid == work_userid)
-    return q.order_by(WorkScheduleLog.workschid).all()
+    rows = q.order_by(WorkScheduleLog.workschid).all()
+    return [WorkLogOut(**{k: v for k, v in vars(w).items() if not k.startswith('_')},
+                       work_user_name=uname)
+            for w, uname in rows]
 
 
 @router.get("/events")

@@ -80,6 +80,13 @@ button.link {
   text-decoration: underline; padding: 0 4px;
 }
 button.link:hover { background: none; color: #1d4ed8; }
+/* label 타입의 파일첨부 버튼 (숨긴 file input 포함) */
+label.btn-file {
+  display: inline-block; cursor: pointer; padding: 5px 12px;
+  font-size: 13px; background: #fff; border: 1px solid #d1d5db;
+  border-radius: 4px;
+}
+label.btn-file:hover { background: #f3f4f6; }
 input.num { width: 64px; }
 
 .newtask {
@@ -251,10 +258,30 @@ table.grid td.clickable:hover { background: #eff6ff; }
   margin-left: auto; flex-shrink: 0; font-size: 10px; padding: 0 4px;
   border-radius: 3px; background: rgba(255,255,255,.3); line-height: 1.5;
 }
-/* 작업요청 상세 내용 (팝업) */
+/* 작업요청 상세 내용 (팝업): 내부 스크롤 없이 전체 표시 — 팝업 자체가 스크롤 */
 .req-detail {
   white-space: pre-wrap; word-break: break-word;
-  max-height: 240px; overflow-y: auto; font-size: 13px; line-height: 1.6;
+  font-size: 13px; line-height: 1.6; margin-top: 4px;
+}
+.req-edit-btn { float: right; font-size: 12px; }
+/* 작업이력 작업내용: 목록은 한 줄 말줄임, 클릭 시 상세 팝업 */
+.log-link {
+  display: block; max-width: 320px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; text-align: left;
+}
+.log-pop { z-index: 110; }
+.log-pop .popup-body { width: 560px; max-width: 90vw; }
+.log-detail {
+  white-space: pre-wrap; word-break: break-word;
+  font-size: 13px; line-height: 1.6;
+  background: #fdf3e7; border: 1px solid #f3e0c3; border-radius: 8px;
+  padding: 10px 12px; min-height: 60px;
+  max-height: 60vh; overflow-y: auto;
+}
+.req-edit, .log-edit textarea {
+  width: 100%; margin-top: 6px; padding: 6px 8px; font-size: 13px;
+  border: 1px solid #d1d5db; border-radius: 4px; resize: vertical;
+  box-sizing: border-box;
 }
 /* 팝업 첨부파일 등록 행 */
 .attach-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
@@ -281,8 +308,11 @@ table.grid td.clickable:hover { background: #eff6ff; }
   color: #fff; padding: 8px 12px; border-radius: 6px;
   margin: -8px -8px 10px; font-size: 16px;
 }
-/* 작업 상세 팝업: 타이틀 한글 50자 이상 표시 가능한 너비 */
-.popup-body.task-popup { min-width: 860px; }
+/* 작업 상세 팝업: 우하단 드래그로 크기 조절 가능 */
+.popup-body.task-popup {
+  width: 900px; max-width: 95vw; max-height: 92vh;
+  resize: both; overflow: auto;
+}
 .popup-title .pt-row1 {
   display: flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 400;
@@ -327,6 +357,14 @@ table.grid td.clickable:hover { background: #eff6ff; }
   border-left: 1px solid #f3e0c3; padding-left: 16px;
   font-size: 14px;   /* 작업정보 본문과 동일 크기 */
 }
+/* 팝업 블록 바깥 타이틀 */
+.blk-title { display: block; font-size: 14px; margin: 10px 0 4px; color: #334155; }
+/* 상태변경이력/작업이력 좌우 배치 */
+.his-cols { display: flex; gap: 16px; align-items: flex-start; }
+.his-cols .his-col { flex: 1 1 0; min-width: 0; }
+.his-cols .his-col:first-child { flex: 4 1 0; }
+.his-cols .his-col:last-child { flex: 6 1 0; }
+.his-cols .blk-title { margin-top: 0; }
 .daily { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 13px; }
 .daily table { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .daily td { padding: 2px 0; }

@@ -176,6 +176,7 @@ class WorkLogOut(WorkLogBase):
     model_config = ConfigDict(from_attributes=True)
     workschid: int
     create_date: Optional[datetime] = None
+    work_user_name: Optional[str] = None   # 작업자명 (users 조인)
 
 
 # ---------- task_chg_log (작업상태변경이력) ----------

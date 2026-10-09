@@ -20,9 +20,16 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [pview, setPview] = useState('info')  // info(기본: 작업정보+요청내용) | his
   const [daily, setDaily] = useState(null)
   const [his, setHis] = useState(null)
+  const [logs, setLogs] = useState(null)
+  const [logForm, setLogForm] = useState(null)   // {workschid?, work_remark} 작업이력 등록/수정
+  const [logView, setLogView] = useState(null)   // 작업내용 상세 팝업
+  const isStaff = me && [0, 1].includes(me.user_grade)
   const [files, setFiles] = useState(null)
   const [cfg, setCfg] = useState(null)
+  const [reqText, setReqText] = useState(task.task_req_remark || '')
+  const [reqEdit, setReqEdit] = useState(null)
   const fileRef = useRef(null)
+  const downOnOverlay = useRef(false)   // mousedown이 오버레이에서 시작됐는지
 
   useEffect(() => {
     api.get(`/tasks/${task.taskid}/daily`)
@@ -30,6 +37,39 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
     loadFiles()   // 첨부파일 목록
   }, [task.taskid])
+
+  const loadLogs = () =>
+    api.get('/schedules', { params: { taskid: task.taskid } })
+      .then(r => setLogs(r.data)).catch(console.error)
+
+  const saveLog = async () => {
+    try {
+      if (logView?.workschid) {
+        await api.put(`/schedules/${logView.workschid}`, {
+          work_remark: logForm.work_remark })
+        setLogView(v => ({ ...v, work_remark: logForm.work_remark }))
+      } else {
+        await api.post('/schedules', {
+          taskid: task.taskid,
+          work_remark: logForm.work_remark,
+          work_userid: me.userid })
+        setLogView(null)
+      }
+      setLogForm(null)
+      loadLogs()
+    } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
+  const saveReq = async () => {
+    try {
+      await api.put(`/tasks/${task.taskid}`, { task_req_remark: reqEdit || null })
+      setReqText(reqEdit)
+      setReqEdit(null)
+      onChanged?.()
+    } catch (ex) {
+      alert(ex.response?.data?.detail || '저장에 실패했습니다')
+    }
+  }
 
   const loadFiles = () => {
     api.get('/attach-files', { params: { taskid: task.taskid } })
@@ -44,15 +84,17 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         a.click()
         URL.revokeObjectURL(a.href)
       }).catch(e => alert(e.response?.data?.detail || '다운로드 실패'))
-  const uploadFile = async () => {
-    const f = fileRef.current?.files?.[0]
+  const uploadFile = async (workschid = null, ev = null) => {
+    const f = ev ? ev.target.files?.[0] : fileRef.current?.files?.[0]
     if (!f) { alert('첨부할 파일을 선택하세요'); return }
     const fd = new FormData()
     fd.append('file', f)
     fd.append('taskid', task.taskid)
+    if (workschid) fd.append('workschid', workschid)
     try {
       await api.post('/attach-files', fd)
-      fileRef.current.value = ''
+      if (ev) ev.target.value = ''
+      else fileRef.current.value = ''
       loadFiles()
     } catch (e) { alert(e.response?.data?.detail || '업로드 실패') }
   }
@@ -63,7 +105,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
       ? +(task.work_hours_estimated / cfg.work_hours_per_day).toFixed(1) : null)
 
   return (
-    <div className="popup" onClick={onClose}>
+    <div className="popup"
+      onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
+      onClick={e => {
+        // 오버레이에서 눌러 오버레이에서 뗀 클릭만 닫기 — 리사이즈 드래그 종료 클릭 무시
+        if (e.target === e.currentTarget && downOnOverlay.current) onClose()
+        downOnOverlay.current = false
+      }}>
       <div className="popup-body task-popup" onClick={e => e.stopPropagation()}>
         <h3 className="popup-title" style={{ background: taskColor(task.taskid) }}>
           <div className="pt-row1">
@@ -77,13 +125,14 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           <div className="pt-row2">{task.task_name}</div>
         </h3>
         {pview === 'his' ? (
+          <div className="his-cols">
+          <div className="his-col">
+          <b className="blk-title">작업상태변경이력</b>
           <div className="popup-info">
-            <div className="daily">
-              <b>작업상태변경이력</b>
+            <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
                 <thead><tr>
                   <th>등록일시</th><th>변경상태</th><th>변경자</th>
-                  <th className="r">작업기간</th><th>비고</th>
                 </tr></thead>
                 <tbody>
                   {(his || []).map(h => (
@@ -91,16 +140,50 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                       <td className="c">{fmtDT(h.create_date)}</td>
                       <td>{STAT_LABEL[h.task_stat] ?? h.task_stat}</td>
                       <td>{h.work_user_name || h.work_userid || '-'}</td>
-                      <td className="r">{h.work_hours ? `${h.work_hours}h` : '-'}</td>
-                      <td>{h.remark || ''}</td>
                     </tr>
                   ))}
                   {(!his || !his.length) && (
-                    <tr><td colSpan="5" className="empty">이력이 없습니다</td></tr>
+                    <tr><td colSpan="3" className="empty">이력이 없습니다</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+          </div>
+          </div>
+          <div className="his-col">
+          <div className="blk-title">
+            작업이력
+            <button className="link req-edit-btn"
+              onClick={() => { setLogView({ work_remark: '' })
+                setLogForm({ work_remark: '' }) }}>등록</button>
+          </div>
+          <div className="popup-info">
+            <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
+              <table>
+                <thead><tr>
+                  <th>등록일시</th><th>작업자</th><th>작업내용</th>
+                </tr></thead>
+                <tbody>
+                  {(logs || []).map(l => (
+                    <tr key={l.workschid}>
+                      <td className="c">{fmtDT(l.create_date)}</td>
+                      <td>{l.work_user_name || l.work_userid || '-'}</td>
+                      <td>
+                        <button className="link log-link"
+                          onClick={() => setLogView(l)}>
+                          {l.work_remark || ''}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(!logs || !logs.length) && (
+                    <tr><td colSpan="3" className="empty">작업이력이 없습니다</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          </div>
           </div>
         ) : (
           <div className="popup-info info-daily">
@@ -140,15 +223,33 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           </div>
         )}
         {pview === 'info' && (
+          <>
+          <div className="blk-title">
+            작업요청내용
+            {canEdit && reqEdit === null &&
+              <button className="link req-edit-btn"
+                onClick={() => setReqEdit(reqText)}>수정</button>}
+          </div>
           <div className="popup-info req-info">
-            <div className="req-detail">
-              {task.task_req_remark || '작업요청 내용이 없습니다'}
-            </div>
+            {reqEdit !== null ? (
+              <>
+                <textarea className="req-edit" rows="10" value={reqEdit}
+                  onChange={e => setReqEdit(e.target.value)} />
+                <div className="popup-btns">
+                  <button className="primary" onClick={saveReq}>저장</button>
+                  <button onClick={() => setReqEdit(null)}>취소</button>
+                </div>
+              </>
+            ) : (
+              <div className="req-detail">
+                {reqText || '작업요청 내용이 없습니다'}
+              </div>
+            )}
             <div className="daily">
               <b>첨부파일</b>
               <table>
                 <tbody>
-                  {(files || []).map(f => (
+                  {(files || []).filter(f => !f.workschid).map(f => (
                     <tr key={f.fileid}>
                       <td>
                         <button className="link"
@@ -170,19 +271,77 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               )}
             </div>
           </div>
+          </>
         )}
         <div className="popup-btns">
           <button onClick={() => {
             setPview(pview === 'his' ? 'info' : 'his')
-            if (pview !== 'his' && !his) {
-              api.get(`/tasks/${task.taskid}/his`)
+            if (pview !== 'his') {
+              if (!his) api.get(`/tasks/${task.taskid}/his`)
                 .then(r => setHis(r.data)).catch(console.error)
+              if (!logs) loadLogs()
             }
           }}>
             {pview === 'his' ? '작업요청정보' : '상태변경이력'}
           </button>
           <button onClick={onClose}>닫기</button>
         </div>
+        {logView && (
+          <div className="popup log-pop" onClick={() => { setLogView(null); setLogForm(null) }}>
+            <div className="popup-body" onClick={e => e.stopPropagation()}>
+              <b className="blk-title" style={{ marginTop: 0 }}>작업내용</b>
+              {logForm ? (
+                <>
+                  <textarea className="req-edit" rows="8" value={logForm.work_remark}
+                    placeholder="작업 내용을 입력하세요"
+                    onChange={e => setLogForm({ ...logForm, work_remark: e.target.value })} />
+                  <div className="popup-btns">
+                    <button className="primary" onClick={saveLog}>
+                      {logView.workschid ? '저장' : '등록'}</button>
+                    <button onClick={() => logView.workschid ? setLogForm(null)
+                      : (setLogView(null), setLogForm(null))}>취소</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="log-detail">{logView.work_remark || ''}</div>
+                  <div className="daily" style={{ borderTop: 'none', paddingTop: 0 }}>
+                    <b>첨부파일</b>
+                    <table>
+                      <tbody>
+                        {(files || []).filter(f => f.workschid === logView.workschid).map(f => (
+                          <tr key={f.fileid}>
+                            <td>
+                              <button className="link"
+                                onClick={() => downloadFile(f)}>{f.file_name}</button>
+                            </td>
+                            <td className="r">{fmtDT(f.create_date)}</td>
+                          </tr>
+                        ))}
+                        {!(files || []).some(f => f.workschid === logView.workschid) && (
+                          <tr><td className="empty">첨부파일이 없습니다</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                    {(isStaff || logView.work_userid === me?.userid) &&
+                      <div className="attach-add">
+                        <label className="btn-file">파일 첨부
+                          <input type="file" hidden
+                            onChange={e => uploadFile(logView.workschid, e)} />
+                        </label>
+                      </div>}
+                  </div>
+                  <div className="popup-btns">
+                    {(isStaff || logView.work_userid === me?.userid) &&
+                      <button onClick={() => setLogForm({
+                        work_remark: logView.work_remark || '' })}>수정</button>}
+                    <button onClick={() => setLogView(null)}>닫기</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
