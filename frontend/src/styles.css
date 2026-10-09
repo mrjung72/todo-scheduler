@@ -169,6 +169,10 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .kb-req { color: #0f766e; margin-right: 6px; font-weight: 600; }
 .kb-title { font-weight: 600; font-size: 13px; }
 .kb-site { color: #2563eb; margin-right: 5px; }
+.kb-type {
+  font-size: 10px; font-weight: 600; color: #7c3aed;
+  background: #ede9fe; border-radius: 3px; padding: 0 4px; margin-right: 4px;
+}
 .kb-csr, .csr {
   color: #475569; background: #e2e8f0; border-radius: 3px;
   padding: 0 5px; margin-right: 5px; font-weight: 400;
@@ -305,6 +309,8 @@ button.logout { padding: 3px 10px; font-size: 12px; }
 
 /* 메인(모바일 스타일) */
 td.type-col select { min-width: 110px; }
+td.stat-col select { min-width: 90px; }
+td.work-col select { min-width: 90px; }
 td.req-col input { width: 120px; }
 
 .pager { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }

@@ -5,14 +5,14 @@ import TaskDetailPopup from '../TaskDetailPopup'
 
 // 관리자(0)/개발자(1) 모두 전체 탭 접근 가능 (admin 계정 보호는 별도 처리)
 const TABS = [
-  { key: 'users', label: '사용자' },
   { key: 'sites', label: '사이트' },
-  { key: 'calendar', label: '달력' },
-  { key: 'holidays', label: '작업자휴가' },
   { key: 'tasks', label: '작업스케쥴' },
   { key: 'schedules', label: '작업이력' },
   { key: 'schedhis', label: '작업상태변경이력' },
   { key: 'files', label: '첨부파일' },
+  { key: 'users', label: '사용자' },
+  { key: 'calendar', label: '달력' },
+  { key: 'holidays', label: '작업자휴가' },
 ]
 
 const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') || 'null')?.user_grade)
@@ -21,7 +21,7 @@ const myId = () => JSON.parse(localStorage.getItem('user') || 'null')?.userid
 const isProtectedUser = u => u.userid === 'admin' && myId() !== 'admin'
 
 export default function Admin() {
-  const [tab, setTab] = useState('users')
+  const [tab, setTab] = useState('tasks')
   return (
     <div className="admin">
       <div className="tabs">
@@ -514,6 +514,7 @@ function TasksTab() {
   const [q, setQ] = useState(savedF.q || '')
   const [siteF, setSiteF] = useState(savedF.site || '')
   const [statF, setStatF] = useState(savedF.stat || '')
+  const [typeF, setTypeF] = useState(savedF.type || '')
   const [selTask, setSelTask] = useState(null)
   const [startForm, setStartForm] = useState(null)  // {taskid, start, fixed} 시작일시 팝업
   const [msg, setMsg] = useState('')
@@ -587,9 +588,10 @@ function TasksTab() {
       TASK_TYPE_LABEL[t.task_type], t.task_type,
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(t =>
-    (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF))
+    (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
+    (!typeF || t.task_type === typeF))
     .filter(t => staff || t.work_userid === myId())  // 비관리자: 본인 작업만
-  const { paged, pager } = usePager(filtered, [q, siteF, statF])
+  const { paged, pager } = usePager(filtered, [q, siteF, statF, typeF])
 
   const revStat = revMap(STAT_LABEL)
   const revType = revMap(TASK_TYPE_LABEL)
@@ -597,12 +599,12 @@ function TasksTab() {
     { label: 'ID', field: 'taskid' },
     { label: '사이트ID', field: 'siteid' },
     { label: '사이트(참조)', field: '_site_name', get: t => t.site_name || '' },
+    { label: '유형', field: 'task_type', get: t => TASK_TYPE_LABEL[t.task_type] ?? t.task_type },
     { label: '작업명', field: 'task_name' },
     { label: '우선순위', field: 'priority' },
     { label: '예상 작업시간(H)', field: 'work_hours_estimated' },
     { label: '실제 작업시간(H)', field: 'work_hours_real' },
     { label: '상태', field: 'task_stat', get: t => STAT_LABEL[t.task_stat] ?? t.task_stat },
-    { label: '유형', field: 'task_type', get: t => TASK_TYPE_LABEL[t.task_type] ?? t.task_type },
     { label: 'CSR 번호', field: 'task_csrid' },
     { label: '현업 담당자(참조)', field: '_req_name', get: t => t.req_user_name || '' },
     { label: '현업 담당자ID', field: 'req_userid' },
@@ -623,7 +625,7 @@ function TasksTab() {
       siteid: o.siteid || null,
       priority: +o.priority || 0,
       work_hours_estimated: +o['work_hours_estimated'] || 0,
-      work_hours_real: +o.work_hours_real || 0,
+      // 실제 작업시간은 상태전이 시 자동 집계 — 업로드로 덮어쓰지 않음
       task_stat: revStat[o.task_stat] ?? o.task_stat ?? 'R',
       task_type: revType[o.task_type] ?? o.task_type ?? null,
       task_csrid: o.task_csrid || null,
@@ -658,10 +660,14 @@ function TasksTab() {
           <option value="">상태(전체)</option>
           {statOpt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select value={typeF} onChange={e => setTypeF(e.target.value)}>
+          <option value="">유형(전체)</option>
+          {typeOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
-          saveFilter('admin-tasks', { site: siteF, stat: statF, q })
+          saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <ExcelButtons name="작업" cols={cols} rows={filtered}
@@ -697,8 +703,8 @@ function TasksTab() {
       </form>
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>사이트</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">예상 작업<br/>시간(H)</th><th className="fit">실제 작업<br/>시간(H)</th>
-          <th>상태</th><th>유형</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
+          <th>ID</th><th>사이트</th><th>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">예상 작업<br/>시간(H)</th><th className="fit">실제 작업<br/>시간(H)</th>
+          <th>상태</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
           <th>시작일시</th><th>종료일시<br/>(예상)</th><th>종료일시<br/>(실제)</th><th></th>
         </tr></thead>
         <tbody>
@@ -706,29 +712,28 @@ function TasksTab() {
             <tr key={t.taskid}>
               <td className="r">{t.taskid}</td>
               <td>{t.site_name || t.siteid || '-'}</td>
-              <td><EditableCell value={t.task_name} disabled={!can(t)}
-                onSave={v => save(t.taskid, { task_name: v })} /></td>
-              <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t)}
-                onSave={v => save(t.taskid, { priority: v })} /></td>
-              <td className="r fit"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t)}
-                onSave={v => save(t.taskid, { work_hours_estimated: v })} /></td>
-              <td className="r fit"><EditableCell type="number" value={t.work_hours_real} disabled={!can(t)}
-                onSave={v => save(t.taskid, { work_hours_real: v })} /></td>
-              <td className="c"><EditableCell value={t.task_stat} disabled={!can(t)}
-                onSave={v => save(t.taskid, { task_stat: v })}
-                options={statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
-              <td className="c type-col"><EditableCell value={t.task_type} disabled={!can(t)}
+              <td className="c type-col"><EditableCell value={t.task_type} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { task_type: v || null })}
                 options={typeOpt} /></td>
+              <td><EditableCell value={t.task_name} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
+                onSave={v => save(t.taskid, { task_name: v })} /></td>
+              <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
+                onSave={v => save(t.taskid, { priority: v })} /></td>
+              <td className="r fit"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
+                onSave={v => save(t.taskid, { work_hours_estimated: v })} /></td>
+              <td className="r fit">{t.work_hours_real ?? '-'}</td>
+              <td className="c stat-col"><EditableCell value={t.task_stat} disabled={!can(t)}
+                onSave={v => save(t.taskid, { task_stat: v })}
+                options={statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
-              <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t)}
+              <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 users={reqUsers} listId="req-user-dl"
                 onSave={v => save(t.taskid, { req_userid: v })} /></td>
-              <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t)}
+              <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { itos_userid: v })}
                 options={uopt([0, 2])} /></td>
-              <td className="c"><EditableCell value={t.work_userid} disabled={!staff}
+              <td className="c work-col"><EditableCell value={t.work_userid} disabled={!staff || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { work_userid: v })}
                 options={devOpt} /></td>
               <td className={`c${can(t) ? ' clickable' : ''}`}

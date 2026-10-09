@@ -8,6 +8,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const canEdit = me && ([0, 1].includes(me.user_grade) ||
     task.work_userid === me.userid)
   const canAttach = me && [0, 1].includes(me.user_grade)
+  // 유형/우선순위 등 핵심항목은 R·C·W 상태에서만 수정 가능
+  const canCore = ['R', 'C', 'W'].includes(task.task_stat)
   const [pview, setPview] = useState('req')   // req(기본: 요청상세) | info | his
   const [editForm, setEditForm] = useState(null)
   const [users, setUsers] = useState([])
@@ -108,21 +110,21 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           <form onSubmit={saveEdit}>
             <div className="popup-info">
               <p><b>우선순위</b>
-                <input type="number" value={editForm.priority}
+                <input type="number" value={editForm.priority} disabled={!canCore}
                   onChange={e => setEditForm({ ...editForm, priority: e.target.value })} /></p>
               <p><b>예상시간(h)</b>
                 <input type="number" min="0.5" step="0.5" required
-                  value={editForm.work_hours_estimated}
+                  value={editForm.work_hours_estimated} disabled={!canCore}
                   onChange={e => setEditForm({ ...editForm, work_hours_estimated: e.target.value })} /></p>
               <p><b>작업자</b>
-                <select value={editForm.work_userid}
+                <select value={editForm.work_userid} disabled={!canCore}
                   onChange={e => setEditForm({ ...editForm, work_userid: e.target.value })}>
                   <option value="">-</option>
                   {users.filter(u => u.user_grade === 1)
                     .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
                 </select></p>
               <p><b>유형</b>
-                <select value={editForm.task_type}
+                <select value={editForm.task_type} disabled={!canCore}
                   onChange={e => setEditForm({ ...editForm, task_type: e.target.value })}>
                   <option value="">-</option>
                   {Object.entries(TASK_TYPE_LABEL)

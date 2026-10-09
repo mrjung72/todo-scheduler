@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, taskColor } from '../api'
+import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor } from '../api'
 
 /* 모바일 스타일 메인 화면: 작업중(P) 먼저, 그 아래 대기중(W)을 우선순위순으로 표시 */
 export default function Home() {
@@ -29,8 +29,10 @@ export default function Home() {
               onClick={() => setOpenId(open ? null : t.taskid)}>
               <div className="kb-row1">
                 <span className="kb-no">#{t.taskid}</span>
-                {t.task_csrid && <span className="kb-csr">{t.task_csrid}</span>}
                 {t.site_name && <span className="kb-site">{t.site_name}</span>}
+                {t.task_type &&
+                  <span className="kb-type">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>}
+                {t.task_csrid && <span className="kb-csr">{t.task_csrid}</span>}
                 <span className={`home-stat st-${t.task_stat}`}>
                   {STAT_LABEL[t.task_stat] || t.task_stat}
                 </span>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { STAT_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
+import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
 // 3열 배치: 좌 = 검토·요청, 중 = 대기·작업중·중단, 우 = 완료·반려
@@ -106,6 +106,8 @@ export default function Kanban() {
                       <div className="kb-row1">
                         <span className="kb-no">#{t.taskid}</span>
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
+                        {t.task_type &&
+                          <span className="kb-type">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>}
                         {t.task_csrid && <span className="kb-csr">{t.task_csrid}</span>}
                       </div>
                       <div className="kb-title">

@@ -168,6 +168,17 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         raise HTTPException(403, "다른 작업자에게 배정할 수 없습니다")
     new_stat = data.pop("task_stat", None)
     remark = data.pop("stat_remark", None)
+    # 유형/작업명/우선순위/현업담당자/IT업무담당자는 R·C·W 상태에서만 변경 가능
+    restricted = {"task_name", "task_type", "priority", "req_userid", "itos_userid",
+                  "work_hours_estimated", "work_userid"}
+    eff_stat = new_stat if new_stat is not None else obj.task_stat
+    if eff_stat not in ("R", "C", "W") and \
+            any(f in data and data[f] != getattr(obj, f) for f in restricted):
+        raise HTTPException(400,
+            "유형/작업명/우선순위/예상작업시간/현업담당자/IT업무담당자/작업자는 작업요청·검토중·대기중 상태에서만 변경할 수 있습니다")
+    # 실제 작업시간은 상태전이(P 구간) 시 자동 집계 — 직접 수정 불가
+    if "work_hours_real" in data and data["work_hours_real"] != obj.work_hours_real:
+        raise HTTPException(400, "실제 작업시간은 자동 집계되므로 직접 수정할 수 없습니다")
     for k, v in data.items():
         setattr(obj, k, v)
     # 작업상태 변경: 전이 규칙 검증 + 이력 기록

@@ -36,18 +36,18 @@ export default function TaskList() {
   // 현재 조회 결과를 CSV(BOM 포함, 엑셀에서 바로 열림)로 다운로드
   const downloadCsv = () => {
     const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`
-    const header = ['사이트', '우선순위', 'CSR번호', '작업명', '유형', '예상 작업시간(Hour)',
+    const header = ['사이트', '우선순위', 'CSR번호', '유형', '작업명', '예상 작업시간(Hour)',
       '현업담당자', 'IT담당자', '작업자', '시작일시', '종료일시(예상)', '상태']
     const lines = tasks.map(t => [
-      t.site_name || t.siteid || '', t.priority, t.task_csrid || '', t.task_name,
-      TASK_TYPE_LABEL[t.task_type] || '', t.work_hours_estimated,
+      t.site_name || t.siteid || '', t.priority, t.task_csrid || '',
+      TASK_TYPE_LABEL[t.task_type] || '', t.task_name, t.work_hours_estimated,
       t.req_user_name || t.req_userid || '',
       t.itos_user_name || t.itos_userid || '',
       t.work_user_name || t.work_userid || '',
       fmtDT(t.task_start_date), fmtDT(t.task_end_date_estimated),
       STAT_LABEL[t.task_stat] || t.task_stat,
     ].map(esc).join(','))
-    const fields = ['site_name', 'priority', 'task_csrid', 'task_name', 'task_type',
+    const fields = ['site_name', 'priority', 'task_csrid', 'task_type', 'task_name',
       'work_hours_estimated', 'req_userid', 'itos_userid', 'work_userid',
       'task_start_date', 'task_end_date_estimated', 'task_stat']
     const csv = '\uFEFF' + [header.map(esc).join(','),
@@ -102,7 +102,7 @@ export default function TaskList() {
       <table className="grid">
         <thead>
           <tr>
-            <th>사이트</th><th className="fit">우선<br/>순위</th><th className="csr-col">CSR번호</th><th>작업명</th><th className="fit">유형</th><th className="fit">예상 작업<br/>시간(Hour)</th>
+            <th>사이트</th><th className="fit">우선<br/>순위</th><th className="csr-col">CSR번호</th><th className="fit">유형</th><th>작업명</th><th className="fit">예상 작업<br/>시간(Hour)</th>
             <th>현업담당자</th><th>IT담당자</th><th>작업자</th>
             <th>시작일시</th><th>종료일시(예상)</th><th>상태</th>
           </tr>
@@ -113,8 +113,8 @@ export default function TaskList() {
               <td className="c">{t.site_name || t.siteid}</td>
               <td className="r fit">{t.priority}</td>
               <td className="csr-col">{t.task_csrid || '-'}</td>
-              <td><button className="link" onClick={() => setSel(t)}>{t.task_name}</button></td>
               <td className="c fit">{TASK_TYPE_LABEL[t.task_type] || '-'}</td>
+              <td><button className="link" onClick={() => setSel(t)}>{t.task_name}</button></td>
               <td className="r fit">{t.work_hours_estimated}</td>
               <td className="c">{t.req_user_name || t.req_userid}</td>
               <td className="c">{t.itos_user_name || t.itos_userid}</td>
