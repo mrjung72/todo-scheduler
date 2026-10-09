@@ -24,9 +24,9 @@ MANAGED_GRADES = {
     5: {7, 9},
 }
 
-# 관리 대상이 아닐 때 본인 계정에 허용되는 개인정보 항목 (하루작업시간 포함)
+# 관리 대상이 아닐 때 본인 계정에 허용되는 항목 (개인정보 + 하루작업시간 + 비밀번호)
 PERSONAL_FIELDS = {"user_name", "dept_name", "job_title", "user_tel",
-                   "user_email", "work_hours_day"}
+                   "user_email", "work_hours_day", "password"}
 
 
 def _check_work_hours(data: dict):
@@ -130,6 +130,10 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
     _check_work_hours(data)
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
+    # 비밀번호는 본인만 직접 변경 가능 — 타인은 초기화(1234)만 가능
+    if data.get("password") and userid != me.userid:
+        raise HTTPException(
+            403, "다른 사용자의 비밀번호는 변경할 수 없습니다 (초기화만 가능합니다)")
     # password는 값이 있을 때만 해시해서 반영 (빈 값은 무시)
     if "password" in data:
         pw = data.pop("password")

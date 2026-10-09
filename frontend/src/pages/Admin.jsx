@@ -467,18 +467,18 @@ function UsersTab() {
                 options={[{ value: '', label: '기본' },
                   ...[2, 3, 4, 5, 6, 7, 8].map(h => ({ value: h, label: `${h}시간` }))]} /></td>
               <td className="c">
-                {!lockPriv && <>
+                {u.userid === myId() &&
                 <button onClick={() => {
-                  const pw = window.prompt(`${u.user_name || u.userid} 새 비밀번호`)
+                  const pw = window.prompt('새 비밀번호')
                   if (pw) save(u.userid, { password: pw })
-                }}>변경</button>
+                }}>변경</button>}
+                {!lockPriv && u.userid !== myId() &&
                 <button onClick={() =>
                   window.confirm(`${u.user_name || u.userid} 비밀번호를 초기값(1234)으로 초기화?`) &&
                   api.post(`/users/${u.userid}/password-reset`)
                     .then(() => alert('비밀번호가 초기화되었습니다 (1234)'))
                     .catch(e => alert(e.response?.data?.detail || '초기화 실패'))
-                }>초기화</button>
-                </>}
+                }>초기화</button>}
               </td>
               <td className="c" title={u.reject_remark ? `승인불가 사유: ${u.reject_remark}` : ''}>
                 <EditableCell value={u.user_stat} disabled={lockPriv}
