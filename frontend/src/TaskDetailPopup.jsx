@@ -21,6 +21,24 @@ const fmtUser = (name, id, title, dept) => {
   return extra ? `${base} (${extra})` : base
 }
 
+// 팝업 드래그 이동: 타이틀 mousedown -> 창 기준 오프셋을 transform으로 적용
+function useDrag() {
+  const [pos, setPos] = useState({ x: 0, y: 0 })
+  const onDown = e => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const base = { x: e.clientX - pos.x, y: e.clientY - pos.y }
+    const move = ev => setPos({ x: ev.clientX - base.x, y: ev.clientY - base.y })
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+  return { pos, onDown }
+}
+
 export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const canEdit = me && ([0, 1].includes(me.user_grade) ||
@@ -40,6 +58,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [reqEdit, setReqEdit] = useState(null)
   const fileRef = useRef(null)
   const downOnOverlay = useRef(false)   // mousedown이 오버레이에서 시작됐는지
+  const { pos, onDown } = useDrag()           // 메인 팝업 드래그
+  const { pos: logPos, onDown: logOnDown } = useDrag()  // 작업내용 팝업 드래그
 
   useEffect(() => {
     api.get(`/tasks/${task.taskid}/daily`)
@@ -122,8 +142,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         if (e.target === e.currentTarget && downOnOverlay.current) onClose()
         downOnOverlay.current = false
       }}>
-      <div className="popup-body task-popup" onClick={e => e.stopPropagation()}>
-        <h3 className="popup-title" style={{ background: taskColor(task.taskid) }}>
+      <div className="popup-body task-popup" onClick={e => e.stopPropagation()}
+        style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
+        <h3 className="popup-title" onMouseDown={onDown}
+          style={{ background: taskColor(task.taskid), cursor: 'move', userSelect: 'none' }}>
           <div className="pt-row1">
             {(task.site_name || task.siteid) &&
               <span className="pt-chip">{task.site_name || task.siteid}</span>}
@@ -306,8 +328,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               }
               downOnOverlay.current = false
             }}>
-            <div className="popup-body" onClick={e => e.stopPropagation()}>
-              <b className="blk-title" style={{ marginTop: 0 }}>작업내용</b>
+            <div className="popup-body" onClick={e => e.stopPropagation()}
+              style={{ transform: `translate(${logPos.x}px, ${logPos.y}px)` }}>
+              <b className="blk-title" onMouseDown={logOnDown}
+                style={{ marginTop: 0, cursor: 'move', userSelect: 'none' }}>작업내용</b>
               {logForm ? (
                 <>
                   <textarea className="req-edit" rows="8" value={logForm.work_remark}
