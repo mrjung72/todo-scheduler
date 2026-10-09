@@ -98,6 +98,8 @@ input.num { width: 64px; }
   background: #fff; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px;
 }
 .newtask input { min-width: 120px; }
+.newtask input[type="checkbox"] { min-width: 0; }  /* 체크박스는 120px 제외 */
+.newtask label.chk { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; }
 
 table.grid { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
 table.grid th, table.grid td {
@@ -155,6 +157,9 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .grid td.fit input, .grid td.fit select { width: 70px; }
 .grid td .sub { font-size: 12px; color: #64748b; }  /* 예상/실제 통합 컬럼의 보조값 */
 .hol-badge { background: #fb8c00; color: #fff; border: none; margin-left: 4px; }  /* 일별 작업시간의 휴가 표시 */
+.warn-badge {   /* 휴일작업 기간에 평일 포함 경고 */
+  background: #dc2626; color: #fff; border: none; margin-right: 4px;
+}
 
 /* 칸반 보드 */
 .kanban-wrap { height: calc(100vh - 125px); display: flex; flex-direction: column; }

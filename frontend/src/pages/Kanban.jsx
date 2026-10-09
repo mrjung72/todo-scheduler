@@ -52,8 +52,8 @@ export default function Kanban() {
     const taskid = +e.dataTransfer.getData('text/taskid')
     const t = tasks.find(x => x.taskid === taskid)
     if (!t || t.task_stat === st || !canMove(t)) return
-    // 허용 전이 외 이동은 서버와 동일 규칙으로 차단
-    if (!(NEXT_STAT[t.task_stat] || []).includes(st)) {
+    // 허용 전이 외 이동은 서버와 동일 규칙으로 차단 (휴일작업은 제약 없음)
+    if (!t.holiday_work && !(NEXT_STAT[t.task_stat] || []).includes(st)) {
       setErr(`${STAT_LABEL[t.task_stat]} 상태에서는 ${STAT_LABEL[st]}(으)로 변경할 수 없습니다`)
       return
     }
@@ -127,9 +127,12 @@ export default function Kanban() {
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_type &&
                           <span className="kb-type">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>}
+                        {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
                         {t.task_csrid && <span className="kb-csr">{t.task_csrid}</span>}
                       </div>
                       <div className="kb-title">
+                        {!!t.weekday_included &&
+                          <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
                         <span className="kb-req">{t.req_user_name || t.req_userid || '-'}</span>
                         {t.task_name}
                       </div>

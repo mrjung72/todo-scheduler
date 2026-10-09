@@ -60,12 +60,15 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
     prev = task.task_stat or "R"
     if prev == new_stat:
         return
-    _check(prev, new_stat)
+    # 휴일작업은 상태 전이 제약 없이 자유롭게 변경 가능
+    if not task.holiday_work:
+        _check(prev, new_stat)
     now = datetime.now().replace(microsecond=0)
 
     if new_stat == "P":
-        # 대기중->작업중: 예정 시작일이 미래이면 작업중으로 변경 불가
-        if prev == "W" and task.task_start_date and task.task_start_date > now:
+        # 대기중->작업중: 예정 시작일이 미래이면 작업중으로 변경 불가 (휴일작업 제외)
+        if not task.holiday_work and prev == "W" and \
+                task.task_start_date and task.task_start_date > now:
             raise HTTPException(
                 400, "작업시작일시 이후에만 작업중으로 변경할 수 있습니다")
         # 최초 작업중 진입: 실제 시작일시 = 현재시각.

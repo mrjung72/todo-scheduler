@@ -50,6 +50,7 @@ class Task(Base):
     task_end_date = Column(DateTime)            # 작업완료일자 (실제)
     task_end_date_estimated = Column(DateTime)  # 작업 예상 종료 일시 (자동계산)
     start_fixed = Column(Integer, default=0)    # 시작일시 수동 고정 여부
+    holiday_work = Column(Integer, default=0)   # 휴일작업 여부 (상태전이·스케줄 제약 없음)
     req_date = Column(DateTime)                 # 요청일자
     create_date = Column(DateTime, default=datetime.now)
 

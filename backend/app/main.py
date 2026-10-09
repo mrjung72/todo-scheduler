@@ -131,6 +131,9 @@ def migrate(db):
                         "WHERE req_date IS NULL"))
     if "task_type" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN task_type TEXT"))
+    if "holiday_work" not in cols:
+        db.execute(text(
+            "ALTER TABLE tasks ADD COLUMN holiday_work INTEGER DEFAULT 0"))
     # task_chg_log.work_userid 추가 (기존 이력은 작업의 현재 작업자로 백필)
     if "task_chg_log" in {r[0] for r in db.execute(
             text("SELECT name FROM sqlite_master WHERE type='table'"))}:

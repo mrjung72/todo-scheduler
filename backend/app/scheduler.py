@@ -70,6 +70,19 @@ def is_working_day(d: date, cal: dict) -> bool:
     return d.weekday() < 5  # 기본: 월~금 근무
 
 
+def has_workday_between(cal: dict, start: datetime, end: datetime) -> bool:
+    """start~end 기간에 근무일이 하루라도 포함되면 True — 휴일작업 경고용.
+    달력에 H로 등록된 날(공휴일 포함)은 평일이라도 휴일로 본다."""
+    if not start or not end:
+        return False
+    d = start.date()
+    while d <= end.date():
+        if is_working_day(d, cal):
+            return True
+        d += timedelta(days=1)
+    return False
+
+
 def _day_segments(d: date):
     return [
         (datetime.combine(d, s), datetime.combine(d, e)) for s, e in DAY_SEGMENTS
@@ -219,7 +232,9 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
 
-    task_q = db.query(Task).filter(Task.task_stat == "W")   # 대기중 작업만 재계산
+    # 대기중(W) 작업만 재계산, 휴일작업은 자동 스케줄링 대상에서 제외
+    task_q = db.query(Task).filter(Task.task_stat == "W") \
+                           .filter(Task.holiday_work != 1)
     if only_userid:
         task_q = task_q.filter(Task.work_userid == only_userid)
     rows = task_q.all()

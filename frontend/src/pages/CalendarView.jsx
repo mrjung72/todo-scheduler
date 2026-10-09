@@ -149,6 +149,7 @@ export default function CalendarView() {
         display: 'background',
         color: 'rgba(229,57,53,.18)',
         title: d.holiday_remark || DAY_STAT_LABEL[d.date_stat],
+        extendedProps: { day_holiday: true },
       }))
     )
     // 작업자 개인 휴가를 종일 이벤트로 표시
@@ -218,6 +219,8 @@ export default function CalendarView() {
     const p = { ...info.event.extendedProps, title: info.event.title,
       start: info.event.start, end: info.event.end }
     if (p.holiday) { setSelected(p); return }
+    // 공통휴일 배경 이벤트 등 taskid 없는 이벤트는 팝업 대상 아님
+    if (!p.taskid) return
     // 작업 이벤트 → 공용 작업 상세 팝업 (TaskDetail 형태로 매핑)
     setSelTask({
       ...p,
@@ -305,6 +308,10 @@ export default function CalendarView() {
             || arg.event.extendedProps.req_userid
           return (
             <div className="ev-line">
+              {!!arg.event.extendedProps.holiday_work &&
+                <span className="badge hol-badge">휴일</span>}
+              {!!arg.event.extendedProps.weekday_included &&
+                <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
               {site && <span className="ev-site">{site}</span>}
               {csr && <span className="csr">{csr}</span>}
               {req && <span className="ev-req">{req}</span>}

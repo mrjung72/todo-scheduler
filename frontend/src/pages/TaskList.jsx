@@ -133,7 +133,10 @@ export default function TaskList() {
               <td className="r fit">{t.priority}</td>
               <td className="csr-col">{t.task_csrid || '-'}</td>
               <td className="c fit">{TASK_TYPE_LABEL[t.task_type] || '-'}</td>
-              <td><button className="link" onClick={() => setSel(t)}>{t.task_name}</button></td>
+              <td>{!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
+                {!!t.weekday_included &&
+                  <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
+                <button className="link" onClick={() => setSel(t)}>{t.task_name}</button></td>
               <td className="r fit">{t.work_hours_estimated}</td>
               <td className="c">{t.req_user_name || t.req_userid}</td>
               <td className="c">{t.itos_user_name || t.itos_userid}</td>

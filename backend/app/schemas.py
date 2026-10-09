@@ -75,6 +75,7 @@ class TaskBase(BaseModel):
     task_end_date: Optional[datetime] = None
     task_end_date_estimated: Optional[datetime] = None
     req_date: Optional[datetime] = None
+    holiday_work: Optional[int] = 0       # 휴일작업 여부 (전이/스케줄 제약 없음)
 
 
 class TaskCreate(TaskBase):
@@ -98,6 +99,7 @@ class TaskUpdate(BaseModel):
     task_end_date: Optional[datetime] = None
     task_end_date_estimated: Optional[datetime] = None
     req_date: Optional[datetime] = None
+    holiday_work: Optional[int] = None
     stat_remark: Optional[str] = None   # 작업상태 변경 시 이력 비고
 
 
@@ -213,3 +215,4 @@ class TaskDetail(TaskOut):
     work_user_dept: Optional[str] = None
     work_user_title: Optional[str] = None
     start_fixed: Optional[int] = 0
+    weekday_included: Optional[bool] = False   # 휴일작업 기간에 근무일 포함 여부(경고)

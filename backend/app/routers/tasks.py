@@ -9,7 +9,7 @@ from ..models import Task, User, Site, TaskChgLog, WorkScheduleLog
 from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail, TaskChgLogOut
 from ..scheduler import (
     recalculate, get_calendar_map, get_holiday_map,
-    add_work_hours, workday_cal, daily_breakdown,
+    add_work_hours, workday_cal, daily_breakdown, has_workday_between,
 )
 from ..statusflow import apply_task_stat_change
 from ..security import get_current_user, check_task_access
@@ -52,7 +52,7 @@ def _detail_query(db: Session):
     )
 
 
-def _to_detail(row) -> TaskDetail:
+def _to_detail(row, cal: dict = None) -> TaskDetail:
     (task, req_name, req_dept, req_title, itos_name,
      work_name, work_dept, work_title, site_name) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
@@ -63,6 +63,10 @@ def _to_detail(row) -> TaskDetail:
         work_user_title=work_title,
         site_name=site_name,
     )
+    # 휴일작업인데 기간에 근무일이 포함되면 경고 플래그
+    if task.holiday_work and cal is not None:
+        data["weekday_included"] = has_workday_between(
+            cal, task.task_start_date, task.task_end_date_estimated)
     return TaskDetail(**data)
 
 
@@ -122,7 +126,8 @@ def list_tasks(
             )
 
     rows = query.order_by(Task.priority, Task.taskid).all()
-    return [_to_detail(r) for r in rows]
+    cal = get_calendar_map(db)
+    return [_to_detail(r, cal) for r in rows]
 
 
 @router.post("/recalculate")
@@ -144,7 +149,7 @@ def auto_schedule_one(taskid: int, db: Session = Depends(get_db),
         raise HTTPException(404, "작업을 찾을 수 없습니다")
     recalculate(db, only_userid=None if me.user_grade in (0, 1) else me.userid)
     row = _detail_query(db).filter(Task.taskid == taskid).first()
-    return _to_detail(row)
+    return _to_detail(row, get_calendar_map(db))
 
 
 @router.post("", response_model=TaskOut, status_code=201)
@@ -159,6 +164,10 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
     now = datetime.now().replace(microsecond=0)
     if not data.get("req_date"):
         data["req_date"] = now          # 요청일자 = 등록 시각
+    if data.get("holiday_work") and has_workday_between(
+            get_calendar_map(db),
+            data.get("task_start_date"), data.get("task_end_date_estimated")):
+        raise HTTPException(400, "휴일작업은 근무일을 포함할 수 없습니다")
     task = Task(**data)
     db.add(task)
     db.flush()  # taskid 확보
@@ -188,7 +197,8 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     restricted = {"task_name", "task_type", "priority", "req_userid", "itos_userid",
                   "work_hours_estimated", "work_userid"}
     eff_stat = new_stat if new_stat is not None else obj.task_stat
-    if eff_stat not in ("R", "C", "W") and \
+    # 휴일작업은 상태와 무관하게 자유 수정 가능
+    if not obj.holiday_work and eff_stat not in ("R", "C", "W") and \
             any(f in data and data[f] != getattr(obj, f) for f in restricted):
         raise HTTPException(400,
             "유형/작업명/우선순위/예상작업시간/현업담당자/IT업무담당자/작업자는 작업요청·검토중·대기중 상태에서만 변경할 수 있습니다")
@@ -197,12 +207,18 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         raise HTTPException(400, "실제 작업시간은 자동 집계되므로 직접 수정할 수 없습니다")
     for k, v in data.items():
         setattr(obj, k, v)
+    # 휴일작업은 기간에 근무일을 포함할 수 없음 (공휴일 등 H 등록일은 허용)
+    if obj.holiday_work and has_workday_between(
+            get_calendar_map(db), obj.task_start_date, obj.task_end_date_estimated):
+        raise HTTPException(400, "휴일작업은 근무일을 포함할 수 없습니다")
     # 작업상태 변경: 전이 규칙 검증 + 이력 기록
     if new_stat is not None:
         apply_task_stat_change(db, obj, new_stat, remark,
                                actor_userid=me.userid)
     # 예상 작업시간 변경 시 시작일시가 잡힌 작업의 종료예상일시 재계산
-    if "work_hours_estimated" in data and obj.task_start_date:
+    # (휴일작업은 종료일시를 직접 입력하므로 자동 재계산 제외)
+    if "work_hours_estimated" in data and obj.task_start_date \
+            and not obj.holiday_work:
         cal = get_calendar_map(db)
         hol = get_holiday_map(db)
         uid = obj.work_userid or ""
@@ -249,10 +265,16 @@ def set_start(taskid: int, body: StartSet, db: Session = Depends(get_db),
     # 근무구간을 무시하고 그날의 경과시간 그대로 작업시간을 적용해 종료를 계산
     task.task_start_date = body.start_datetime
     task.start_fixed = 1
-    cal = workday_cal(cal, body.start_datetime.date())
-    task.task_end_date_estimated = add_work_hours(
-        task.task_start_date, task.work_hours_estimated or 0, cal, hol, uid
-    )
+    if task.holiday_work:
+        # 휴일작업은 종료일시를 직접 입력 — 자동 재계산 없이 근무일 포함만 검증
+        if has_workday_between(
+                cal, task.task_start_date, task.task_end_date_estimated):
+            raise HTTPException(400, "휴일작업은 근무일을 포함할 수 없습니다")
+    else:
+        cal = workday_cal(cal, body.start_datetime.date())
+        task.task_end_date_estimated = add_work_hours(
+            task.task_start_date, task.work_hours_estimated or 0, cal, hol, uid
+        )
     db.commit()
     db.refresh(task)
     return task

@@ -5,6 +5,7 @@
 - 변경이력: 상태 전이 시 statusflow에서 자동 기록된 로그 조회/삭제
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, aliased
 
 from ..database import get_db
@@ -13,6 +14,7 @@ from ..schemas import WorkLogCreate, WorkLogUpdate, WorkLogOut
 from ..security import get_current_user, check_owner_or_admin, require_staff
 from ..scheduler import (
     get_calendar_map, get_holiday_map, workday_cal, daily_breakdown,
+    has_workday_between,
 )
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
@@ -49,7 +51,7 @@ def calendar_events(db: Session = Depends(get_db)):
         .outerjoin(WorkUser, WorkUser.userid == Task.work_userid)
         .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(Site, Site.siteid == Task.siteid)
-        .filter(Task.task_stat.in_(["W", "P"]))
+        .filter(or_(Task.task_stat.in_(["W", "P"]), Task.holiday_work == 1))
         .all()
     )
     cal = get_calendar_map(db)
@@ -85,6 +87,11 @@ def calendar_events(db: Session = Depends(get_db)):
                 "req_date": task.req_date.isoformat() if task.req_date else None,
                 "task_req_remark": task.task_req_remark,
                 "start_fixed": task.start_fixed,
+                "holiday_work": task.holiday_work,
+                # 휴일작업인데 기간에 근무일 포함 시 경고 플래그
+                "weekday_included": bool(task.holiday_work) and
+                    has_workday_between(cal, task.task_start_date,
+                                        task.task_end_date_estimated),
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도
                 # (시작일이 휴일이면 그 날짜도 작업가능일로 간주해 분해)
                 "daily": daily_breakdown(

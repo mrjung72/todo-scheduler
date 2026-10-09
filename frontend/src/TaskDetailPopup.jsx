@@ -130,6 +130,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             {task.task_type &&
               <span className="pt-chip">{TASK_TYPE_LABEL[task.task_type] || task.task_type}</span>}
             {task.task_csrid && <span className="csr">{task.task_csrid}</span>}
+            {!!task.holiday_work && <span className="pt-chip">휴일작업</span>}
             <span className="pt-chip">{STAT_LABEL[task.task_stat] || task.task_stat}</span>
           </div>
           <div className="pt-row2">{task.task_name}</div>

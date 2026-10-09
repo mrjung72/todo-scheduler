@@ -516,7 +516,7 @@ function SitesTab() {
 function TasksTab() {
   const empty = { task_name: '', siteid: '', priority: 0, work_hours_estimated: 8,
     task_stat: 'R', task_type: '', task_csrid: '', task_req_remark: '', req_userid: '',
-    itos_userid: '', work_userid: '' }
+    itos_userid: '', work_userid: '', holiday_work: 0 }
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
@@ -528,6 +528,7 @@ function TasksTab() {
   const [typeF, setTypeF] = useState(savedF.type || '')
   const [selTask, setSelTask] = useState(null)
   const [startForm, setStartForm] = useState(null)  // {taskid, start, fixed} 시작일시 팝업
+  const [endForm, setEndForm] = useState(null)      // {taskid, end} 휴일작업 종료일시 팝업
   const [msg, setMsg] = useState('')
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
   useEffect(() => {
@@ -562,6 +563,17 @@ function TasksTab() {
     try {
       await api.patch(`/tasks/${startForm.taskid}/unfix`)
       setStartForm(null)
+      load()
+    } catch (e) { alert(errMsg(e)) }
+  }
+  const saveEnd = async e => {
+    e.preventDefault()
+    if (!endForm?.end) return
+    try {
+      await api.put(`/tasks/${endForm.taskid}`, {
+        task_end_date_estimated: endForm.end.length === 16 ? endForm.end + ':00' : endForm.end,
+      })
+      setEndForm(null)
       load()
     } catch (e) { alert(errMsg(e)) }
   }
@@ -715,7 +727,12 @@ function TasksTab() {
             {devOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         )}
-        <button type="submit">추가</button>
+        <label className="chk">
+          <input type="checkbox" checked={!!form.holiday_work}
+            onChange={e => setForm({ ...form, holiday_work: e.target.checked ? 1 : 0 })} />
+          휴일작업
+        </label>
+        <button type="submit">작업추가</button>
       </form>
       <table className="grid">
         <thead><tr>
@@ -731,7 +748,8 @@ function TasksTab() {
               <td className="c type-col"><EditableCell value={t.task_type} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { task_type: v || null })}
                 options={typeOpt} /></td>
-              <td><EditableCell value={t.task_name} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
+              <td>{!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
+                <EditableCell value={t.task_name} disabled={!can(t) || (!t.holiday_work && !['R', 'C', 'W'].includes(t.task_stat))}
                 onSave={v => save(t.taskid, { task_name: v })} /></td>
               <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { priority: v })} /></td>
@@ -740,7 +758,8 @@ function TasksTab() {
                 <span className="sub"> / {t.work_hours_real ?? '-'}</span></td>
               <td className="c stat-col"><EditableCell value={t.task_stat} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_stat: v })}
-                options={statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
+                options={t.holiday_work ? statOpt
+                  : statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
               <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
@@ -763,7 +782,13 @@ function TasksTab() {
                 {fmtDT(t.task_start_date) || '-'}
                 {t.start_fixed ? <span className="badge">고정</span> : null}
               </td>
-              <td className="c">{fmtDT(t.task_end_date || t.task_end_date_estimated) || '-'}</td>
+              <td className={`c${t.holiday_work && can(t) ? ' clickable' : ''}`}
+                title={t.holiday_work && can(t) ? '클릭하면 종료일시를 수정합니다' : undefined}
+                onClick={() => t.holiday_work && can(t) && setEndForm({
+                  taskid: t.taskid,
+                  end: (t.task_end_date || t.task_end_date_estimated || '').slice(0, 16),
+                })}>
+                {fmtDT(t.task_end_date || t.task_end_date_estimated) || '-'}</td>
               <td>
                 <button onClick={() => setSelTask(t)}>상세</button>
                 {['R', 'C', 'W', 'H', 'X'].includes(t.task_stat) && can(t) &&
@@ -793,6 +818,23 @@ function TasksTab() {
                 {startForm.fixed &&
                   <button type="button" onClick={unfixStart}>고정 해제</button>}
                 <button type="button" onClick={() => setStartForm(null)}>취소</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {endForm && (
+        <div className="popup" onClick={() => setEndForm(null)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <h3>종료일시 설정 (휴일작업)</h3>
+            <form className="holiday-form" onSubmit={saveEnd}>
+              <label>종료일시
+                <input type="datetime-local" required value={endForm.end}
+                  onChange={e => setEndForm({ ...endForm, end: e.target.value })} />
+              </label>
+              <div className="popup-btns">
+                <button type="submit" className="primary">저장</button>
+                <button type="button" onClick={() => setEndForm(null)}>취소</button>
               </div>
             </form>
           </div>
