@@ -52,6 +52,10 @@ export const TASK_TYPE_LABEL = {
   BF: '오류수정',
   DE: '데이터추출',
   DM: '데이터변경',
+  SC: '시스템점검',
+  RS: '연관시스템지원',
+  FW: '장애대응',
+  ET: '기타',
 }
 
 // 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일, 자기 상태 포함)
