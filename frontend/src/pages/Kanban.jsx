@@ -45,6 +45,12 @@ export default function Kanban() {
     api.get('/sites').then(r => setSites(r.data))
     api.get('/users').then(r => setUsers(r.data))
   }, [])
+  // 에러 메시지는 3초 후 자동 제거
+  useEffect(() => {
+    if (!err) return
+    const t = setTimeout(() => setErr(''), 3000)
+    return () => clearTimeout(t)
+  }, [err])
 
   const onDrop = async (e, st) => {
     e.preventDefault()
