@@ -9,7 +9,7 @@ from . import __version__
 from .database import Base, engine, SessionLocal
 from .models import User, Site, Task, CalendarDefine, WorkScheduleLog
 from .routers import (users, sites, tasks, calendar, schedules,
-                      user_holidays, auth, attach_files)
+                      user_holidays, auth, attach_files, boards)
 from .security import hash_password, parse_token
 
 app = FastAPI(title="TODO Scheduler API", version=__version__)
@@ -30,6 +30,7 @@ app.include_router(calendar.router)
 app.include_router(schedules.router)
 app.include_router(user_holidays.router)
 app.include_router(attach_files.router)
+app.include_router(boards.router)
 
 # --- API 인증 가드: /api/* 는 로그인 토큰 필요 (login/health/config 제외) ---
 from fastapi.responses import JSONResponse
@@ -280,6 +281,10 @@ def migrate(db):
             db.execute(text("DROP TABLE task_attach_files"))
             db.execute(text(
                 "ALTER TABLE task_attach_files_new RENAME TO task_attach_files"))
+    # boards.passwd — 비공개 게시글 열람 비밀번호
+    cols = {r[1] for r in db.execute(text("PRAGMA table_info(boards)"))}
+    if cols and "passwd" not in cols:
+        db.execute(text("ALTER TABLE boards ADD COLUMN passwd TEXT"))
     db.commit()
 
 

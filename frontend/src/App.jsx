@@ -6,6 +6,7 @@ import TaskList from './pages/TaskList'
 import Kanban from './pages/Kanban'
 import CalendarView from './pages/CalendarView'
 import Admin from './pages/Admin'
+import Board from './pages/Board'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import DocView from './pages/DocView'
@@ -120,6 +121,7 @@ export default function App() {
           <NavLink to="/kanban">칸반</NavLink>
           <NavLink to="/calendar">달력</NavLink>
           <NavLink to="/tasks">작업목록</NavLink>
+          <NavLink to="/board">게시판</NavLink>
           {[0, 1, 3, 4, 5].includes(me.user_grade) && <NavLink to="/admin">관리자</NavLink>}
         </nav>
         {cfg && (
@@ -139,6 +141,7 @@ export default function App() {
           <Route path="/tasks" element={<TaskList />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/calendar" element={<CalendarView />} />
+          <Route path="/board" element={<Board />} />
           <Route path="/docs/:name" element={<DocView />} />
           <Route path="/admin" element={
             [0, 1, 3, 4, 5].includes(me.user_grade) ? <Admin /> : <Navigate to="/tasks" replace />

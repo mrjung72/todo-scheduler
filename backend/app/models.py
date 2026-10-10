@@ -117,3 +117,35 @@ class TaskAttachFile(Base):
     workschid = Column(Integer, ForeignKey("work_schedule_log.workschid"))
     task_filepath = Column(Text)
     create_date = Column(DateTime, default=datetime.now)
+
+
+class Board(Base):
+    """게시판 글 — is_public: 1-공개, 0-비공개(작성자·관리자만 조회)."""
+    __tablename__ = "boards"
+    boardid = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(Text, nullable=False)
+    content = Column(Text)
+    is_public = Column(Integer, default=1)
+    passwd = Column(Text)                               # 비공개 시 열람 비밀번호(pbkdf2 해시)
+    user_id = Column(Text, ForeignKey("users.userid"))    # 작성자
+    create_date = Column(DateTime, default=datetime.now)
+    update_date = Column(DateTime)
+
+
+class BoardComment(Base):
+    __tablename__ = "board_comments"
+    commentid = Column(Integer, primary_key=True, autoincrement=True)
+    boardid = Column(Integer, ForeignKey("boards.boardid"))
+    user_id = Column(Text, ForeignKey("users.userid"))
+    content = Column(Text, nullable=False)
+    create_date = Column(DateTime, default=datetime.now)
+
+
+class BoardAttachFile(Base):
+    """게시판 첨부파일 — 작업 첨부(task_attach_files)와 분리된 전용 테이블."""
+    __tablename__ = "board_attach_files"
+    fileid = Column(Integer, primary_key=True, autoincrement=True)
+    file_name = Column(Text, nullable=False)
+    boardid = Column(Integer, ForeignKey("boards.boardid"))
+    file_filepath = Column(Text)
+    create_date = Column(DateTime, default=datetime.now)

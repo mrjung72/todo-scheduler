@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import TaskAttachFile, Task, User
+from ..models import TaskAttachFile, Task, User, Board, BoardAttachFile
 from ..security import get_current_user, check_owner_or_admin
 
 router = APIRouter(prefix="/api/attach-files", tags=["attach-files"])
@@ -80,14 +80,26 @@ def _check_blocked(filename: str | None):
             400, f"'.{ext}' 형식의 파일은 보안상 업로드할 수 없습니다")
 
 
+def _board_file_out(f: BoardAttachFile):
+    return {"fileid": f.fileid, "file_name": f.file_name, "boardid": f.boardid,
+            "file_size": _file_size(f.file_filepath),
+            "create_date": f.create_date}
+
+
 @router.get("")
 def list_files(taskid: int | None = None, workschid: int | None = None,
+               boardid: int | None = None,
                db: Session = Depends(get_db),
                me: object = Depends(get_current_user)):
+    if boardid is not None:
+        rows = (db.query(BoardAttachFile)
+                .filter(BoardAttachFile.boardid == boardid)
+                .order_by(BoardAttachFile.fileid).all())
+        return [_board_file_out(f) for f in rows]
     q = _list_query(db)
     # 전체 목록(관리자화면 첨부파일 탭)은 비스태프에게 본인 작업만 노출.
     # 개발매니저(3)는 관리자화면 전체 조회 권한으로 전체 목록 조회 가능.
-    # taskid/workschid 지정 조회는 작업 팝업과 동일한 접근 수준으로 허용.
+    # taskid/workschid/boardid 지정 조회는 팝업과 동일한 접근 수준으로 허용.
     if me.user_grade not in (0, 1, 3) and taskid is None and workschid is None:
         q = q.filter(Task.work_userid == me.userid)
     if taskid is not None:
@@ -106,12 +118,36 @@ class AttachMeta(BaseModel):
 
 @router.post("", status_code=201)
 def upload_file(file: UploadFile = File(...),
-                taskid: int = Form(...),
+                taskid: int = Form(None),
                 workschid: int = Form(None),
+                boardid: int = Form(None),
                 db: Session = Depends(get_db),
                 me=Depends(get_current_user)):
-    """파일 업로드 -> uploads/ 에 저장하고 첨부파일 레코드 생성."""
+    """파일 업로드 -> uploads/ 에 저장하고 첨부파일 레코드 생성.
+    boardid 지정 시 게시판 전용 테이블(board_attach_files)에 기록."""
     _check_blocked(file.filename)
+    if boardid is not None:
+        board = db.get(Board, boardid)
+        if not board:
+            raise HTTPException(404, "게시글을 찾을 수 없습니다")
+        if not board.is_public and board.user_id != me.userid \
+                and me.user_grade not in (0, 1):
+            raise HTTPException(403, "비공개 게시글입니다")
+        obj = BoardAttachFile(file_name=file.filename, boardid=boardid,
+                              create_date=datetime.now())
+        db.add(obj)
+        db.flush()  # fileid 확보 -> 파일명에 붙여 중복 방지
+        safe_name = f"{obj.fileid}_{os.path.basename(file.filename or 'file')}"
+        dir_path = os.path.join(UPLOAD_DIR, "board_files", str(boardid))
+        os.makedirs(dir_path, exist_ok=True)
+        path = os.path.join(dir_path, safe_name)
+        with open(path, "wb") as out:
+            out.write(file.file.read())
+        obj.file_filepath = os.path.relpath(path, BACKEND_DIR)
+        db.commit()
+        return _board_file_out(obj)
+    if taskid is None:
+        raise HTTPException(422, "taskid 또는 boardid가 필요합니다")
     task = db.get(Task, taskid)
     if not task:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
@@ -172,6 +208,47 @@ def update_file(fileid: int, body: AttachMeta, db: Session = Depends(get_db),
     db.commit()
     db.refresh(obj)
     return _to_out((obj, None, None, None))
+
+
+@router.get("/board/{fileid}/download")
+def download_board_file(fileid: int, pw: str | None = None,
+                        db: Session = Depends(get_db),
+                        me=Depends(get_current_user)):
+    """게시판 첨부파일 다운로드 — 게시글 조회 권한과 동일.
+    비공개글은 작성자·스태프 또는 게시글 비밀번호(pw) 확인 후 허용."""
+    obj = db.get(BoardAttachFile, fileid)
+    if not obj:
+        raise HTTPException(404, "첨부파일을 찾을 수 없습니다")
+    b = db.get(Board, obj.boardid)
+    if b and not b.is_public and b.user_id != me.userid \
+            and me.user_grade not in (0, 1):
+        from ..security import verify_password
+        if not (b.passwd and verify_password(pw or "", b.passwd)):
+            raise HTTPException(403, "비공개 게시글입니다")
+    if not obj.file_filepath:
+        raise HTTPException(404, "저장된 파일이 없습니다")
+    path = _file_path(obj.file_filepath)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "파일을 찾을 수 없습니다")
+    return FileResponse(path, filename=obj.file_name)
+
+
+@router.delete("/board/{fileid}", status_code=204)
+def delete_board_file(fileid: int, db: Session = Depends(get_db),
+                      me=Depends(get_current_user)):
+    """게시판 첨부 삭제 — 글 작성자 또는 스태프."""
+    obj = db.get(BoardAttachFile, fileid)
+    if not obj:
+        raise HTTPException(404, "첨부파일을 찾을 수 없습니다")
+    b = db.get(Board, obj.boardid)
+    if b and b.user_id != me.userid and me.user_grade not in (0, 1):
+        raise HTTPException(403, "작성자만 삭제할 수 있습니다")
+    if obj.file_filepath:
+        path = _file_path(obj.file_filepath)
+        if os.path.isfile(path):
+            os.remove(path)
+    db.delete(obj)
+    db.commit()
 
 
 @router.get("/{fileid}/download")
