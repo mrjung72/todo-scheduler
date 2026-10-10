@@ -80,6 +80,11 @@ button.link {
   text-decoration: underline; padding: 0 4px;
 }
 button.link:hover { background: none; color: #1d4ed8; }
+/* 셀 옆 사용자 정보 버튼 */
+button.uinfo {
+  text-decoration: none; font-size: 11px; padding: 0 2px;
+  vertical-align: middle;
+}
 /* 표 셀 내 긴 텍스트를 한 줄 말줄임으로 표시 */
 button.clip {
   display: inline-block; max-width: 280px; text-align: left;

@@ -4,6 +4,7 @@ import 'highlight.js/styles/github.css'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL, GRADE_LABEL,
   NEXT_STAT, USER_STAT_LABEL, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
+import UserInfoPopup from '../UserInfoPopup'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -331,7 +332,9 @@ function UsersTab() {
     try {
       await api.post('/users', {
         ...form,
-        work_hours_day: form.work_hours_day === '' ? null : +form.work_hours_day,
+        // 하루작업시간은 개발자 등급(수석1·일반4)만 적용
+        work_hours_day: [1, 4].includes(+form.user_grade) && form.work_hours_day !== ''
+          ? +form.work_hours_day : null,
       })
       setForm({ ...empty, work_hours_day: (cfgHours >= 2 && cfgHours <= 8) ? cfgHours : '' }); load()
     } catch (e) { alert(errMsg(e)) }
@@ -420,12 +423,14 @@ function UsersTab() {
           <option value="">기본사이트</option>
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
+        {[1, 4].includes(+form.user_grade) && (
         <select value={form.work_hours_day} style={{ width: '130px' }}
-          title="하루작업시간"
+          title="하루작업시간 (개발자만 설정 가능)"
           onChange={e => setForm({ ...form, work_hours_day: e.target.value })}>
           <option value="">하루작업시간(기본)</option>
           {[2, 3, 4, 5, 6, 7, 8].map(h => <option key={h} value={h}>{h}시간</option>)}
         </select>
+        )}
         <button type="submit">추가</button>
       </form>
       )}
@@ -462,10 +467,12 @@ function UsersTab() {
                 onSave={v => save(u.userid, { default_siteid: v || null })}
                 options={[{ value: '', label: '-' },
                   ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]} /></td>
-              <td className="c"><EditableCell value={u.work_hours_day} disabled={locked}
-                onSave={v => save(u.userid, { work_hours_day: v === '' ? null : +v })}
-                options={[{ value: '', label: '기본' },
-                  ...[2, 3, 4, 5, 6, 7, 8].map(h => ({ value: h, label: `${h}시간` }))]} /></td>
+              <td className="c">{[1, 4].includes(u.user_grade)
+                ? <EditableCell value={u.work_hours_day} disabled={locked}
+                  onSave={v => save(u.userid, { work_hours_day: v === '' ? null : +v })}
+                  options={[{ value: '', label: '기본' },
+                    ...[2, 3, 4, 5, 6, 7, 8].map(h => ({ value: h, label: `${h}시간` }))]} />
+                : <span>-</span>}</td>
               <td className="c">
                 {u.userid === myId() &&
                 <button onClick={() => {
@@ -609,9 +616,15 @@ function TasksTab() {
   // 저장된 검색조건이 없으면 기본값: 사이트=본인 기본사이트, 상태=작업요청
   const [siteF, setSiteF] = useState(savedF.site ?? mySite() ?? '')
   const [statF, setStatF] = useState(savedF.stat ?? 'R')
+  const [workF, setWorkF] = useState(savedF.work || '')
   const [typeF, setTypeF] = useState(savedF.type || '')
   const [selTask, setSelTask] = useState(null)
   const [startForm, setStartForm] = useState(null)  // {taskid, start, fixed} 시작일시 팝업
+  const [userSel, setUserSel] = useState(null)      // 사용자 정보 팝업 대상 userid
+  const userBtn = uid => uid
+    ? <button type="button" className="link uinfo" title="사용자 정보"
+        onClick={() => setUserSel(uid)}>ⓘ</button>
+    : null
   const [endForm, setEndForm] = useState(null)      // {taskid, end} 휴일작업 종료일시 팝업
   const [newId, setNewId] = useState(null)          // 방금 추가한 작업 ID (강조용)
   const [msg, setMsg] = useState('')
@@ -711,9 +724,10 @@ function TasksTab() {
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
-    (!typeF || t.task_type === typeF))
+    (!typeF || t.task_type === typeF) &&
+    (!workF || t.work_userid === workF))
     .filter(t => staff || viewer || t.work_userid === myId())  // 조회전용·일반개발자 본인 작업만
-  const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF])
+  const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF, workF])
 
   // 방금 추가한 작업이 보이는 페이지로 이동 + 행 강조
   // (새 작업은 항상 작업요청(R) — 상태 필터는 R로 두고 나머지 조건만 해제)
@@ -723,8 +737,8 @@ function TasksTab() {
     if (newHandled.current) return
     const idx = filtered.findIndex(t => t.taskid === newId)
     if (idx < 0) {
-      if (siteF || (statF && statF !== 'R') || typeF || q) {
-        setSiteF(''); setStatF('R'); setTypeF(''); setQ('')
+      if (siteF || (statF && statF !== 'R') || typeF || workF || q) {
+        setSiteF(''); setStatF('R'); setTypeF(''); setWorkF(''); setQ('')
       }
       return   // 목록 갱신 후 이펙트가 다시 실행됨
     }
@@ -813,10 +827,15 @@ function TasksTab() {
           <option value="">유형(전체)</option>
           {typeOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select value={workF} onChange={e => setWorkF(e.target.value)}>
+          <option value="">작업자(전체)</option>
+          {users.filter(u => [1, 3, 4].includes(u.user_grade)).map(u =>
+            <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
-          saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, q })
+          saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, work: workF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <ExcelButtons name="작업" cols={cols} rows={filtered}
@@ -897,13 +916,15 @@ function TasksTab() {
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
               <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 users={reqUsers} listId="req-user-dl"
-                onSave={v => save(t.taskid, { req_userid: v })} /></td>
+                onSave={v => save(t.taskid, { req_userid: v })} />{userBtn(t.req_userid)}</td>
               <td className="c"><EditableCell value={t.itos_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { itos_userid: v })}
-                options={uopt([0, 5])} /></td>
-              <td className="c work-col"><EditableCell value={t.work_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
-                onSave={v => save(t.taskid, { work_userid: v })}
-                options={devOpt} /></td>
+                options={uopt([0, 5])} />{userBtn(t.itos_userid)}</td>
+              <td className="c work-col">{can(t) && ['R', 'C', 'W'].includes(t.task_stat)
+                ? <EditableCell value={t.work_userid}
+                  onSave={v => save(t.taskid, { work_userid: v })}
+                  options={devOpt} />
+                : <span>{t.work_user_name || t.work_userid}</span>}{userBtn(t.work_userid)}</td>
               <td className="c">{fmtDT(t.req_date)}</td>
               <td className={`c${can(t) ? ' clickable' : ''}`}
                 title={can(t) ? '클릭하면 시작일시를 수정합니다' : undefined}
@@ -974,6 +995,8 @@ function TasksTab() {
         </div>
       )}
       {selTask && <TaskDetailPopup task={selTask} onClose={() => setSelTask(null)} onChanged={load} />}
+      {userSel && <UserInfoPopup userid={userSel} users={users} sites={sites}
+        onClose={() => setUserSel(null)} />}
     </div>
   )
 }

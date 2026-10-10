@@ -158,6 +158,7 @@ export default function App() {
             <p><b>이메일</b> {profile.user_email || '-'}</p>
             <p><b>등급</b> {GRADE_LABEL[profile.user_grade] ?? profile.user_grade}</p>
             <p><b>기본사이트</b> {profile.default_siteid || '-'}</p>
+            {[1, 4].includes(profile.user_grade) && (
             <p><b>하루작업시간</b>{' '}
               <select value={whDay}
                 title="기본은 근무구간 기본값 적용"
@@ -166,6 +167,7 @@ export default function App() {
                 {[2, 3, 4, 5, 6, 7, 8].map(h => <option key={h} value={h}>{h}시간</option>)}
               </select>
             </p>
+            )}
             <div className="popup-btns">
               <button onClick={openPw}>비밀번호 변경</button>
               <button onClick={() => setProfile(null)}>닫기</button>

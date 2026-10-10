@@ -98,6 +98,9 @@ def create_user(body: UserCreate, db: Session = Depends(get_db),
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     data = body.model_dump()
     _check_work_hours(data)
+    # 하루작업시간은 개발자 등급(수석1·일반4)만 사용 — 그 외 등급은 저장하지 않음
+    if data.get("user_grade") not in (1, 4):
+        data["work_hours_day"] = None
     data["password"] = hash_password(data.pop("password") or "1234")
     obj = User(**data)
     db.add(obj)
@@ -128,6 +131,14 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
         if not data:
             raise HTTPException(400, "수정할 수 있는 항목이 없습니다")
     _check_work_hours(data)
+    # 하루작업시간은 개발자 등급(수석1·일반4)만 설정 가능
+    eff_grade = data.get("user_grade") if data.get("user_grade") is not None else obj.user_grade
+    if "work_hours_day" in data and eff_grade not in (1, 4):
+        raise HTTPException(
+            400, "하루작업시간은 개발자(수석/일반)만 설정할 수 있습니다")
+    # 개발자 외 등급으로 변경되면 하루작업시간을 초기화
+    if data.get("user_grade") is not None and data["user_grade"] not in (1, 4):
+        data["work_hours_day"] = None
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     # 비밀번호는 본인만 직접 변경 가능 — 타인은 초기화(1234)만 가능

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
+import UserInfoPopup from '../UserInfoPopup'
 
 const PAGE_SIZE = 20
 
@@ -18,6 +19,7 @@ export default function TaskList() {
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [cfg, setCfg] = useState(null)
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
+  const [userSel, setUserSel] = useState(null)   // 사용자 정보 팝업 대상 userid
   const [page, setPage] = useState(0)
 
   const load = useCallback(async () => {
@@ -138,9 +140,15 @@ export default function TaskList() {
                   <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
                 <button className="link" onClick={() => setSel(t)}>{t.task_name}</button></td>
               <td className="r fit">{t.work_hours_estimated}</td>
-              <td className="c">{t.req_user_name || t.req_userid}</td>
-              <td className="c">{t.itos_user_name || t.itos_userid}</td>
-              <td className="c">{t.work_user_name || t.work_userid || '-'}</td>
+              <td className="c">{t.req_userid
+                ? <button className="link" onClick={() => setUserSel(t.req_userid)}>{t.req_user_name || t.req_userid}</button>
+                : '-'}</td>
+              <td className="c">{t.itos_userid
+                ? <button className="link" onClick={() => setUserSel(t.itos_userid)}>{t.itos_user_name || t.itos_userid}</button>
+                : '-'}</td>
+              <td className="c">{t.work_userid
+                ? <button className="link" onClick={() => setUserSel(t.work_userid)}>{t.work_user_name || t.work_userid}</button>
+                : '-'}</td>
               <td className="c">
                 {fmtDT(t.task_start_date)}
                 {t.start_fixed ? <span className="badge">고정</span> : null}
@@ -161,6 +169,8 @@ export default function TaskList() {
         <button disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>다음</button>
       </div>
       {sel && <TaskDetailPopup task={sel} onClose={() => setSel(null)} onChanged={load} />}
+      {userSel && <UserInfoPopup userid={userSel} users={users} sites={sites}
+        onClose={() => setUserSel(null)} />}
       <p className="hint">
         우선순위 순 정렬. 작업 수정·삭제·일정 재적용은 [관리자 → 작업스케줄] 화면에서 합니다.
         {cfg
