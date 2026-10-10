@@ -855,7 +855,7 @@ function TasksTab() {
         }}>검색조건 저장</button>
         <ExcelButtons name="작업" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
-        {!viewer && <button className="primary" onClick={recalc}>재적용(재계산)</button>}
+        {!viewer && <button className="primary" onClick={recalc}>작업스케쥴링 재실행</button>}
         {msg && <span className="msg">{msg}</span>}
       </div>
       {!viewer && <form className="newtask" onSubmit={add}>

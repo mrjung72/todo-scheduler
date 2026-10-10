@@ -77,6 +77,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const { pos: logPos, onDown: logOnDown } = useDrag()  // 작업내용 팝업 드래그
 
   useEffect(() => {
+    setTf({})   // 다른 작업으로 열릴 때 이전 수정값 초기화
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => setDaily([]))
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})

@@ -110,6 +110,7 @@ class TaskOut(TaskBase):
     model_config = ConfigDict(from_attributes=True)
     taskid: int
     create_date: Optional[datetime] = None
+    start_fixed: Optional[int] = 0
 
 
 # ---------- calendar_define ----------
@@ -218,5 +219,4 @@ class TaskDetail(TaskOut):
     work_user_dept: Optional[str] = None
     work_user_title: Optional[str] = None
     work_hours_day: Optional[float] = None   # 작업자의 하루 개발시간 (None=기본 근무구간)
-    start_fixed: Optional[int] = 0
     weekday_included: Optional[bool] = False   # 휴일작업 기간에 근무일 포함 여부(경고)
