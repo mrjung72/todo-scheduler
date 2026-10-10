@@ -79,9 +79,10 @@ function trimBarToWork(arg) {
       const x1 = Math.min(elRect.width, r.right - elRect.left)
       if (x1 - x0 <= 0 || !r.width) continue
       const dd = p.daily[td.dataset.date]
-      // 비작업 칸: 없거나 free(수동작업일)면 전체, 일부휴가면 뒤쪽 off 비율만 연하게
+      // 비작업 칸: 없거나 free(수동작업일)면 전체 연하게.
+      // 점유구간(occ, 다른 작업이 차지한 시간)·휴가로 잘린 뒤쪽(off)도 연하게
       const offs = (!dd || dd.free) ? [[0, 1]]
-        : (dd.off ? [[1 - dd.off, 1]] : [])
+        : [...(dd.occ || []), ...(dd.off ? [[1 - dd.off, 1]] : [])]
       const c0 = (x0 - cellLeft) / r.width, c1 = (x1 - cellLeft) / r.width
       for (const [a, b] of offs) {
         const lo = Math.max(c0, a), hi = Math.min(c1, b)

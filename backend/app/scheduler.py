@@ -267,11 +267,29 @@ def daily_breakdown(start, end, cal, hol, uid, uhours: dict = None,
     while d <= end.date():
         segs = worker_segments(d, cal, hol, uid, uhours, busy)
         if segs:
+            nominal_segs = worker_segments(d, cal, {}, uid, uhours)
             daylen = sum((e - s).total_seconds() for s, e in segs) or 1
-            # 일부휴가 등으로 차감된 뒤쪽 비율 (정상 근무시간 대비 비작업 꼬리)
-            nominal = sum((e - s).total_seconds()
-                          for s, e in worker_segments(d, cal, {}, uid, uhours)) or daylen
-            off = round(max(0.0, 1 - daylen / nominal), 3)
+            # 정상 근무시간(휴가·점유 미적용) 대비 비율 기준
+            nominal = sum((e - s).total_seconds() for s, e in nominal_segs) or daylen
+            # off: 개인휴가로 잘린 비작업 꼬리 비율
+            # occ: 점유구간(다른 작업)으로 잘린 구간의 정규일 기준 비율 목록
+            occ = []
+            if busy:
+                off = round(max(0.0, 1 - sum(
+                    (e - s).total_seconds() for s, e in
+                    worker_segments(d, cal, hol, uid, uhours)) / nominal), 3)
+                pos = 0.0
+                for ns, ne in nominal_segs:
+                    base = pos
+                    pos += (ne - ns).total_seconds()
+                    for b0, b1 in busy:
+                        lo, hi = max(ns, b0), min(ne, b1)
+                        if lo < hi:
+                            occ.append([
+                                round((base + (lo - ns).total_seconds()) / nominal, 3),
+                                round((base + (hi - ns).total_seconds()) / nominal, 3)])
+            else:
+                off = round(max(0.0, 1 - daylen / nominal), 3)
             hours, spans = 0.0, []
             offset = 0.0  # 이전 근무구간들의 누적 길이(초)
             for s, e in segs:
@@ -287,7 +305,7 @@ def daily_breakdown(start, end, cal, hol, uid, uhours: dict = None,
             if hours > 0:
                 result[d.strftime("%Y-%m-%d")] = {
                     "hours": round(hours, 1), "spans": spans,
-                    "off": off,
+                    "off": off, "occ": occ,
                     # 'F'(휴일 수동작업): 24h 기준 비율 -> 프론트에서 최소폭 보정
                     "free": cal.get(d.strftime("%Y%m%d")) == FREE_DAY_STAT}
         d += timedelta(days=1)
