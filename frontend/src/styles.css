@@ -226,6 +226,10 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .kb-card[draggable="true"]:active { cursor: grabbing; }
 .kb-row1 { font-size: 12px; margin-bottom: 3px; }
 .kb-no { color: #94a3b8; font-size: 11px; font-weight: 700; margin-right: 5px; }
+.kb-prio {
+  color: #fff; background: #64748b; font-size: 10px; font-weight: 700;
+  border-radius: 3px; padding: 0 4px; margin-right: 5px;
+}
 .kb-req { color: #0f766e; margin-right: 6px; font-weight: 600; }
 .kb-title { font-weight: 600; font-size: 13px; }
 .kb-site { color: #2563eb; margin-right: 5px; }
@@ -270,6 +274,11 @@ table.grid td.clickable:hover { background: #eff6ff; }
 
 /* 작업 바 안 작업자명 + 작업명 */
 .ev-line { display: flex; align-items: baseline; overflow: hidden; white-space: nowrap; }
+.ev-id { font-weight: 700; margin-right: 4px; flex-shrink: 0; opacity: .8; }
+.ev-prio {
+  font-weight: 700; margin-right: 4px; flex-shrink: 0;
+  background: rgba(255,255,255,.35); border-radius: 3px; padding: 0 4px;
+}
 .ev-site { font-weight: 700; margin-right: 5px; flex-shrink: 0; }
 .ev-worker { margin-left: 5px; flex-shrink: 0; opacity: .85; }
 .ev-req { margin-right: 4px; flex-shrink: 0; opacity: .9; font-weight: 600; }

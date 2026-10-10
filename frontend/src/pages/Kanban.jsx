@@ -131,6 +131,8 @@ export default function Kanban() {
                       style={{ borderLeft: `5px solid ${taskColor(t.taskid)}` }}>
                       <div className="kb-row1">
                         <span className="kb-no">#{t.taskid}</span>
+                        {t.priority != null &&
+                          <span className="kb-prio" title="우선순위">{t.priority}</span>}
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_type &&
                           <span className="kb-type">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>}

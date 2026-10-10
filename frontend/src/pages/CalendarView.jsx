@@ -360,8 +360,11 @@ export default function CalendarView() {
           const site = arg.event.extendedProps.site_name
           const req = arg.event.extendedProps.req_user_name
             || arg.event.extendedProps.req_userid
+          const prio = arg.event.extendedProps.priority
           return (
             <div className="ev-line">
+              <span className="ev-id">#{arg.event.extendedProps.taskid}</span>
+              {prio != null && <span className="ev-prio">{prio}</span>}
               {!!arg.event.extendedProps.holiday_work &&
                 <span className="badge hol-badge">휴일</span>}
               {!!arg.event.extendedProps.weekday_included &&

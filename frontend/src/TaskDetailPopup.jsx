@@ -58,6 +58,18 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [workHr, setWorkHr] = useState(task.work_hours_day)
   const [reqText, setReqText] = useState(task.task_req_remark || '')
   const [reqEdit, setReqEdit] = useState(null)
+  const [tf, setTf] = useState({})               // 팝업 내 수정 반영 (시작/종료/예상/고정)
+  const [startEdit, setStartEdit] = useState(null)   // 시작일시 수정 입력값
+  const [hoursEdit, setHoursEdit] = useState(null)   // 예상시간 수정 입력값
+  const [prioEdit, setPrioEdit] = useState(null)     // 우선순위 수정 입력값
+  // 수정 제한 항목은 작업요청·검토중·대기중(또는 휴일작업)에서만 변경 가능
+  const canEditFields = canEdit &&
+    (['R', 'C', 'W'].includes(task.task_stat) || !!task.holiday_work)
+  const startDate = tf.task_start_date ?? task.task_start_date
+  const endEst = tf.task_end_date_estimated ?? task.task_end_date_estimated
+  const startFixed = tf.start_fixed ?? task.start_fixed
+  const estHours = tf.work_hours_estimated ?? task.work_hours_estimated
+  const prio = tf.priority ?? task.priority
   const fileRef = useRef(null)
   const downOnOverlay = useRef(false)   // mousedown이 오버레이에서 시작됐는지
   const { pos, onDown } = useDrag()           // 메인 팝업 드래그
@@ -96,6 +108,48 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
       }
       setLogForm(null)
       loadLogs()
+    } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
+  const reloadDaily = () =>
+    api.get(`/tasks/${task.taskid}/daily`)
+      .then(r => setDaily(r.data)).catch(() => {})
+
+  // 시작일시 수동 설정 (서버에서 고정 처리 + 종료예상일시 재계산)
+  const saveStart = async () => {
+    try {
+      const { data } = await api.patch(`/tasks/${task.taskid}/start`, {
+        start_datetime: startEdit.length === 16 ? startEdit + ':00' : startEdit })
+      setTf(t => ({ ...t, task_start_date: data.task_start_date,
+        task_end_date_estimated: data.task_end_date_estimated,
+        start_fixed: data.start_fixed }))
+      setStartEdit(null); reloadDaily(); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+  const unfixStart = async () => {
+    if (!window.confirm('시작일시 고정을 해제하면 다음 재계산 시 자동 배치됩니다. 계속할까요?')) return
+    try {
+      const { data } = await api.patch(`/tasks/${task.taskid}/unfix`)
+      setTf(t => ({ ...t, start_fixed: data.start_fixed }))
+      onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '처리에 실패했습니다') }
+  }
+  const saveHours = async () => {
+    try {
+      const { data } = await api.put(`/tasks/${task.taskid}`, {
+        work_hours_estimated: +hoursEdit })
+      setTf(t => ({ ...t, work_hours_estimated: data.work_hours_estimated,
+        task_end_date_estimated: data.task_end_date_estimated }))
+      setHoursEdit(null); reloadDaily(); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
+  const savePrio = async () => {
+    try {
+      const { data } = await api.put(`/tasks/${task.taskid}`, {
+        priority: +prioEdit })
+      setTf(t => ({ ...t, priority: data.priority }))
+      setPrioEdit(null); onChanged?.()
     } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
   }
 
@@ -153,8 +207,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const dayHours = workHr || cfg?.work_hours_per_day
   const workDays = (daily && daily.length)
     ? (daily.filter(d => d.hours > 0).length || null)
-    : (dayHours && task.work_hours_estimated
-      ? +(task.work_hours_estimated / dayHours).toFixed(1) : null)
+    : (dayHours && estHours ? +(estHours / dayHours).toFixed(1) : null)
 
   return (
     <div className="popup"
@@ -169,6 +222,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         <h3 className="popup-title" onMouseDown={onDown}
           style={{ background: taskColor(task.taskid), cursor: 'move', userSelect: 'none' }}>
           <div className="pt-row1">
+            <span className="pt-chip">#{task.taskid}</span>
+            {prio != null &&
+              <span className="pt-chip">우선순위 {prio}</span>}
             {(task.site_name || task.siteid) &&
               <span className="pt-chip">{task.site_name || task.siteid}</span>}
             {task.task_type &&
@@ -247,12 +303,52 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 task.req_user_title, task.req_user_dept)}</p>
               <p><b>작업자</b> {fmtUser(task.work_user_name, task.work_userid,
                 task.work_user_title, task.work_user_dept)}</p>
-              <p><b>예상시간</b> {task.work_hours_estimated}h
+              <p><b>우선순위</b> {prioEdit === null ? (<>
+                {prio}
+                {canEditFields &&
+                  <button className="link"
+                    onClick={() => setPrioEdit(prio)}>수정</button>}
+              </>) : (<>
+                <input type="number" step="1" style={{ maxWidth: 80 }}
+                  value={prioEdit}
+                  onChange={e => setPrioEdit(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && savePrio()} />
+                <button className="link" onClick={savePrio}>저장</button>
+                <button className="link" onClick={() => setPrioEdit(null)}>취소</button>
+              </>)}</p>
+              <p><b>예상시간</b> {hoursEdit === null ? (<>
+                {estHours}h
                 {workDays != null && ` (총 ${workDays}일)`}
-                {dayHours != null && ` / 하루 ${dayHours}시간`}</p>
+                {dayHours != null && ` / 하루 ${dayHours}시간`}
+                {canEditFields &&
+                  <button className="link"
+                    onClick={() => setHoursEdit(estHours)}>수정</button>}
+              </>) : (<>
+                <input type="number" min="0.5" step="0.5" style={{ maxWidth: 80 }}
+                  value={hoursEdit}
+                  onChange={e => setHoursEdit(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveHours()} />h
+                <button className="link" onClick={saveHours}>저장</button>
+                <button className="link" onClick={() => setHoursEdit(null)}>취소</button>
+              </>)}</p>
               <p><b>요청일자</b> {fmtDT(task.req_date) || '-'}</p>
-              <p><b>시작</b> {fmtDT(task.task_start_date) || '-'}</p>
-              <p><b>종료(예상)</b> {fmtDT(task.task_end_date_estimated) || '-'}</p>
+              <p><b>시작</b> {startEdit === null ? (<>
+                {fmtDT(startDate) || '-'}
+                {!!startFixed &&
+                  <span className="badge" title="시작일시가 고정되어 재계산에도 유지됩니다">고정</span>}
+                {canEditFields &&
+                  <button className="link" onClick={() =>
+                    setStartEdit(startDate ? startDate.slice(0, 16) : '')}>수정</button>}
+                {canEditFields && !!startFixed &&
+                  <button className="link" onClick={unfixStart}>고정해제</button>}
+              </>) : (<>
+                <input type="datetime-local" value={startEdit}
+                  onChange={e => setStartEdit(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveStart()} />
+                <button className="link" onClick={saveStart}>저장</button>
+                <button className="link" onClick={() => setStartEdit(null)}>취소</button>
+              </>)}</p>
+              <p><b>종료(예상)</b> {fmtDT(endEst) || '-'}</p>
             </div>
             {daily && daily.length > 0 && (
               <div className="daily">
