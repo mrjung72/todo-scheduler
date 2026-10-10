@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
-import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor } from './api'
+import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
+  taskColor, uploadWithProgress, saveBlob } from './api'
+import ProgressBar from './ProgressBar'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -53,6 +55,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [logView, setLogView] = useState(null)   // 작업내용 상세 팝업
   const isStaff = me && [0, 1].includes(me.user_grade)
   const [files, setFiles] = useState(null)
+  const [upPct, setUpPct] = useState(null)           // 업로드 진행률
   const [cfg, setCfg] = useState(null)
   // 작업자의 하루작업시간 — task 객체에 없으면 users 조회로 보완
   const [workHr, setWorkHr] = useState(task.work_hours_day)
@@ -185,13 +188,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   }
   const downloadFile = f =>
     api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
-      .then(r => {
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(r.data)
-        a.download = f.file_name
-        a.click()
-        URL.revokeObjectURL(a.href)
-      }).catch(e => alert(e.response?.data?.detail || '다운로드 실패'))
+      .then(r => saveBlob(r.data, f.file_name))
+      .catch(e => alert(e.response?.data?.detail || '다운로드 실패'))
   const uploadFile = async (workschid = null, ev = null) => {
     const f = ev ? ev.target.files?.[0] : fileRef.current?.files?.[0]
     if (!f) { alert('첨부할 파일을 선택하세요'); return }
@@ -200,11 +198,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     fd.append('taskid', task.taskid)
     if (workschid) fd.append('workschid', workschid)
     try {
-      await api.post('/attach-files', fd)
+      setUpPct(0)
+      await uploadWithProgress('/attach-files', fd, setUpPct)
       if (ev) ev.target.value = ''
       else fileRef.current.value = ''
       loadFiles()
     } catch (e) { alert(e.response?.data?.detail || '업로드 실패') }
+    finally { setUpPct(null) }
   }
 
   // 작업이력/작업요청정보 뷰 토글
@@ -433,20 +433,22 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                         <button className="link"
                           onClick={() => downloadFile(f)}>{f.file_name}</button>
                       </td>
+                      <td className="r">{fmtSize(f.file_size)}</td>
                       <td className="r">{fmtDT(f.create_date)}</td>
                     </tr>
                   ))}
                   {files && !files.length && (
-                    <tr><td colSpan="2" className="empty">첨부파일이 없습니다</td></tr>
+                    <tr><td colSpan="3" className="empty">첨부파일이 없습니다</td></tr>
                   )}
                 </tbody>
               </table>
-              {canAttach && (
+              {canAttach && (<>
                 <div className="attach-add">
                   <input type="file" ref={fileRef} />
-                  <button onClick={uploadFile}>첨부</button>
+                  <button onClick={() => uploadFile()}>첨부</button>
                 </div>
-              )}
+                <ProgressBar pct={upPct} />
+              </>)}
             </div>
           </div>
           </>
@@ -502,6 +504,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                               <button className="link"
                                 onClick={() => downloadFile(f)}>{f.file_name}</button>
                             </td>
+                            <td className="r">{fmtSize(f.file_size)}</td>
                             <td className="r">{fmtDT(f.create_date)}</td>
                           </tr>
                         ))}
@@ -510,13 +513,15 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                         )}
                       </tbody>
                     </table>
-                    {(isStaff || logView.work_userid === me?.userid) &&
+                    {(isStaff || logView.work_userid === me?.userid) && <>
                       <div className="attach-add">
                         <label className="btn-file">파일 첨부
                           <input type="file" hidden
                             onChange={e => uploadFile(logView.workschid, e)} />
                         </label>
-                      </div>}
+                      </div>
+                      <ProgressBar pct={upPct} />
+                    </>}
                   </div>
                   <div className="popup-btns">
                     {(isStaff || logView.work_userid === me?.userid) &&

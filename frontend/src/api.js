@@ -20,6 +20,50 @@ api.interceptors.response.use(r => r, err => {
   return Promise.reject(err)
 })
 
+// 업로드 차단 확장자 — 실행파일·스크립트·설치파일 등 (백엔드와 동일 목록)
+export const BLOCKED_FILE_EXT = new Set([
+  'exe', 'msi', 'msix', 'msp', 'mst', 'com', 'scr', 'pif', 'cpl', 'gadget',
+  'dll', 'sys', 'drv', 'ocx', 'bat', 'cmd', 'vbs', 'vbe', 'jse', 'wsf',
+  'wsc', 'wsh', 'ps1', 'ps2', 'psm1', 'reg', 'lnk', 'hta', 'msc', 'inf',
+  'sct', 'jar', 'apk', 'ipa', 'app', 'deb', 'rpm', 'run', 'sh', 'bash',
+])
+export const fileExt = name => (name || '').split('.').pop().toLowerCase()
+
+// 파일 업로드 + 진행률 콜백 (0~100). 차단 확장자는 요청 전 거부
+export const uploadWithProgress = (url, fd, onProgress) => {
+  const f = fd.get('file')
+  const ext = fileExt(f?.name)
+  if (f && BLOCKED_FILE_EXT.has(ext)) {
+    return Promise.reject({ response: { data: {
+      detail: `'.${ext}' 형식의 파일은 보안상 업로드할 수 없습니다` } } })
+  }
+  return api.post(url, fd, {
+    onUploadProgress: e =>
+      onProgress?.(e.total ? Math.round(e.loaded * 100 / e.total) : 0),
+  })
+}
+
+// Blob 응답을 파일로 저장 — 다운로드 시작 후 URL 해제 (즉시 해제 시 실패 가능)
+export const saveBlob = (blob, fileName) => {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10000)
+}
+
+// 파일 크기 표시 (B/KB/MB/GB)
+export const fmtSize = n => {
+  if (n == null) return ''
+  if (n < 1024) return `${n} B`
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
+  return `${(n / 1024 ** 3).toFixed(2)} GB`
+}
+
 export default api
 
 export const fmtDT = (iso) => {

@@ -39,14 +39,45 @@ def _list_query(db: Session):
             .order_by(TaskAttachFile.fileid.desc()))
 
 
+def _file_path(stored: str) -> str:
+    return (stored if os.path.isabs(stored)
+            else os.path.join(BACKEND_DIR, stored))
+
+
+def _file_size(stored):
+    if not stored:
+        return None
+    try:
+        return os.path.getsize(_file_path(stored))
+    except OSError:
+        return None
+
+
 def _to_out(row):
     f, task_name, work_userid, work_user_name = row
     return {
         "fileid": f.fileid, "file_name": f.file_name, "taskid": f.taskid,
         "workschid": f.workschid, "task_filepath": f.task_filepath,
+        "file_size": _file_size(f.task_filepath),
         "create_date": f.create_date, "task_name": task_name,
         "work_userid": work_userid, "work_user_name": work_user_name,
     }
+
+
+# 업로드 차단 확장자 — 실행파일·스크립트·설치파일 등 (프론트 api.js와 동일 목록)
+BLOCKED_FILE_EXT = {
+    'exe', 'msi', 'msix', 'msp', 'mst', 'com', 'scr', 'pif', 'cpl', 'gadget',
+    'dll', 'sys', 'drv', 'ocx', 'bat', 'cmd', 'vbs', 'vbe', 'jse', 'wsf',
+    'wsc', 'wsh', 'ps1', 'ps2', 'psm1', 'reg', 'lnk', 'hta', 'msc', 'inf',
+    'sct', 'jar', 'apk', 'ipa', 'app', 'deb', 'rpm', 'run', 'sh', 'bash',
+}
+
+
+def _check_blocked(filename: str | None):
+    ext = (filename or '').rsplit('.', 1)[-1].lower()
+    if ext in BLOCKED_FILE_EXT:
+        raise HTTPException(
+            400, f"'.{ext}' 형식의 파일은 보안상 업로드할 수 없습니다")
 
 
 @router.get("")
@@ -80,6 +111,7 @@ def upload_file(file: UploadFile = File(...),
                 db: Session = Depends(get_db),
                 me=Depends(get_current_user)):
     """파일 업로드 -> uploads/ 에 저장하고 첨부파일 레코드 생성."""
+    _check_blocked(file.filename)
     task = db.get(Task, taskid)
     if not task:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
@@ -89,7 +121,10 @@ def upload_file(file: UploadFile = File(...),
     db.add(obj)
     db.flush()  # fileid 확보 -> 파일명에 붙여 중복 방지
     safe_name = f"{obj.fileid}_{os.path.basename(file.filename or 'file')}"
-    path = os.path.join(UPLOAD_DIR, safe_name)
+    # 작업별 하위 디렉토리: UPLOAD_DIR/task_files/<작업ID>/
+    dir_path = os.path.join(UPLOAD_DIR, "task_files", str(taskid))
+    os.makedirs(dir_path, exist_ok=True)
+    path = os.path.join(dir_path, safe_name)
     with open(path, "wb") as out:
         out.write(file.file.read())
     # backend/ 기준 상대경로로 저장 (커스텀 UPLOAD_DIR 절대경로도 그대로 인식)
