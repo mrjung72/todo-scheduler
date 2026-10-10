@@ -458,9 +458,8 @@ td.req-col input { width: 120px; }
 .home-wrap { max-width: 820px; margin: 0 auto; }
 .home-card {
   background: #fff; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08); cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
-.home-card.open { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
 .home-card .kb-title { display: flex; align-items: baseline; }
 .home-card .kb-row1 { display: flex; align-items: baseline; }
 .home-card .kb-row1 .home-stat { margin-left: auto; flex-shrink: 0; }
@@ -475,10 +474,5 @@ td.req-col input { width: 120px; }
 .home-stat.st-H { background: #ffedd5; color: #c2410c; }
 .home-stat.st-F { background: #dcfce7; color: #15803d; }
 .home-stat.st-X { background: #fee2e2; color: #b91c1c; }
-.home-detail {
-  margin-top: 10px; padding-top: 10px; border-top: 1px solid #f3f4f6;
-  font-size: 13px; display: flex; flex-direction: column; gap: 5px;
-}
-.home-detail div { display: flex; justify-content: space-between; gap: 12px; }
-.home-detail span { color: #6b7280; flex-shrink: 0; }
+.home-card .kb-meta .kb-req { font-size: 11px; }
 .home-empty { text-align: center; color: #9ca3af; padding: 40px 0; }
