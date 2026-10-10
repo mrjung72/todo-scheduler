@@ -32,8 +32,11 @@ def _to_out(row) -> UserHolidayOut:
     day_hours = user_hours_day or WORK_HOURS_PER_DAY   # 작업자별 하루시간 우선
     hrs = hol.holiday_hours or 0
     if hol.holiday_category == "P" and 0 < hrs < day_hours:
-        # 일부휴가는 하루 근무의 뒤쪽 hrs 시간을 차지 -> 뒤쪽 비율 구간
+        # 오후 일부휴가는 하루 근무의 뒤쪽 hrs 시간을 차지 -> 뒤쪽 비율 구간
         span = [round(1 - hrs / day_hours, 3), 1.0]
+    elif hol.holiday_category == "M" and 0 < hrs < day_hours:
+        # 오전 일부휴가는 하루 근무의 앞쪽 hrs 시간을 차지 -> 앞쪽 비율 구간
+        span = [0.0, round(hrs / day_hours, 3)]
     else:
         span = [0.0, 1.0]
     return UserHolidayOut(

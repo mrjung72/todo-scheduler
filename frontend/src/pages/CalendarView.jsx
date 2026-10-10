@@ -23,11 +23,14 @@ function trimBarToWork(arg) {
   const segW = harness.offsetWidth          // 세그먼트(바) 전체 너비 px
   if (!segW) return
 
-  // 개인휴가 바: 일부(P)는 하루 근무의 뒤쪽 비율만큼만 채움 (A는 전체 폭)
+  // 개인휴가 바: 일부(P-오후/M-오전)는 차지하는 비율 구간만큼만 채움 (A는 전체 폭)
   if (p.holiday) {
     const s = p.span
-    if (s?.[0] > 0 && dayEl.offsetWidth) {
-      arg.el.style.marginLeft = `${(s[0] * dayEl.offsetWidth / segW * 100).toFixed(3)}%`
+    if (s && dayEl.offsetWidth) {
+      if (s[0] > 0)
+        arg.el.style.marginLeft = `${(s[0] * dayEl.offsetWidth / segW * 100).toFixed(3)}%`
+      if (s[1] - s[0] < 1)
+        arg.el.style.width = `${((s[1] - s[0]) * dayEl.offsetWidth / segW * 100).toFixed(3)}%`
     }
     return
   }
@@ -137,7 +140,7 @@ export default function CalendarView() {
   const [showHol, setShowHol] = useState(savedF.holiday !== false)  // 작업자휴가 표시 여부
   // 달력은 대기중(W)/작업중(P) 스케줄만 표시 (서버에서도 W,P만 반환)
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
-    holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
+    holiday_half: 'PM', holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
   const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
   const calRef = useRef(null)
   const downOnOverlay = useRef(false)  // 오버레이에서 눌러 오버레이에서 뗀 클릭만 닫기
@@ -171,7 +174,8 @@ export default function CalendarView() {
       start: `${h.dateid.slice(0, 4)}-${h.dateid.slice(4, 6)}-${h.dateid.slice(6, 8)}`,
       allDay: true,
       title: `${h.user_name || h.work_userid} 휴가` +
-        (h.holiday_category === 'P' ? `(${h.holiday_hours}h)` : '(종일)') +
+        (h.holiday_category === 'P' ? `(오후 ${h.holiday_hours}h)`
+          : h.holiday_category === 'M' ? `(오전 ${h.holiday_hours}h)` : '(종일)') +
         (h.holiday_remark ? ` ${h.holiday_remark}` : ''),
       color: '#fb8c00',
       classNames: ['holiday-event'],
@@ -186,6 +190,8 @@ export default function CalendarView() {
   }, [load])
 
   const onDateClick = (info) => {
+    // 날짜 숫자를 눌렀을 때만 팝업 — 칸의 빈 공백 클릭은 무시
+    if (!info.jsEvent.target.closest('.fc-daygrid-day-number')) return
     // 이벤트(작업바/휴가바) 위 클릭은 eventClick이 처리 -> 여기선 건너뜀
     if (info.jsEvent.target.closest('.fc-daygrid-event-harness, .fc-event')) return
     if (!canReg) return  // 휴가 등록 권한 없음
@@ -200,14 +206,15 @@ export default function CalendarView() {
         const h = exist.extendedProps
         setHolForm({ date, ...emptyHol, edit: true,
           work_userid: h.work_userid,
-          holiday_category: h.holiday_category,
+          holiday_category: h.holiday_category === 'M' ? 'P' : h.holiday_category,
+          holiday_half: h.holiday_category === 'M' ? 'AM' : 'PM',
           holiday_hours: h.holiday_hours || 4,
           holiday_remark: h.holiday_remark || '' })
         return
       }
     }
     setHolForm({ date, ...emptyHol,
-      work_userid: staff ? '' : me.userid,   // 비스태프는 본인 고정
+      work_userid: me.userid,   // 기본 본인 — 스태프는 선택 변경 가능
       date_stat: 'H',
       holiday_remark: day?.holiday_remark || '' })
   }
@@ -232,7 +239,9 @@ export default function CalendarView() {
     } else {
       if (!holForm.work_userid) return
       const body = {
-        holiday_category: holForm.holiday_category,
+        holiday_category: holForm.holiday_category === 'P'
+          ? (holForm.holiday_half === 'AM' ? 'M' : 'P')
+          : 'A',
         holiday_hours: holForm.holiday_category === 'P' ? +holForm.holiday_hours : 0,
         holiday_remark: holForm.holiday_remark,
       }
@@ -264,7 +273,8 @@ export default function CalendarView() {
     setHolForm({ date: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
       ...emptyHol, edit: true,
       work_userid: h.work_userid,
-      holiday_category: h.holiday_category,
+      holiday_category: h.holiday_category === 'M' ? 'P' : h.holiday_category,
+      holiday_half: h.holiday_category === 'M' ? 'AM' : 'PM',
       holiday_hours: h.holiday_hours || 4,
       holiday_remark: h.holiday_remark || '' })
     setSelected(null)
@@ -398,7 +408,8 @@ export default function CalendarView() {
             </h3>
             <div className="popup-info">
               <p><b>작업자</b> {selected.user_name || selected.work_userid}</p>
-              <p><b>구분</b> {selected.holiday_category === 'A' ? '종일' : `일부 (${selected.holiday_hours}h)`}</p>
+              <p><b>구분</b> {selected.holiday_category === 'A' ? '종일'
+                : `일부 (${selected.holiday_category === 'M' ? '오전' : '오후'} ${selected.holiday_hours}h)`}</p>
               {selected.holiday_remark && <p><b>설명</b> {selected.holiday_remark}</p>}
             </div>
             <div className="popup-btns">
@@ -453,6 +464,8 @@ export default function CalendarView() {
                             : { ...holForm, work_userid: uid, edit: false })
                         }}>
                         <option value="">선택</option>
+                        {me && !users.some(u => u.userid === me.userid && isDevWorker(u)) &&
+                          <option value={me.userid}>{me.user_name || me.userid}</option>}
                         {users.filter(isDevWorker)
                           .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
                       </select>
@@ -468,13 +481,20 @@ export default function CalendarView() {
                       <option value="P">일부(시간)</option>
                     </select>
                   </label>
-                  {holForm.holiday_category === 'P' && (
+                  {holForm.holiday_category === 'P' && (<>
+                    <label>시간대
+                      <select value={holForm.holiday_half}
+                        onChange={e => setHolForm({ ...holForm, holiday_half: e.target.value })}>
+                        <option value="AM">오전</option>
+                        <option value="PM">오후</option>
+                      </select>
+                    </label>
                     <label>휴가시간
                       <input type="number" min="0.5" step="0.5" required
                         value={holForm.holiday_hours}
                         onChange={e => setHolForm({ ...holForm, holiday_hours: e.target.value })} />
                     </label>
-                  )}
+                  </>)}
                 </>
               ) : (
                 <label>구분

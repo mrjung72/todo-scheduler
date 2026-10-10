@@ -171,7 +171,22 @@ def worker_segments(d: date, cal: dict, hol: dict, userid,
         (e - s).total_seconds() for s, e in segs) / 3600.0
     if cat == "A" or (hrs or 0) >= day_hours:
         return []
-    # P-일부휴가: 하루 근무의 마지막 hrs 시간을 제외 (오후반차 방식)
+    if cat == "M":
+        # M-일부휴가(오전): 하루 근무의 앞쪽 hrs 시간을 제외
+        remaining = float(hrs)
+        out = []
+        for s, e in segs:
+            if remaining <= 0:
+                out.append((s, e))
+                continue
+            dur = (e - s).total_seconds() / 3600.0
+            if remaining >= dur:
+                remaining -= dur
+                continue
+            out.append((s + timedelta(hours=remaining), e))
+            remaining = 0
+        return _subtract_busy(out, d, busy)
+    # P-일부휴가(오후): 하루 근무의 마지막 hrs 시간을 제외 (오후반차 방식)
     remaining = float(hrs)
     out = []
     for s, e in reversed(segs):
@@ -271,25 +286,31 @@ def daily_breakdown(start, end, cal, hol, uid, uhours: dict = None,
             daylen = sum((e - s).total_seconds() for s, e in segs) or 1
             # 정상 근무시간(휴가·점유 미적용) 대비 비율 기준
             nominal = sum((e - s).total_seconds() for s, e in nominal_segs) or daylen
-            # off: 개인휴가로 잘린 비작업 꼬리 비율
-            # occ: 점유구간(다른 작업)으로 잘린 구간의 정규일 기준 비율 목록
+            # occ: 정규일 기준으로 segs 에 없는 구간 목록
+            #      (휴가·점유구간 등으로 잘린 부분 — 위치 무관하게 표시)
             occ = []
-            if busy:
-                off = round(max(0.0, 1 - sum(
-                    (e - s).total_seconds() for s, e in
-                    worker_segments(d, cal, hol, uid, uhours)) / nominal), 3)
-                pos = 0.0
-                for ns, ne in nominal_segs:
-                    base = pos
-                    pos += (ne - ns).total_seconds()
-                    for b0, b1 in busy:
-                        lo, hi = max(ns, b0), min(ne, b1)
-                        if lo < hi:
-                            occ.append([
-                                round((base + (lo - ns).total_seconds()) / nominal, 3),
-                                round((base + (hi - ns).total_seconds()) / nominal, 3)])
-            else:
-                off = round(max(0.0, 1 - daylen / nominal), 3)
+            pos = 0.0
+            for ns, ne in nominal_segs:
+                base = pos
+                pos += (ne - ns).total_seconds()
+                cur = ns
+                for s, e in segs:
+                    if e <= ns or s >= ne:
+                        continue
+                    cs = max(s, ns)
+                    if cs > cur:
+                        occ.append([
+                            round((base + (cur - ns).total_seconds()) / nominal, 3),
+                            round((base + (cs - ns).total_seconds()) / nominal, 3)])
+                    cur = max(cur, min(e, ne))
+                if cur < ne:
+                    occ.append([
+                        round((base + (cur - ns).total_seconds()) / nominal, 3),
+                        round((base + (ne - ns).total_seconds()) / nominal, 3)])
+            # off: 하루 끝까지 이어지는 꼬리 공백 비율 (오후휴가 등).
+            #      오전휴가처럼 앞쪽 공백은 occ 만으로 표시하고 off 는 0
+            off = round(1 - occ[-1][0], 3) \
+                if occ and occ[-1][1] >= 0.999 else 0.0
             hours, spans = 0.0, []
             offset = 0.0  # 이전 근무구간들의 누적 길이(초)
             for s, e in segs:

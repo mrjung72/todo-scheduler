@@ -1077,7 +1077,7 @@ function CalendarTab() {
 }
 
 /* ---------------- 작업자휴가 ---------------- */
-const HOL_CAT_LABEL = { A: '종일', P: '일부' }
+const HOL_CAT_LABEL = { A: '종일', P: '일부-오후', M: '일부-오전' }
 
 function HolidaysTab() {
   const today = new Date()
@@ -1122,7 +1122,8 @@ function HolidaysTab() {
         dateid: form.date.replaceAll('-', ''),
         work_userid: form.work_userid,
         holiday_category: form.holiday_category,
-        holiday_hours: form.holiday_category === 'P' ? +form.holiday_hours : 0,
+        holiday_hours: ['P', 'M'].includes(form.holiday_category)
+          ? +form.holiday_hours : 0,
         holiday_remark: form.holiday_remark,
       })
       setForm(empty); load()
@@ -1149,7 +1150,7 @@ function HolidaysTab() {
           </select>
         )}
         <span className="hint">
-          종일(A)은 해당일 근무 제외, 일부(P)는 휴가시간만큼 근무시간 차감(하루 뒤쪽부터).
+          종일(A)은 해당일 근무 제외, 일부-오후(P)/일부-오전(M)은 휴가시간만큼 근무시간 차감.
           반영은 [작업목록]의 재적용 시 적용됩니다.
         </span>
       </div>
@@ -1169,7 +1170,7 @@ function HolidaysTab() {
           onChange={e => setForm({ ...form, holiday_category: e.target.value })}>
           {catOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        {form.holiday_category === 'P' && (
+        {['P', 'M'].includes(form.holiday_category) && (
           <input type="number" className="num" min="1" max="8" step="0.5"
             title="휴가시간" value={form.holiday_hours}
             onChange={e => setForm({ ...form, holiday_hours: e.target.value })} />

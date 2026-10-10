@@ -371,7 +371,8 @@ def daily_hours(taskid: int, db: Session = Depends(get_db)):
             cat, hrs = h
             key = d.strftime("%Y-%m-%d")
             full = cat == "A" or hrs >= day_cap
-            label = "종일" if full else f"{hrs}h"
+            label = "종일" if full else \
+                (f"오전 {hrs}h" if cat == "M" else f"오후 {hrs}h")
             if key in out:
                 out[key]["holiday"] = label
             elif full:
