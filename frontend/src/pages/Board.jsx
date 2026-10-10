@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import api, { fmtDT, fmtSize, uploadWithProgress, saveBlob } from '../api'
+import api, { fmtDT, fmtSize, uploadWithProgress, downloadFile } from '../api'
 import ProgressBar from '../ProgressBar'
 
 /* 게시판 — 목록 / 작성·수정 / 상세(첨부·댓글) */
@@ -138,11 +138,38 @@ function BoardForm({ edit, onDone, onCancel }) {
   const [content, setContent] = useState(edit?.content || '')
   const [isPublic, setIsPublic] = useState(edit ? !!edit.is_public : true)
   const [passwd, setPasswd] = useState('')     // 비공개 열람 비밀번호 (수정 시 빈칸=유지)
-  const [files, setFiles] = useState([])       // 선택된 File 객체 배열
+  const [files, setFiles] = useState([])       // 신규 작성: 저장 시 함께 올릴 대기 파일
+  const [editFiles, setEditFiles] = useState(edit?.files || [])  // 수정 시 기존 첨부
   const [upPct, setUpPct] = useState(null)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const fileRef = useRef(null)
+
+  // 수정 화면 전용: 게시글 ID가 이미 있으므로 선택 파일을 즉시 업로드
+  const uploadNow = async () => {
+    const fs = Array.from(fileRef.current?.files || [])
+    if (!fs.length) { alert('첨부할 파일을 선택하세요'); return }
+    try {
+      for (const f of fs) {
+        const fd = new FormData()
+        fd.append('file', f)
+        fd.append('boardid', edit.boardid)
+        setUpPct(0)
+        const { data } = await uploadWithProgress('/attach-files', fd, setUpPct)
+        setEditFiles(list => [...list, data])
+      }
+      fileRef.current.value = ''
+      setFiles([])
+    } catch (e) {
+      setErr(e.response?.data?.detail || '업로드에 실패했습니다')
+    } finally { setUpPct(null) }
+  }
+
+  const delEditFile = f =>
+    window.confirm(`'${f.file_name}'을(를) 삭제할까요?`) &&
+    api.delete(`/attach-files/board/${f.fileid}`)
+      .then(() => setEditFiles(list => list.filter(x => x.fileid !== f.fileid)))
+      .catch(e => alert(e.response?.data?.detail || '삭제에 실패했습니다'))
 
   const save = async e => {
     e.preventDefault()
@@ -161,12 +188,15 @@ function BoardForm({ edit, onDone, onCancel }) {
           passwd: !isPublic && passwd ? passwd : null })
         boardid = data.boardid
       }
-      for (const f of files) {
-        const fd = new FormData()
-        fd.append('file', f)
-        fd.append('boardid', boardid)
-        setUpPct(0)
-        await uploadWithProgress('/attach-files', fd, setUpPct)
+      // 신규 작성 시에만: 저장하면서 대기 중인 파일들을 업로드
+      if (!edit) {
+        for (const f of files) {
+          const fd = new FormData()
+          fd.append('file', f)
+          fd.append('boardid', boardid)
+          setUpPct(0)
+          await uploadWithProgress('/attach-files', fd, setUpPct)
+        }
       }
       onDone()
     } catch (ex) {
@@ -199,13 +229,36 @@ function BoardForm({ edit, onDone, onCancel }) {
         <textarea rows={10} value={content}
           onChange={e => setContent(e.target.value)} />
       </label>
-      <label>첨부파일
-        <input type="file" multiple ref={fileRef}
-          onChange={e => setFiles(Array.from(e.target.files || []))} />
-      </label>
+      <label>첨부파일</label>
+      {edit && !!editFiles.length && (
+        <table className="grid">
+          <tbody>
+            {editFiles.map(f => (
+              <tr key={f.fileid}>
+                <td>{f.file_name}</td>
+                <td className="r" style={{ width: 90 }}>{fmtSize(f.file_size)}</td>
+                <td className="r" style={{ width: 50 }}>
+                  <button type="button" className="link"
+                    onClick={() => delEditFile(f)}>삭제</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <span>
+        <label className="btn-file">파일 선택
+          <input type="file" multiple hidden ref={fileRef}
+            onChange={e => setFiles(Array.from(e.target.files || []))} />
+        </label>
+        {edit &&
+          <button type="button" onClick={uploadNow}
+            disabled={!files.length || upPct != null}>업로드</button>}
+      </span>
       {!!files.length &&
         <ul className="bd-filesel">
           {files.map((f, i) => <li key={i}>{f.name} ({fmtSize(f.size)})</li>)}
+          {!edit && <li className="hint">저장 시 함께 업로드됩니다</li>}
         </ul>}
       <ProgressBar pct={upPct} />
       {err && <p className="err">{err}</p>}
@@ -221,13 +274,32 @@ function BoardForm({ edit, onDone, onCancel }) {
 /* 상세 — 본문·첨부파일·댓글 */
 function BoardDetail({ me, post, pw, onEdit, onDelete, onReload }) {
   const [text, setText] = useState('')
+  const [pick, setPick] = useState([])          // 업로드 대기 중인 선택 파일
+  const [upPct, setUpPct] = useState(null)
+  const fileRef = useRef(null)
   const staff = [0, 1].includes(me?.user_grade)
 
   const download = f =>
-    api.get(`/attach-files/board/${f.fileid}/download`,
-        { responseType: 'blob', params: pw ? { pw } : {} })
-      .then(r => saveBlob(r.data, f.file_name))
-      .catch(e => alert(e.response?.data?.detail || '다운로드 실패'))
+    downloadFile(`/attach-files/board/${f.fileid}/download` +
+      (pw ? `?pw=${encodeURIComponent(pw)}` : ''))
+
+  const uploadNow = async () => {
+    if (!pick.length) { alert('첨부할 파일을 선택하세요'); return }
+    try {
+      for (const f of pick) {
+        const fd = new FormData()
+        fd.append('file', f)
+        fd.append('boardid', post.boardid)
+        setUpPct(0)
+        await uploadWithProgress('/attach-files', fd, setUpPct)
+      }
+      setPick([])
+      if (fileRef.current) fileRef.current.value = ''
+      onReload()
+    } catch (e) {
+      alert(e.response?.data?.detail || '업로드에 실패했습니다')
+    } finally { setUpPct(null) }
+  }
 
   const delFile = async f => {
     if (!window.confirm(`'${f.file_name}'을(를) 삭제할까요?`)) return
@@ -291,6 +363,20 @@ function BoardDetail({ me, post, pw, onEdit, onDelete, onReload }) {
             <tr><td className="empty">첨부파일이 없습니다</td></tr>}
         </tbody>
       </table>
+      {post.can_edit && (
+        <div className="bd-attach-row">
+          <label className="btn-file">파일 선택
+            <input type="file" hidden multiple ref={fileRef}
+              onChange={e => setPick(Array.from(e.target.files || []))} />
+          </label>
+          {!!pick.length &&
+            <span className="bd-pickname">
+              {pick.map(f => f.name).join(', ')}</span>}
+          <button onClick={uploadNow}
+            disabled={!pick.length || upPct != null}>업로드</button>
+        </div>
+      )}
+      <ProgressBar pct={upPct} />
 
       <div className="blk-title">댓글 {post.comments?.length || 0}</div>
       <div className="comment-list">

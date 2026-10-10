@@ -57,14 +57,28 @@ def parse_token(token: str):
         return None
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    """Authorization Bearer 토큰 -> 현재 User (권한 검사용 의존성)."""
-    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+def _user_from_token(token: str, db: Session) -> User:
     uid = parse_token(token)
     user = db.get(User, uid) if uid else None
     if not user:
         raise HTTPException(401, "로그인이 필요합니다")
     return user
+
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """Authorization Bearer 토큰 -> 현재 User (권한 검사용 의존성)."""
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    return _user_from_token(token, db)
+
+
+def get_current_user_dl(request: Request, db: Session = Depends(get_db)) -> User:
+    """다운로드 전용 인증 — Authorization 헤더 또는 ?token= 쿼리.
+    브라우저 네이티브 다운로드(스트리밍)는 커스텀 헤더를 못 붙이므로 쿼리를 허용.
+    파일 다운로드 엔드포인트에서만 사용할 것."""
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not token:
+        token = request.query_params.get("token", "")
+    return _user_from_token(token, db)
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:

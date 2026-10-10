@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
-import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL, GRADE_LABEL,
-  NEXT_STAT, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
-  loadFilter, saveFilter } from '../api'
+import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
+  GRADE_LABEL, NEXT_STAT, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
+  loadFilter, saveFilter, downloadFile } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 
@@ -43,6 +43,7 @@ const TABS = [
   { key: 'users', label: '사용자' },
   { key: 'calendar', label: '달력' },
   { key: 'holidays', label: '작업자휴가' },
+  { key: 'boards', label: '게시판' },
 ]
 
 const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') || 'null')?.user_grade)
@@ -64,7 +65,8 @@ const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_gra
 // 비스태프 등급별 관리자 탭 접근
 // 3-개발매니저: 전체 조회 / 4-일반개발자: 기존과 동일 / 5-IT담당자: 지정 탭 조회
 const TAB_ACCESS = {
-  3: ['sites', 'tasks', 'schedules', 'schedhis', 'files', 'users', 'calendar', 'holidays'],
+  3: ['sites', 'tasks', 'schedules', 'schedhis', 'files', 'users', 'calendar',
+      'holidays', 'boards'],
   4: ['tasks', 'schedules', 'schedhis', 'files', 'users', 'holidays'],
   5: ['sites', 'tasks', 'users', 'calendar', 'holidays'],
 }
@@ -88,6 +90,7 @@ export default function Admin() {
       {tab === 'schedules' && <SchedulesTab />}
       {tab === 'schedhis' && <SchedHisTab />}
       {tab === 'files' && <AttachFilesTab />}
+      {tab === 'boards' && <BoardsTab />}
     </div>
   )
 }
@@ -1652,15 +1655,7 @@ function AttachFilesTab() {
     } catch (ex) { alert(errMsg(ex)) }
   }
 
-  const download = f =>
-    api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
-      .then(r => {
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(r.data)
-        a.download = f.file_name
-        a.click()
-        URL.revokeObjectURL(a.href)
-      }).catch(e => alert(errMsg(e)))
+  const download = f => downloadFile(`/attach-files/${f.fileid}/download`)
 
   const del = f => {
     if (!confirm(`첨부파일 '${f.file_name}'을(를) 삭제할까요?`)) return
@@ -1772,6 +1767,166 @@ function AttachFilesTab() {
         외부 경로만 등록하려면 엑셀 업로드(CSV)를 사용하세요.
       </p>
       {selTask && <TaskDetailPopup task={selTask} onClose={() => setSelTask(null)} onChanged={load} />}
+    </div>
+  )
+}
+
+/* ---------------- 게시판 ---------------- */
+function BoardsTab() {
+  const staff = isStaff()
+  const [rows, setRows] = useState([])
+  const [q, setQ] = useState('')
+  const [pubF, setPubF] = useState('')
+  const [sel, setSel] = useState(null)         // 내용/댓글 열람 대상
+  const load = useCallback(() =>
+    api.get('/boards').then(r => setRows(r.data)), [])
+  useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
+
+  const save = (id, patch) =>
+    api.put(`/boards/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
+  const del = b => window.confirm(
+      `게시글 '${b.title}'을(를) 삭제할까요?\n첨부파일·댓글도 함께 삭제됩니다.`) &&
+    api.delete(`/boards/${b.boardid}`).then(load).catch(e => alert(errMsg(e)))
+  const clearPw = b => window.confirm(
+      `'${b.title}'의 열람 비밀번호를 해제할까요?\n(해제 후 비공개글은 작성자·관리자만 열람 가능)`) &&
+    api.put(`/boards/${b.boardid}`, { passwd: '' })
+      .then(load).catch(e => alert(errMsg(e)))
+  const openView = b =>
+    api.get(`/boards/${b.boardid}`).then(r => setSel(r.data))
+      .catch(e => alert(errMsg(e)))
+  const delComment = c =>
+    window.confirm('댓글을 삭제할까요?') &&
+    api.delete(`/boards/${sel.boardid}/comments/${c.commentid}`)
+      .then(() => openView(sel)).catch(e => alert(errMsg(e)))
+  const download = f => downloadFile(`/attach-files/board/${f.fileid}/download`)
+
+  const kw = q.trim().toLowerCase()
+  const filtered = rows.filter(b =>
+    (pubF === '' || b.is_public === +pubF) &&
+    (!kw || [b.title, b.user_id, b.user_name]
+      .some(v => (v || '').toLowerCase().includes(kw))))
+  const { paged, pager } = usePager(filtered, [q, pubF])
+
+  const cols = [
+    { label: '게시글ID', field: 'boardid' },
+    { label: '제목', field: 'title' },
+    { label: '공개여부', field: 'is_public', get: b => b.is_public ? '공개' : '비공개' },
+    { label: '열람비밀번호(참조)', field: '_pw', get: b => b.has_passwd ? '설정' : '' },
+    { label: '작성자ID', field: 'user_id' },
+    { label: '작성자(참조)', field: '_user_name', get: b => b.user_name || '' },
+    { label: '첨부(참조)', field: '_fc', get: b => b.file_count ?? '' },
+    { label: '댓글(참조)', field: '_cc', get: b => b.comment_count ?? '' },
+    { label: '작성일시', field: 'create_date', get: b => fmtDT(b.create_date) },
+    { label: '수정일시(참조)', field: '_ud', get: b => fmtDT(b.update_date) },
+  ]
+
+  return (
+    <div>
+      <div className="toolbar">
+        <select value={pubF} onChange={e => setPubF(e.target.value)}>
+          <option value="">공개여부(전체)</option>
+          <option value="1">공개</option>
+          <option value="0">비공개</option>
+        </select>
+        <input placeholder="검색 (제목/작성자)" value={q}
+          onChange={e => setQ(e.target.value)} />
+        <ExcelButtons name="게시판" cols={cols} rows={filtered} />
+      </div>
+      <table className="grid">
+        <thead><tr>
+          <th style={{ width: 55 }}>번호</th><th>제목</th>
+          <th style={{ width: 80 }}>공개여부</th><th style={{ width: 90 }}>비밀번호</th>
+          <th style={{ width: 110 }}>작성자</th>
+          <th style={{ width: 50 }}>첨부</th><th style={{ width: 50 }}>댓글</th>
+          <th style={{ width: 140 }}>작성일시</th>
+          <th style={{ width: 140 }}>수정일시</th><th style={{ width: 60 }}></th>
+        </tr></thead>
+        <tbody>
+          {paged.map(b => (
+            <tr key={b.boardid}>
+              <td className="r">{b.boardid}</td>
+              <td>
+                <button className="link" onClick={() => openView(b)}>
+                  {!b.is_public && '🔒 '}{b.title}</button>
+                {!b.is_public && <span className="bd-private">비공개</span>}
+              </td>
+              <td className="c">
+                <EditableCell value={b.is_public} disabled={!staff}
+                  onSave={v => save(b.boardid, { is_public: +v })}
+                  options={[{ value: 1, label: '공개' }, { value: 0, label: '비공개' }]} />
+              </td>
+              <td className="c">
+                {b.has_passwd
+                  ? <span>설정{staff &&
+                      <button className="link" style={{ marginLeft: 6 }}
+                        onClick={() => clearPw(b)}>해제</button>}</span>
+                  : (!b.is_public ? '미설정' : '-')}
+              </td>
+              <td>{b.user_name || b.user_id}</td>
+              <td className="r">{b.file_count || ''}</td>
+              <td className="r">{b.comment_count || ''}</td>
+              <td className="c">{fmtDT(b.create_date)}</td>
+              <td className="c">{fmtDT(b.update_date)}</td>
+              <td>{staff &&
+                <button className="danger" onClick={() => del(b)}>삭제</button>}</td>
+            </tr>
+          ))}
+          {!filtered.length &&
+            <tr><td colSpan="10" className="empty">게시글이 없습니다</td></tr>}
+        </tbody>
+      </table>
+      {pager}
+      <p className="hint">
+        스태프(관리자·수석)는 비공개글도 열람·수정·삭제할 수 있습니다.
+        [해제]는 비공개글의 열람 비밀번호를 지웁니다.
+      </p>
+      {sel && (
+        <div className="popup" onClick={() => setSel(null)}>
+          <div className="popup-body task-popup" onClick={e => e.stopPropagation()}>
+            <h3>{!sel.is_public && '🔒 '}{sel.title}
+              {!sel.is_public && <span className="bd-private">비공개</span>}</h3>
+            <p className="bd-meta">
+              {sel.user_name || sel.user_id} · {fmtDT(sel.create_date)}
+              {sel.update_date && ` (수정 ${fmtDT(sel.update_date)})`}
+            </p>
+            <div className="bd-content">{sel.content || ''}</div>
+            <div className="blk-title">첨부파일</div>
+            <table className="grid">
+              <tbody>
+                {(sel.files || []).map(f => (
+                  <tr key={f.fileid}>
+                    <td><button className="link" onClick={() => download(f)}>
+                      {f.file_name}</button></td>
+                    <td className="r" style={{ width: 90 }}>{fmtSize(f.file_size)}</td>
+                    <td className="r" style={{ width: 140 }}>{fmtDT(f.create_date)}</td>
+                  </tr>
+                ))}
+                {!sel.files?.length &&
+                  <tr><td className="empty">첨부파일이 없습니다</td></tr>}
+              </tbody>
+            </table>
+            <div className="blk-title">댓글 {sel.comments?.length || 0}</div>
+            <div className="comment-list">
+              {(sel.comments || []).map(c => (
+                <div key={c.commentid} className="comment-row">
+                  <div className="comment-head">
+                    <b>{c.user_name || c.user_id}</b>
+                    <span className="comment-date">{fmtDT(c.create_date)}</span>
+                    {staff &&
+                      <button className="link" onClick={() => delComment(c)}>삭제</button>}
+                  </div>
+                  <div className="comment-body">{c.content}</div>
+                </div>
+              ))}
+              {!sel.comments?.length &&
+                <div className="comment-empty">댓글이 없습니다</div>}
+            </div>
+            <div className="popup-btns">
+              <button onClick={() => setSel(null)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

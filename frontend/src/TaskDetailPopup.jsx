@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
-  taskColor, uploadWithProgress, saveBlob } from './api'
+  taskColor, uploadWithProgress, downloadFile as dlFile } from './api'
 import ProgressBar from './ProgressBar'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
@@ -186,10 +186,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     api.get('/attach-files', { params: { taskid: task.taskid } })
       .then(r => setFiles(r.data)).catch(console.error)
   }
-  const downloadFile = f =>
-    api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
-      .then(r => saveBlob(r.data, f.file_name))
-      .catch(e => alert(e.response?.data?.detail || '다운로드 실패'))
+  const downloadFile = f => dlFile(`/attach-files/${f.fileid}/download`)
   const uploadFile = async (workschid = null, ev = null) => {
     const f = ev ? ev.target.files?.[0] : fileRef.current?.files?.[0]
     if (!f) { alert('첨부할 파일을 선택하세요'); return }

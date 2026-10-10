@@ -43,6 +43,19 @@ export const uploadWithProgress = (url, fd, onProgress) => {
   })
 }
 
+// 첨부파일 네이티브 다운로드 — 브라우저가 스트리밍 저장 + 자체 진행률 표시.
+// 대용량 파일을 메모리(blob)에 버퍼링하지 않아 큰 파일에 적합.
+// 헤더를 못 붙이는 대신 ?token= 쿼리로 인증 (다운로드 엔드포인트만 허용됨)
+export const downloadFile = path => {
+  const t = localStorage.getItem('token')
+  const sep = path.includes('?') ? '&' : '?'
+  const a = document.createElement('a')
+  a.href = `/api${path}${sep}token=${encodeURIComponent(t || '')}`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 // Blob 응답을 파일로 저장 — 다운로드 시작 후 URL 해제 (즉시 해제 시 실패 가능)
 export const saveBlob = (blob, fileName) => {
   const url = URL.createObjectURL(blob)

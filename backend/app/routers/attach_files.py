@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import TaskAttachFile, Task, User, Board, BoardAttachFile
-from ..security import get_current_user, check_owner_or_admin
+from ..security import get_current_user, get_current_user_dl, check_owner_or_admin
 
 router = APIRouter(prefix="/api/attach-files", tags=["attach-files"])
 
@@ -213,7 +213,7 @@ def update_file(fileid: int, body: AttachMeta, db: Session = Depends(get_db),
 @router.get("/board/{fileid}/download")
 def download_board_file(fileid: int, pw: str | None = None,
                         db: Session = Depends(get_db),
-                        me=Depends(get_current_user)):
+                        me=Depends(get_current_user_dl)):
     """게시판 첨부파일 다운로드 — 게시글 조회 권한과 동일.
     비공개글은 작성자·스태프 또는 게시글 비밀번호(pw) 확인 후 허용."""
     obj = db.get(BoardAttachFile, fileid)
@@ -253,7 +253,7 @@ def delete_board_file(fileid: int, db: Session = Depends(get_db),
 
 @router.get("/{fileid}/download")
 def download_file(fileid: int, db: Session = Depends(get_db),
-                  me=Depends(get_current_user)):
+                  me=Depends(get_current_user_dl)):
     obj = db.get(TaskAttachFile, fileid)
     if not obj:
         raise HTTPException(404, "첨부파일을 찾을 수 없습니다")

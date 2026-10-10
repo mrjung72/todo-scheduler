@@ -57,6 +57,9 @@ async def auth_guard(request, call_next):
             or (request.method == "GET" and path == "/api/tasks")):
         return await call_next(request)
     token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not token:
+        # 브라우저 네이티브 다운로드용 — 헤더를 못 붙이는 경우 ?token= 쿼리 허용
+        token = request.query_params.get("token", "")
     if not parse_token(token):
         return JSONResponse({"detail": "로그인이 필요합니다"}, status_code=401)
     return await call_next(request)

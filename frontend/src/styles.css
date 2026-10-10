@@ -484,6 +484,8 @@ td.req-col input { width: 120px; }
 .bd-scope { display: flex; gap: 16px; }
 .bd-scope label { flex-direction: row; align-items: center; gap: 4px; }
 .bd-filesel { margin: 0; padding-left: 18px; font-size: 12px; color: #374151; }
+.bd-attach-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.bd-pickname { font-size: 12px; color: #374151; }
 .bd-private {
   margin-left: 6px; padding: 0 6px; border-radius: 8px;
   background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 600;
