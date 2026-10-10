@@ -30,6 +30,7 @@ class UserUpdate(UserBase):
 class UserOut(UserBase):
     model_config = ConfigDict(from_attributes=True)
     userid: str
+    duty_class: Optional[str] = None   # 담당분류코드(D-개발담당/B-업무담당) — 등급에서 자동 산출
     create_date: Optional[datetime] = None
 
 

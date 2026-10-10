@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL, GRADE_LABEL,
-  NEXT_STAT, USER_STAT_LABEL, loadFilter, saveFilter } from '../api'
+  NEXT_STAT, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
+  loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 
@@ -312,6 +313,7 @@ function UsersTab() {
   const [q, setQ] = useState('')
   const [statF, setStatF] = useState('')
   const [gradeF, setGradeF] = useState('')
+  const [dutyF, setDutyF] = useState('')
   const load = useCallback(() => api.get('/users').then(r => setRows(r.data)), [])
   useEffect(() => {
     load()
@@ -332,8 +334,8 @@ function UsersTab() {
     try {
       await api.post('/users', {
         ...form,
-        // 하루작업시간은 개발자 등급(수석1·일반4)만 적용
-        work_hours_day: [1, 4].includes(+form.user_grade) && form.work_hours_day !== ''
+        // 하루작업시간은 개발담당(D)+수석(1)만 적용
+        work_hours_day: isDevGrade(+form.user_grade) && form.work_hours_day !== ''
           ? +form.work_hours_day : null,
       })
       setForm({ ...empty, work_hours_day: (cfgHours >= 2 && cfgHours <= 8) ? cfgHours : '' }); load()
@@ -347,11 +349,14 @@ function UsersTab() {
     { label: '직급', field: 'job_title' },
     { label: '연락처', field: 'user_tel' },
     { label: '이메일', field: 'user_email' },
+    { label: '담당분류(참조)', field: '_duty_class', get: u => DUTY_LABEL[u.duty_class] || '' },
     { label: '등급', field: 'user_grade', get: u => GRADE_LABEL[u.user_grade] ?? u.user_grade },
     { label: '기본사이트ID', field: 'default_siteid' },
     { label: '하루작업시간', field: 'work_hours_day' },
     { label: '상태', field: 'user_stat',
       get: u => USER_STAT_LABEL[u.user_stat] ?? u.user_stat },
+    { label: '등록일자(참조)', field: '_create_date',
+      get: u => (u.create_date || '').slice(0, 10) },
   ]
   const revUStat = revMap(USER_STAT_LABEL)
   const upload = async o => {
@@ -379,9 +384,10 @@ function UsersTab() {
     u.user_grade >= myGrade() &&
     (!statF || u.user_stat === statF) &&
     (gradeF === '' || u.user_grade === +gradeF) &&
+    (dutyF === '' || u.duty_class === dutyF) &&
     (!q || [u.userid, u.user_name, u.dept_name, u.job_title, u.user_tel, u.user_email]
       .some(v => (v || '').toLowerCase().includes(q.toLowerCase()))))
-  const { paged, pager } = usePager(shown, [q, statF, gradeF])
+  const { paged, pager } = usePager(shown, [q, statF, gradeF, dutyF])
 
   return (
     <div>
@@ -391,8 +397,12 @@ function UsersTab() {
           {Object.entries(USER_STAT_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}</option>)}
         </select>
+        <select value={dutyF} onChange={e => setDutyF(e.target.value)}>
+          <option value="">담당 분류</option>
+          {Object.entries(DUTY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
         <select value={gradeF} onChange={e => setGradeF(e.target.value)}>
-          <option value="">전체 등급</option>
+          <option value="">사용자 등급</option>
           {Object.entries(GRADE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
@@ -423,9 +433,9 @@ function UsersTab() {
           <option value="">기본사이트</option>
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
-        {[1, 4].includes(+form.user_grade) && (
+        {isDevGrade(+form.user_grade) && (
         <select value={form.work_hours_day} style={{ width: '130px' }}
-          title="하루작업시간 (개발자만 설정 가능)"
+          title="하루작업시간 (개발담당·수석만 설정 가능)"
           onChange={e => setForm({ ...form, work_hours_day: e.target.value })}>
           <option value="">하루작업시간(기본)</option>
           {[2, 3, 4, 5, 6, 7, 8].map(h => <option key={h} value={h}>{h}시간</option>)}
@@ -437,7 +447,7 @@ function UsersTab() {
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
-          <th>이메일</th><th>등급</th><th>기본사이트</th><th title="2~8 정수, 빈칸이면 근무구간 기본값 적용">하루작업시간</th><th>비밀번호</th><th>상태</th><th></th>
+          <th>이메일</th><th>담당분류</th><th>등급</th><th>기본사이트</th><th title="2~8 정수, 빈칸이면 근무구간 기본값 적용">하루작업시간</th><th>비밀번호</th><th>상태</th><th>등록일자</th><th></th>
         </tr></thead>
         <tbody>
           {paged.map(u => {
@@ -457,6 +467,7 @@ function UsersTab() {
                 onSave={v => save(u.userid, { user_tel: v })} /></td>
               <td><EditableCell value={u.user_email} disabled={locked}
                 onSave={v => save(u.userid, { user_email: v })} /></td>
+              <td className="c">{DUTY_LABEL[u.duty_class] || '-'}</td>
               <td><EditableCell value={u.user_grade} disabled={lockPriv}
                 onSave={v => save(u.userid, { user_grade: v })}
                 options={Object.entries(GRADE_LABEL)
@@ -467,7 +478,7 @@ function UsersTab() {
                 onSave={v => save(u.userid, { default_siteid: v || null })}
                 options={[{ value: '', label: '-' },
                   ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]} /></td>
-              <td className="c">{[1, 4].includes(u.user_grade)
+              <td className="c">{isDevWorker(u)
                 ? <EditableCell value={u.work_hours_day} disabled={locked}
                   onSave={v => save(u.userid, { work_hours_day: v === '' ? null : +v })}
                   options={[{ value: '', label: '기본' },
@@ -492,6 +503,7 @@ function UsersTab() {
                   onSave={v => save(u.userid, { user_stat: v })}
                   options={Object.entries(USER_STAT_LABEL)
                     .map(([k, l]) => ({ value: k, label: l }))} /></td>
+              <td className="c">{(u.create_date || '').slice(0, 10) || '-'}</td>
               <td>
                 {!lockPriv && u.user_stat === 'A' && <>
                   <button onClick={() => save(u.userid, { user_stat: 'Y' })}>승인</button>
@@ -707,12 +719,15 @@ function TasksTab() {
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
-  const devOpt = staff ? uopt([1, 3, 4])
-    : uopt([1, 3, 4]).filter(o => o.value === '' || o.value === myId())
+  const wkOpt = [{ value: '', label: '-' },
+    ...users.filter(isDevWorker)
+      .map(u => ({ value: u.userid, label: u.user_name }))]
+  const devOpt = staff ? wkOpt
+    : wkOpt.filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
   // 현업담당자 검색 리스트다운 대상 (현업담당자 7, 기타사용자 9)
-  const reqUsers = users.filter(u => [7, 9].includes(u.user_grade))
+  const reqUsers = users.filter(u => u.duty_class === 'B')   // 현업담당자 후보 = 업무담당
 
   const filtered = (!q.trim() ? rows : rows.filter(t => {
     const kw = q.trim().toLowerCase()
@@ -829,7 +844,7 @@ function TasksTab() {
         </select>
         <select value={workF} onChange={e => setWorkF(e.target.value)}>
           <option value="">작업자(전체)</option>
-          {users.filter(u => [1, 3, 4].includes(u.user_grade)).map(u =>
+          {users.filter(isDevWorker).map(u =>
             <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
@@ -1118,7 +1133,7 @@ function HolidaysTab() {
 
   const catOptions = Object.entries(HOL_CAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const userOptions = [{ value: '', label: '작업자(전체)' },
-    ...users.filter(u => [1, 3, 4].includes(u.user_grade))
+    ...users.filter(isDevWorker)
       .map(u => ({ value: u.userid, label: u.user_name }))]
   const { paged, pager } = usePager(rows, [year, filterUser])
 
@@ -1145,7 +1160,7 @@ function HolidaysTab() {
           <select required value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
             <option value="">작업자 선택</option>
-            {users.filter(u => (staff ? [1, 3, 4] : [4]).includes(u.user_grade)
+            {users.filter(u => (staff ? ['A', 'D'].includes(u.duty_class) : u.user_grade === 4)
                 || u.userid === myId())
               .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
           </select>
@@ -1276,7 +1291,7 @@ function SchedulesTab() {
 
   // 작업자는 개발자(등급 1·3·4)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
   // 값이 깨지지 않도록 해당 작업자만 선택지에 포함
-  const devOpt = users.filter(u => [1, 3, 4].includes(u.user_grade))
+  const devOpt = users.filter(isDevWorker)
     .map(u => ({ value: u.userid, label: u.user_name }))
   const uopt = [{ value: '', label: '-' }, ...devOpt]
   const topt = [{ value: '', label: '-' },

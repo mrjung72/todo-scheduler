@@ -116,6 +116,15 @@ def migrate(db):
         db.execute(text("ALTER TABLE users ADD COLUMN reject_remark TEXT"))
     if "work_hours_day" not in cols:
         db.execute(text("ALTER TABLE users ADD COLUMN work_hours_day REAL"))
+    if "duty_class" not in cols:
+        db.execute(text("ALTER TABLE users ADD COLUMN duty_class TEXT"))
+    # 담당분류코드는 등급에서 자동 산출 (매 기동 시 동기화)
+    db.execute(text("""
+        UPDATE users SET duty_class = CASE
+            WHEN user_grade BETWEEN 0 AND 1 THEN 'A'
+            WHEN user_grade BETWEEN 2 AND 4 THEN 'D'
+            WHEN user_grade BETWEEN 5 AND 7 THEN 'B'
+            ELSE 'G' END"""))
     # 사용자 등급 체계 개편 마이그레이션 (schema_meta 의 grade_scheme 버전으로 1회만 실행)
     # v1: 2=IT담당자,3=현업담당자,4=일반개발자 -> v2: 2=일반개발자,5=IT,7=현업
     # v3(현재): 3=개발매니저,4=일반개발자,5=IT,7=현업

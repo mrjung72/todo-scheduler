@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, loadFilter, saveFilter } from '../api'
+import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, isDevWorker,
+  loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 
 // 3열 배치: 좌 = 검토·요청, 중 = 대기·작업중·중단, 우 = 완료·반려
@@ -88,7 +89,7 @@ export default function Kanban() {
         </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
-          {users.filter(u => [1, 3, 4].includes(u.user_grade))
+          {users.filter(isDevWorker)
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input

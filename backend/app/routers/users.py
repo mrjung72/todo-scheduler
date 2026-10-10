@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import User, Site
+from ..models import User, Site, duty_class_of
 from ..schemas import UserCreate, UserUpdate, UserOut
 from ..security import (
     hash_password, verify_password, get_current_user,
@@ -98,8 +98,9 @@ def create_user(body: UserCreate, db: Session = Depends(get_db),
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     data = body.model_dump()
     _check_work_hours(data)
-    # 하루작업시간은 개발자 등급(수석1·일반4)만 사용 — 그 외 등급은 저장하지 않음
-    if data.get("user_grade") not in (1, 4):
+    data["duty_class"] = duty_class_of(data.get("user_grade"))
+    # 하루작업시간은 개발담당(D)+수석(1)만 사용 — 그 외는 저장하지 않음
+    if data["duty_class"] != "D" and data.get("user_grade") != 1:
         data["work_hours_day"] = None
     data["password"] = hash_password(data.pop("password") or "1234")
     obj = User(**data)
@@ -131,13 +132,19 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
         if not data:
             raise HTTPException(400, "수정할 수 있는 항목이 없습니다")
     _check_work_hours(data)
-    # 하루작업시간은 개발자 등급(수석1·일반4)만 설정 가능
+    # 등급이 바뀌면 담당분류코드도 함께 갱신
     eff_grade = data.get("user_grade") if data.get("user_grade") is not None else obj.user_grade
-    if "work_hours_day" in data and eff_grade not in (1, 4):
+    eff_class = duty_class_of(eff_grade)
+    if "user_grade" in data:
+        data["duty_class"] = eff_class
+    # 하루작업시간은 개발담당(D)+수석(1)만 설정 가능 (초기화(None)는 허용)
+    if (data.get("work_hours_day") is not None
+            and eff_class != "D" and eff_grade != 1):
         raise HTTPException(
-            400, "하루작업시간은 개발자(수석/일반)만 설정할 수 있습니다")
-    # 개발자 외 등급으로 변경되면 하루작업시간을 초기화
-    if data.get("user_grade") is not None and data["user_grade"] not in (1, 4):
+            400, "하루작업시간은 개발담당(수석개발자 포함)만 설정할 수 있습니다")
+    # 작업자가 아닌 등급으로 변경되면 하루작업시간을 초기화
+    if (data.get("user_grade") is not None
+            and eff_class != "D" and eff_grade != 1):
         data["work_hours_day"] = None
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")

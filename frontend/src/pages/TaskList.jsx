@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor, loadFilter, saveFilter } from '../api'
+import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor, isDevWorker,
+  loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 
@@ -104,7 +105,7 @@ export default function TaskList() {
         </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
-          {users.filter(u => [1, 3, 4].includes(u.user_grade))
+          {users.filter(isDevWorker)
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input

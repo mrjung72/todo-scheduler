@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Link, Route, Routes, Navigate } from 'react-router-dom'
-import api, { GRADE_LABEL } from './api'
+import api, { GRADE_LABEL, DUTY_LABEL, isDevGrade } from './api'
 import Home from './pages/Home'
 import TaskList from './pages/TaskList'
 import Kanban from './pages/Kanban'
@@ -157,8 +157,9 @@ export default function App() {
             <p><b>연락처</b> {profile.user_tel || '-'}</p>
             <p><b>이메일</b> {profile.user_email || '-'}</p>
             <p><b>등급</b> {GRADE_LABEL[profile.user_grade] ?? profile.user_grade}</p>
+            <p><b>담당분류</b> {DUTY_LABEL[profile.duty_class] || '-'}</p>
             <p><b>기본사이트</b> {profile.default_siteid || '-'}</p>
-            {[1, 4].includes(profile.user_grade) && (
+            {isDevGrade(profile.user_grade) && (
             <p><b>하루작업시간</b>{' '}
               <select value={whDay}
                 title="기본은 근무구간 기본값 적용"

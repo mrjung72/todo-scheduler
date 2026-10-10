@@ -3,6 +3,19 @@ from sqlalchemy import Column, Integer, REAL, Text, DateTime, ForeignKey
 from .database import Base
 
 
+def duty_class_of(grade):
+    """담당분류코드: A-어드민(0~1), D-개발담당(2~4), B-업무담당(5~7), G-기타(8~9)."""
+    if grade is None:
+        return None
+    if grade <= 1:
+        return "A"
+    if grade <= 4:
+        return "D"
+    if grade <= 7:
+        return "B"
+    return "G"
+
+
 class User(Base):
     __tablename__ = "users"
     userid = Column(Text, primary_key=True)
@@ -12,6 +25,7 @@ class User(Base):
     user_tel = Column(Text)
     user_email = Column(Text)
     user_grade = Column(Integer)          # 0-관리자, 1-수석개발자, 3-개발매니저, 4-일반개발자, 5-IT업무담당자, 7-현업담당자, 9-기타사용자
+    duty_class = Column(Text)             # 담당분류코드: A-어드민(0~1), D-개발담당(2~4), B-업무담당(5~7), G-기타(8~9) — 등급에서 자동 산출
     password = Column(Text, nullable=False, default='')   # 비밀번호(pbkdf2 해시)
     user_stat = Column(Text, default="Y")
     reject_remark = Column(Text)          # 승인불가 사유 (user_stat='R')
