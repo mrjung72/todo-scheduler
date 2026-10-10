@@ -39,6 +39,27 @@ def list_work_logs(
             for w, uname in rows]
 
 
+def _busy_for(task, all_tasks) -> list:
+    """작업이 건너뛰는 점유구간 목록 — 같은 작업자의 고정·휴일 작업과
+    우선순위가 앞선 작업의 기간 (일별 작업시간 계산에서 제외)."""
+    if task.start_fixed or task.holiday_work:
+        return []
+    my_key = (task.priority or 0, task.taskid)
+    out = []
+    for o in all_tasks:
+        if o.taskid == task.taskid or o.work_userid != task.work_userid:
+            continue
+        if not o.task_start_date or not o.task_end_date_estimated:
+            continue
+        if o.task_start_date >= task.task_end_date_estimated \
+                or o.task_end_date_estimated <= task.task_start_date:
+            continue
+        if o.start_fixed or o.holiday_work \
+                or (o.priority or 0, o.taskid) < my_key:
+            out.append((o.task_start_date, o.task_end_date_estimated))
+    return out
+
+
 @router.get("/events")
 def calendar_events(db: Session = Depends(get_db)):
     """FullCalendar용 이벤트: 작업 + 담당자/사이트 정보 (대기중/작업중만)."""
@@ -61,6 +82,7 @@ def calendar_events(db: Session = Depends(get_db)):
     cal = get_calendar_map(db)
     hol = get_holiday_map(db)
     uhours = get_user_hours_map(db)
+    all_tasks = [r[0] for r in rows]
     events = []
     for (task, work_user_name, work_user_dept, work_user_title, work_hours_day,
          site_name, req_userid, req_user_name,
@@ -99,11 +121,13 @@ def calendar_events(db: Session = Depends(get_db)):
                     has_workday_between(cal, task.task_start_date,
                                         task.task_end_date_estimated),
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도
-                # (시작일이 휴일이면 그 날짜도 작업가능일로 간주해 분해)
+                # (시작일이 휴일이면 그 날짜도 작업가능일로 간주해 분해,
+                #  건너뛴 고정·휴일/선순번 작업의 기간은 제외)
                 "daily": daily_breakdown(
                     task.task_start_date, task.task_end_date_estimated,
                     workday_cal(cal, task.task_start_date.date()),
-                    hol, task.work_userid or "", uhours),
+                    hol, task.work_userid or "", uhours,
+                    _busy_for(task, all_tasks)),
             },
         })
     return events

@@ -341,9 +341,24 @@ def daily_hours(taskid: int, db: Session = Depends(get_db)):
     hol = get_holiday_map(db)
     uid = task.work_userid or ""
     uhours = get_user_hours_map(db)
+    # 점유구간 반영: 이 작업이 건너뛴 고정·휴일/선순번 작업의 기간은 작업시간에서 제외
+    busy = []
+    if not task.start_fixed and not task.holiday_work:
+        my_key = (task.priority or 0, task.taskid)
+        for o in db.query(Task).filter(
+                Task.work_userid == task.work_userid,
+                Task.taskid != taskid,
+                Task.task_stat.in_(["W", "P", "H"]),
+                Task.task_start_date != None,
+                Task.task_end_date_estimated != None,
+                Task.task_start_date < task.task_end_date_estimated,
+                Task.task_end_date_estimated > task.task_start_date):
+            if o.start_fixed or o.holiday_work \
+                    or (o.priority or 0, o.taskid) < my_key:
+                busy.append((o.task_start_date, o.task_end_date_estimated))
     bd = daily_breakdown(
         task.task_start_date, task.task_end_date_estimated,
-        workday_cal(cal, task.task_start_date.date()), hol, uid, uhours)
+        workday_cal(cal, task.task_start_date.date()), hol, uid, uhours, busy)
     out = {k: {"date": k, "hours": v["hours"]} for k, v in bd.items()}
     # 작업자 휴가 반영: 범위 내 휴가일을 표시 (종일=작업불가, 일부=차감된 채로 표시)
     # 일부휴가(P)라도 작업자의 하루시간 이상이면 사실상 종일휴가로 표시

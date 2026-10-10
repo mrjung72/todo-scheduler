@@ -62,6 +62,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [startEdit, setStartEdit] = useState(null)   // 시작일시 수정 입력값
   const [hoursEdit, setHoursEdit] = useState(null)   // 예상시간 수정 입력값
   const [prioEdit, setPrioEdit] = useState(null)     // 우선순위 수정 입력값
+  const [recalcBusy, setRecalcBusy] = useState(false)
   // 수정 제한 항목은 작업요청·검토중·대기중(또는 휴일작업)에서만 변경 가능
   const canEditFields = canEdit &&
     (['R', 'C', 'W'].includes(task.task_stat) || !!task.holiday_work)
@@ -142,6 +143,19 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         task_end_date_estimated: data.task_end_date_estimated }))
       setHoursEdit(null); reloadDaily(); onChanged?.()
     } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
+  const doRecalc = async () => {
+    if (!confirm('대기중 작업의 일정을 우선순위 기준으로 재계산합니다.\n계속할까요?')) return
+    try {
+      setRecalcBusy(true)
+      await api.post('/tasks/recalculate')
+      const { data } = await api.get('/tasks')
+      const t = (data || []).find(x => x.taskid === task.taskid)
+      if (t) setTf(prev => ({ ...prev, ...t }))
+      reloadDaily(); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '재계산에 실패했습니다') }
+    finally { setRecalcBusy(false) }
   }
 
   const savePrio = async () => {
@@ -348,7 +362,12 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <button className="link" onClick={saveStart}>저장</button>
                 <button className="link" onClick={() => setStartEdit(null)}>취소</button>
               </>)}</p>
-              <p><b>종료(예상)</b> {fmtDT(endEst) || '-'}</p>
+              <p><b>종료(예상)</b> {fmtDT(endEst) || '-'}
+                {canEdit &&
+                  <button onClick={doRecalc} disabled={recalcBusy}
+                    style={{ marginLeft: 12 }}
+                    title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}
+              </p>
             </div>
             {daily && daily.length > 0 && (
               <div className="daily">

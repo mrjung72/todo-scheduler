@@ -9,8 +9,10 @@ calendar_define 에 없는 날짜는 월~금=근무일, 토/일=휴일로 간주
 
 재계산(recalculate) 규칙:
 - 대기중(W) tasks 를 work_userid 별로 그룹화하고 task.priority 순으로 정렬
-- 각 작업자 그룹 내에서 순차 배치 (이전 작업 종료 -> 다음 작업 시작)
+- 각 작업자 그룹 내에서 우선순위 순으로 순차 배치
 - start_fixed=1 인 작업은 task_start_date 를 유지하고 종료예상일시만 재계산
+- 고정·휴일 작업의 기간은 점유구간 — 다른 작업은 그 기간을 제외(건너뛰)며
+  우선순위 순으로 가장 빠른 빈 시간부터 작업시간을 배분한다
 """
 import os
 from datetime import datetime, timedelta, date, time
@@ -112,8 +114,35 @@ def _day_segments(d: date):
 FREE_DAY_STAT = "F"
 
 
+def _subtract_busy(segs: list, d: date, busy: list) -> list:
+    """근무구간에서 점유구간(busy: [(시작,종료)])과 겹치는 부분을 제외.
+    고정 작업·휴일작업·이미 배치된 작업의 기간은 작업 불가 시간으로 본다."""
+    if not busy:
+        return segs
+    ds = datetime.combine(d, time(0, 0))
+    de = ds + timedelta(days=1)
+    out = segs
+    for b0, b1 in busy:
+        bs, be = max(b0, ds), min(b1, de)
+        if bs >= be:
+            continue
+        nxt = []
+        for s, e in out:
+            if be <= s or bs >= e:
+                nxt.append((s, e))
+                continue
+            if s < bs:
+                nxt.append((s, bs))
+            if be < e:
+                nxt.append((be, e))
+        out = nxt
+        if not out:
+            break
+    return out
+
+
 def worker_segments(d: date, cal: dict, hol: dict, userid,
-                    uhours: dict = None) -> list:
+                    uhours: dict = None, busy: list = None) -> list:
     """작업자의 해당 일 근무 구간 목록 (개인휴가 + 개발자별 하루시간 반영).
     달력 값이 'F' 이면 근무구간 무시하고 00:00~24:00 전체를 작업가능으로 둔다
     (하루 개발시간 제한도 적용하지 않음 — 경과시간 그대로)."""
@@ -136,7 +165,7 @@ def worker_segments(d: date, cal: dict, hol: dict, userid,
                 segs[-1] = (s, e + timedelta(hours=cap - total))
     h = hol.get((userid or "", d.strftime("%Y%m%d")))
     if not h:
-        return segs
+        return _subtract_busy(segs, d, busy)
     cat, hrs = h
     day_hours = sum(
         (e - s).total_seconds() for s, e in segs) / 3600.0
@@ -155,7 +184,7 @@ def worker_segments(d: date, cal: dict, hol: dict, userid,
             continue
         out.append((s, e - timedelta(hours=remaining)))
         remaining = 0
-    return list(reversed(out))
+    return _subtract_busy(list(reversed(out)), d, busy)
 
 
 def workday_cal(cal: dict, d: date) -> dict:
@@ -169,13 +198,13 @@ def workday_cal(cal: dict, d: date) -> dict:
 
 
 def next_work_start(dt: datetime, cal: dict, hol: dict = None, userid=None,
-                    uhours: dict = None) -> datetime:
+                    uhours: dict = None, busy: list = None) -> datetime:
     """dt 이후(포함) 가장 빠른 근무 시작 시각을 반환."""
     hol = hol or {}
     d = dt.date()
     # 최대 5년치만 탐색
     for _ in range(366 * 5):
-        for seg_s, seg_e in worker_segments(d, cal, hol, userid, uhours):
+        for seg_s, seg_e in worker_segments(d, cal, hol, userid, uhours, busy):
             if dt <= seg_s:
                 return seg_s
             if seg_s < dt < seg_e:
@@ -186,16 +215,17 @@ def next_work_start(dt: datetime, cal: dict, hol: dict = None, userid=None,
 
 
 def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None,
-                   userid=None, uhours: dict = None) -> datetime:
+                   userid=None, uhours: dict = None,
+                   busy: list = None) -> datetime:
     """start 부터 근무시간 hours 만큼 경과한 시각을 반환."""
     hol = hol or {}
     if hours <= 0:
         return start
     remaining = float(hours)
-    cur = next_work_start(start, cal, hol, userid, uhours)
+    cur = next_work_start(start, cal, hol, userid, uhours, busy)
     while True:
         d = cur.date()
-        for seg_s, seg_e in worker_segments(d, cal, hol, userid, uhours):
+        for seg_s, seg_e in worker_segments(d, cal, hol, userid, uhours, busy):
             if cur >= seg_e:
                 continue
             s = max(cur, seg_s)
@@ -205,7 +235,7 @@ def add_work_hours(start: datetime, hours: float, cal: dict, hol: dict = None,
             remaining -= avail
             cur = seg_e
         cur = next_work_start(datetime.combine(d + timedelta(days=1), time(0, 0)),
-                              cal, hol, userid, uhours)
+                              cal, hol, userid, uhours, busy)
 
 
 def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = None,
@@ -226,7 +256,8 @@ def work_hours_between(start: datetime, end: datetime, cal: dict, hol: dict = No
     return round(total, 2)
 
 
-def daily_breakdown(start, end, cal, hol, uid, uhours: dict = None):
+def daily_breakdown(start, end, cal, hol, uid, uhours: dict = None,
+                    busy: list = None):
     """시작~종료 구간을 일별로 분해.
     {date: {"hours": 작업시간, "spans": [[시작비율, 끝비율], ...]}} 반환.
     spans 비율은 그날 근무시간(구간별 실제 근무 합계) 기준 0~1.
@@ -234,7 +265,7 @@ def daily_breakdown(start, end, cal, hol, uid, uhours: dict = None):
     result = {}
     d = start.date()
     while d <= end.date():
-        segs = worker_segments(d, cal, hol, uid, uhours)
+        segs = worker_segments(d, cal, hol, uid, uhours, busy)
         if segs:
             daylen = sum((e - s).total_seconds() for s, e in segs) or 1
             # 일부휴가 등으로 차감된 뒤쪽 비율 (정상 근무시간 대비 비작업 꼬리)
@@ -299,11 +330,12 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
 
     for key, items in groups.items():
         items.sort(key=lambda x: (x.priority or 0, x.taskid))
-        cursor = max(now, in_prog_end.get(key, now))
-        # 시작일시가 고정된 작업은 자리를 유지 — 먼저 종료시각을 계산해 기준선에 반영.
-        # 비고정 작업은 이 작업자의 가장 마지막 스케줄이 끝난 이후부터만 배치한다.
+        floor = max(now, in_prog_end.get(key, now))
+        # 시작일시가 고정된 작업은 자리를 유지 — 종료시각만 계산해 점유구간으로 둔다
         fixed_ids = {t.taskid for t in items
                      if t.start_fixed and t.task_start_date}
+        busy = []        # (시작, 종료) 점유구간 — 고정·휴일 작업 + 이미 배치된 작업
+        fixed_info = []  # (우선순위키, 시작, 종료) — 우선순위 높은 고정 작업은 배치 차단선
         for task in items:
             if task.taskid not in fixed_ids:
                 continue
@@ -312,17 +344,38 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
             task.task_end_date_estimated = add_work_hours(
                 task.task_start_date, task.work_hours_estimated or 0,
                 cal_f, hol, uid, uhours)
-            cursor = max(cursor, task.task_end_date_estimated)
+            busy.append((task.task_start_date, task.task_end_date_estimated))
+            fixed_info.append(((task.priority or 0, task.taskid),
+                               task.task_start_date, task.task_end_date_estimated))
             updated += 1
+        # 수동 일정인 휴일작업도 점유구간으로 반영 (자동 배치 대상은 아님)
+        for t in db.query(Task).filter(
+                Task.task_stat == "W", Task.holiday_work == 1,
+                Task.work_userid == key,
+                Task.task_start_date != None,
+                Task.task_end_date_estimated != None):
+            busy.append((t.task_start_date, t.task_end_date_estimated))
+            fixed_info.append(((t.priority or 0, t.taskid),
+                               t.task_start_date, t.task_end_date_estimated))
+        # 비고정 작업은 우선순위 순으로 배치.
+        # 나보다 우선순위가 높은 고정·휴일 작업은 그 종료 이후부터만 배치되고,
+        # 우선순위가 낮은 고정 작업과 배치된 작업의 기간은 제외(건너뜀)하며 배치한다.
         for task in items:
             if task.taskid in fixed_ids:
                 continue
             uid = task.work_userid or ""
-            start = next_work_start(cursor, cal, hol, uid, uhours)
+            order_key = (task.priority or 0, task.taskid)
+            cursor = floor
+            for k, fs, fe in fixed_info:
+                if k < order_key:
+                    cursor = max(cursor, fe)
+            start = next_work_start(cursor, cal, hol, uid, uhours, busy)
+            end = add_work_hours(
+                start, task.work_hours_estimated or 0,
+                cal, hol, uid, uhours, busy)
             task.task_start_date = start
-            task.task_end_date_estimated = add_work_hours(
-                start, task.work_hours_estimated or 0, cal, hol, uid, uhours)
-            cursor = task.task_end_date_estimated
+            task.task_end_date_estimated = end
+            busy.append((start, end))
             updated += 1
 
     db.commit()
