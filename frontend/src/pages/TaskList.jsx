@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor, isDevWorker,
-  loadFilter, saveFilter } from '../api'
+  resolveUserid, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
+import ReqUserInput from '../ReqUserInput'
 
 const PAGE_SIZE = 20
 
@@ -30,11 +31,12 @@ export default function TaskList() {
     if (statFilter) params.task_stat = statFilter
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
-    if (reqFilter) params.req_userid = reqFilter
+    const reqUid = resolveUserid(reqFilter, users)
+    if (reqUid) params.req_userid = reqUid
     if (workerFilter) params.work_userid = workerFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, statFilter, siteFilter, typeFilter, reqFilter, workerFilter])
+  }, [q, statFilter, siteFilter, typeFilter, reqFilter, workerFilter, users])
 
   useEffect(() => { load().catch(console.error) }, [load])
   useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, reqFilter, workerFilter])   // 검색조건 변경 시 1페이지로
@@ -74,8 +76,7 @@ export default function TaskList() {
       q.trim(),
       statFilter && (STAT_LABEL[statFilter] || statFilter),
       typeFilter && (TASK_TYPE_LABEL[typeFilter] || typeFilter),
-      reqFilter &&
-        (users.find(u => u.userid === reqFilter)?.user_name || reqFilter),
+      reqFilter,
       workerFilter &&
         (users.find(u => u.userid === workerFilter)?.user_name || workerFilter),
     ].filter(Boolean).join('_')
@@ -107,11 +108,7 @@ export default function TaskList() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
-        <select value={reqFilter} onChange={e => setReqFilter(e.target.value)}>
-          <option value="">요청자(전체)</option>
-          {users.filter(u => u.duty_class === 'B')
-            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-        </select>
+        <ReqUserInput users={users} value={reqFilter} onChange={setReqFilter} />
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker)

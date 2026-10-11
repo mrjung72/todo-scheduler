@@ -4,8 +4,9 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, TASK_TYPE_LABEL,
-  dutyOfGrade, isDevWorker, loadFilter, saveFilter } from '../api'
+  dutyOfGrade, isDevWorker, resolveUserid, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
+import ReqUserInput from '../ReqUserInput'
 
 const p2 = n => String(n).padStart(2, '0')
 const fmtYMD = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
@@ -297,11 +298,12 @@ export default function CalendarView() {
   }
 
   const kw = q.trim().toLowerCase()
+  const reqUid = resolveUserid(reqFilter, users)
   const filtered = events.filter(e => {
     const p = e.extendedProps || {}
     if (siteFilter && p.siteid !== siteFilter) return false
     if (typeFilter && p.task_type !== typeFilter) return false
-    if (reqFilter && p.req_userid !== reqFilter) return false
+    if (reqUid && p.req_userid !== reqUid) return false
     if (workerFilter && p.work_userid !== workerFilter) return false
     if (kw && ![e.title, p.task_csrid, p.work_user_name, p.work_userid, p.site_name]
       .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
@@ -328,11 +330,7 @@ export default function CalendarView() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
-        <select value={reqFilter} onChange={e => setReqFilter(e.target.value)}>
-          <option value="">요청자(전체)</option>
-          {users.filter(u => u.duty_class === 'B')
-            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-        </select>
+        <ReqUserInput users={users} value={reqFilter} onChange={setReqFilter} />
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker)

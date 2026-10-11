@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, isDevWorker,
-  loadFilter, saveFilter } from '../api'
+  resolveUserid, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
+import ReqUserInput from '../ReqUserInput'
 
 // 3열 배치: 좌 = 검토·요청, 중 = 대기·작업중·중단, 우 = 완료·반려
 const LAYOUT = [
@@ -37,11 +38,12 @@ export default function Kanban() {
     if (q) params.q = q
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
-    if (reqFilter) params.req_userid = reqFilter
+    const reqUid = resolveUserid(reqFilter, users)
+    if (reqUid) params.req_userid = reqUid
     if (workerFilter) params.work_userid = workerFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, siteFilter, typeFilter, reqFilter, workerFilter])
+  }, [q, siteFilter, typeFilter, reqFilter, workerFilter, users])
 
   useEffect(() => { load().catch(console.error) }, [load])
   useEffect(() => {
@@ -89,11 +91,7 @@ export default function Kanban() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
-        <select value={reqFilter} onChange={e => setReqFilter(e.target.value)}>
-          <option value="">요청자(전체)</option>
-          {users.filter(u => u.duty_class === 'B')
-            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-        </select>
+        <ReqUserInput users={users} value={reqFilter} onChange={setReqFilter} />
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker)

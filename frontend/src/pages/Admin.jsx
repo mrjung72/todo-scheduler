@@ -3,9 +3,10 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
   GRADE_LABEL, NEXT_STAT, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
-  loadFilter, saveFilter, downloadFile } from '../api'
+  loadFilter, saveFilter, downloadFile, resolveUserid } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
+import ReqUserInput from '../ReqUserInput'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -733,6 +734,7 @@ function TasksTab() {
   // 현업담당자 검색 리스트다운 대상 (현업담당자 7, 기타사용자 9)
   const reqUsers = users.filter(u => u.duty_class === 'B')   // 현업담당자 후보 = 업무담당
 
+  const reqUid = resolveUserid(reqF, users)
   const filtered = (!q.trim() ? rows : rows.filter(t => {
     const kw = q.trim().toLowerCase()
     return [
@@ -744,7 +746,7 @@ function TasksTab() {
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
     (!typeF || t.task_type === typeF) &&
-    (!reqF || t.req_userid === reqF) &&
+    (!reqUid || t.req_userid === reqUid) &&
     (!workF || t.work_userid === workF))
     .filter(t => staff || viewer || t.work_userid === myId())  // 조회전용·일반개발자 본인 작업만
   const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF, reqF, workF])
@@ -847,11 +849,7 @@ function TasksTab() {
           <option value="">유형(전체)</option>
           {typeOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select value={reqF} onChange={e => setReqF(e.target.value)}>
-          <option value="">요청자(전체)</option>
-          {reqUsers.map(u =>
-            <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
-        </select>
+        <ReqUserInput users={users} value={reqF} onChange={setReqF} />
         <select value={workF} onChange={e => setWorkF(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker).map(u =>

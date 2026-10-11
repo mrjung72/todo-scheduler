@@ -161,6 +161,19 @@ export const dutyOfGrade = g =>
 // 작업자(개발자) 대상 판별: 개발담당(D) + 수석개발자(등급1)
 export const isDevGrade = g => g === 1 || dutyOfGrade(g) === 'D'
 export const isDevWorker = u => isDevGrade(u.user_grade)
+// 요청자 후보: 업무담당(B)
+export const isReqUser = u => u.duty_class === 'B'
+
+// "이름 (ID)" | 이름 | ID 입력값 → userid 변환. 못 찾으면 입력값 그대로
+export const resolveUserid = (text, users) => {
+  const t = (text || '').trim()
+  if (!t) return ''
+  const m = t.match(/\(([^()]*)\)\s*$/)
+  if (m) return m[1].trim()
+  const u = (users || []).find(u => u.user_name === t) ||
+    (users || []).find(u => u.userid === t)
+  return u ? u.userid : t
+}
 
 const PALETTE = [
   '#1e88e5', '#e53935', '#43a047', '#fb8c00', '#8e24aa',
