@@ -34,7 +34,7 @@ export default function Home() {
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
         <input
-          placeholder="검색어 (작업명/담당자명 또는 ID)"
+          placeholder="검색어 (작업명/CSR/담당자명 또는 ID)"
           value={q}
           onChange={e => setQ(e.target.value)}
         />

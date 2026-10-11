@@ -136,6 +136,7 @@ export default function CalendarView() {
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [showHol, setShowHol] = useState(savedF.holiday !== false)  // 작업자휴가 표시 여부
   // 달력은 대기중(W)/작업중(P) 스케줄만 표시 (서버에서도 W,P만 반환)
@@ -300,8 +301,9 @@ export default function CalendarView() {
     const p = e.extendedProps || {}
     if (siteFilter && p.siteid !== siteFilter) return false
     if (typeFilter && p.task_type !== typeFilter) return false
+    if (reqFilter && p.req_userid !== reqFilter) return false
     if (workerFilter && p.work_userid !== workerFilter) return false
-    if (kw && ![e.title, p.work_user_name, p.work_userid, p.site_name]
+    if (kw && ![e.title, p.task_csrid, p.work_user_name, p.work_userid, p.site_name]
       .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
     return true
   })
@@ -326,18 +328,23 @@ export default function CalendarView() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={reqFilter} onChange={e => setReqFilter(e.target.value)}>
+          <option value="">요청자(전체)</option>
+          {users.filter(u => u.duty_class === 'B')
+            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker)
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input
-          placeholder="검색어 (작업명/작업자/사이트)"
+          placeholder="검색어 (작업명/CSR/작업자/사이트)"
           value={q}
           onChange={e => setQ(e.target.value)}
         />
         <button onClick={() => {
-          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, worker: workerFilter, holiday: showHol })
+          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter, holiday: showHol })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <label className="hint-inline" style={{ cursor: 'pointer' }}>

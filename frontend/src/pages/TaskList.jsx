@@ -17,6 +17,7 @@ export default function TaskList() {
   const [q, setQ] = useState(savedF.q || '')
   const [statFilter, setStatFilter] = useState(savedF.stat || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [cfg, setCfg] = useState(null)
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
@@ -29,13 +30,14 @@ export default function TaskList() {
     if (statFilter) params.task_stat = statFilter
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
+    if (reqFilter) params.req_userid = reqFilter
     if (workerFilter) params.work_userid = workerFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, statFilter, siteFilter, typeFilter, workerFilter])
+  }, [q, statFilter, siteFilter, typeFilter, reqFilter, workerFilter])
 
   useEffect(() => { load().catch(console.error) }, [load])
-  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, workerFilter])   // 검색조건 변경 시 1페이지로
+  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, reqFilter, workerFilter])   // 검색조건 변경 시 1페이지로
   useEffect(() => {
     api.get('/config').then(r => setCfg(r.data))
     api.get('/sites').then(r => setSites(r.data))
@@ -72,6 +74,8 @@ export default function TaskList() {
       q.trim(),
       statFilter && (STAT_LABEL[statFilter] || statFilter),
       typeFilter && (TASK_TYPE_LABEL[typeFilter] || typeFilter),
+      reqFilter &&
+        (users.find(u => u.userid === reqFilter)?.user_name || reqFilter),
       workerFilter &&
         (users.find(u => u.userid === workerFilter)?.user_name || workerFilter),
     ].filter(Boolean).join('_')
@@ -103,19 +107,24 @@ export default function TaskList() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={reqFilter} onChange={e => setReqFilter(e.target.value)}>
+          <option value="">요청자(전체)</option>
+          {users.filter(u => u.duty_class === 'B')
+            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker)
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input
-          placeholder="검색어 (작업명/담당자명 또는 ID)"
+          placeholder="검색어 (작업명/CSR/담당자명 또는 ID)"
           value={q}
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={() => {
-          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, worker: workerFilter })
+          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, req: reqFilter, worker: workerFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>

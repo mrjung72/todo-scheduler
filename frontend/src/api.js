@@ -175,12 +175,18 @@ export function colorOf(key) {
 }
 
 // 작업별 색상: 황금각(137.5°) 분포로 연속 taskid도 대비되는 색이 나오게 함
-export function taskColor(taskid) {
+function taskHue(taskid) {
   const s = String(taskid ?? 'none')
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
   const n = Number(taskid)
   const base = Number.isFinite(n) ? n : h
-  const hue = Math.round((base * 137.508) % 360)
-  return `hsl(${hue}, 65%, 45%)`
+  return Math.round((base * 137.508) % 360)
+}
+export function taskColor(taskid) {
+  return `hsl(${taskHue(taskid)}, 65%, 45%)`
+}
+// 작업색의 보색 — 컬러 타이틀 위에서 눈에 띄어야 할 요소(복사 버튼 등)용
+export function taskColorComp(taskid) {
+  return `hsl(${(taskHue(taskid) + 180) % 360}, 75%, 42%)`
 }

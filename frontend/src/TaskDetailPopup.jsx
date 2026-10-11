@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
-  taskColor, uploadWithProgress, downloadFile as dlFile } from './api'
+  taskColor, taskColorComp, uploadWithProgress, downloadFile as dlFile } from './api'
 import ProgressBar from './ProgressBar'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
@@ -21,6 +21,44 @@ const fmtUser = (name, id, title, dept) => {
   if (!base) return '-'
   const extra = [title, dept].filter(Boolean).join('/')
   return extra ? `${base} (${extra})` : base
+}
+
+// 값 복사 버튼: 클릭 시 클립보드 복사, 잠시 ✓ 표시
+function CopyBtn({ text, title = '복사', bg }) {
+  const [ok, setOk] = useState(false)
+  const copy = e => {
+    e.stopPropagation()
+    const done = () => { setOk(true); setTimeout(() => setOk(false), 1200) }
+    const fallback = () => {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.cssText = 'position:fixed;opacity:0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy'); done() } catch {}
+      ta.remove()
+    }
+    navigator.clipboard?.writeText
+      ? navigator.clipboard.writeText(text).then(done).catch(fallback)
+      : fallback()
+  }
+  return (
+    <span className="copy-wrap">
+      <button type="button" className={`copy-btn${ok ? ' done' : ''}`} title={title}
+        style={bg && !ok ? { background: bg } : undefined}
+        onMouseDown={e => e.stopPropagation()} onClick={copy}>
+        {ok ? '✓' : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+            strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        )}
+      </button>
+      {ok && <span className="copy-toast">복사되었습니다</span>}
+    </span>
+  )
 }
 
 // 팝업 드래그 이동: 타이틀 mousedown -> 창 기준 오프셋을 transform으로 적용
@@ -242,10 +280,15 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             {task.task_type &&
               <span className="pt-chip">{TASK_TYPE_LABEL[task.task_type] || task.task_type}</span>}
             {task.task_csrid && <span className="csr">{task.task_csrid}</span>}
+            {task.task_csrid &&
+              <CopyBtn text={task.task_csrid} title="CSR번호 복사"
+                bg={taskColorComp(task.taskid)} />}
             {!!task.holiday_work && <span className="pt-chip">휴일작업</span>}
             <span className="pt-chip">{STAT_LABEL[task.task_stat] || task.task_stat}</span>
           </div>
-          <div className="pt-row2">{task.task_name}</div>
+          <div className="pt-row2">{task.task_name}
+            <CopyBtn text={task.task_name || ''} title="작업명 복사"
+              bg={taskColorComp(task.taskid)} /></div>
         </h3>
         {pview === 'his' ? (
           <div className="his-cols">

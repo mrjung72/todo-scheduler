@@ -91,6 +91,7 @@ def list_tasks(
     task_stat: str = Query(None),
     siteid: str = Query(None),
     task_type: str = Query(None),
+    req_userid: str = Query(None),
     work_userid: str = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -99,6 +100,9 @@ def list_tasks(
 
     if siteid:
         query = query.filter(Task.siteid == siteid)
+
+    if req_userid:
+        query = query.filter(Task.req_userid == req_userid)
 
     if work_userid:
         query = query.filter(Task.work_userid == work_userid)
@@ -131,6 +135,7 @@ def list_tasks(
             query = query.filter(
                 or_(
                     Task.task_name.like(like),
+                    Task.task_csrid.like(like),
                     Task.req_userid.like(like),
                     ReqUser.user_name.like(like),
                     Task.itos_userid.like(like),

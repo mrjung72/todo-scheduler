@@ -631,6 +631,7 @@ function TasksTab() {
   // 저장된 검색조건이 없으면 기본값: 사이트=본인 기본사이트, 상태=작업요청
   const [siteF, setSiteF] = useState(savedF.site ?? mySite() ?? '')
   const [statF, setStatF] = useState(savedF.stat ?? 'R')
+  const [reqF, setReqF] = useState(savedF.req || '')
   const [workF, setWorkF] = useState(savedF.work || '')
   const [typeF, setTypeF] = useState(savedF.type || '')
   const [selTask, setSelTask] = useState(null)
@@ -743,9 +744,10 @@ function TasksTab() {
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
     (!typeF || t.task_type === typeF) &&
+    (!reqF || t.req_userid === reqF) &&
     (!workF || t.work_userid === workF))
     .filter(t => staff || viewer || t.work_userid === myId())  // 조회전용·일반개발자 본인 작업만
-  const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF, workF])
+  const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF, reqF, workF])
 
   // 방금 추가한 작업이 보이는 페이지로 이동 + 행 강조
   // (새 작업은 항상 작업요청(R) — 상태 필터는 R로 두고 나머지 조건만 해제)
@@ -755,8 +757,8 @@ function TasksTab() {
     if (newHandled.current) return
     const idx = filtered.findIndex(t => t.taskid === newId)
     if (idx < 0) {
-      if (siteF || (statF && statF !== 'R') || typeF || workF || q) {
-        setSiteF(''); setStatF('R'); setTypeF(''); setWorkF(''); setQ('')
+      if (siteF || (statF && statF !== 'R') || typeF || reqF || workF || q) {
+        setSiteF(''); setStatF('R'); setTypeF(''); setReqF(''); setWorkF(''); setQ('')
       }
       return   // 목록 갱신 후 이펙트가 다시 실행됨
     }
@@ -845,6 +847,11 @@ function TasksTab() {
           <option value="">유형(전체)</option>
           {typeOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select value={reqF} onChange={e => setReqF(e.target.value)}>
+          <option value="">요청자(전체)</option>
+          {reqUsers.map(u =>
+            <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <select value={workF} onChange={e => setWorkF(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker).map(u =>
@@ -853,7 +860,7 @@ function TasksTab() {
         <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
-          saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, work: workF, q })
+          saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, req: reqF, work: workF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <ExcelButtons name="작업" cols={cols} rows={filtered}

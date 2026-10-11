@@ -21,6 +21,7 @@ export default function Kanban() {
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
@@ -36,10 +37,11 @@ export default function Kanban() {
     if (q) params.q = q
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
+    if (reqFilter) params.req_userid = reqFilter
     if (workerFilter) params.work_userid = workerFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, siteFilter, typeFilter, workerFilter])
+  }, [q, siteFilter, typeFilter, reqFilter, workerFilter])
 
   useEffect(() => { load().catch(console.error) }, [load])
   useEffect(() => {
@@ -87,19 +89,24 @@ export default function Kanban() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={reqFilter} onChange={e => setReqFilter(e.target.value)}>
+          <option value="">요청자(전체)</option>
+          {users.filter(u => u.duty_class === 'B')
+            .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
+        </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
           {users.filter(isDevWorker)
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input
-          placeholder="검색어 (작업명/담당자명 또는 ID)"
+          placeholder="검색어 (작업명/CSR/담당자명 또는 ID)"
           value={q}
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={() => {
-          saveFilter('kanban', { site: siteFilter, q, type: typeFilter, worker: workerFilter })
+          saveFilter('kanban', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         {err && <span className="err">{err}</span>}
