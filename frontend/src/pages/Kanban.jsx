@@ -63,10 +63,10 @@ export default function Kanban() {
     const taskid = +e.dataTransfer.getData('text/taskid')
     const t = tasks.find(x => x.taskid === taskid)
     if (!t || t.task_stat === st || !canMove(t)) return
-    // 종결(F/X) 카드를 직전 상태 칸으로 드롭 → 되돌리기 (종료예상 미경과)
-    if (['F', 'X'].includes(t.task_stat) && st === t.prev_stat && t.prev_stat &&
-        (!t.task_end_date_estimated ||
-          new Date(t.task_end_date_estimated) > new Date())) {
+    const normalOk = t.holiday_work || (NEXT_STAT[t.task_stat] || []).includes(st)
+    // 직전 상태 칸으로 드롭 → 되돌리기 (F/X는 예상 미경과, 모든 상태는 변경 후 1시간 이내)
+    // 되돌리기 불가여도 정상 전이가 아니면 서버에 보내 불가 사유를 그대로 표시
+    if (t.prev_stat && st === t.prev_stat && (t.can_revert || !normalOk)) {
       try {
         await api.post(`/tasks/${taskid}/revert`)
         load()
@@ -76,8 +76,14 @@ export default function Kanban() {
       return
     }
     // 허용 전이 외 이동은 서버와 동일 규칙으로 차단 (휴일작업은 제약 없음)
-    if (!t.holiday_work && !(NEXT_STAT[t.task_stat] || []).includes(st)) {
-      setErr(`${STAT_LABEL[t.task_stat]} 상태에서는 ${STAT_LABEL[st]}(으)로 변경할 수 없습니다`)
+    if (!normalOk) {
+      // 이동 가능한 상태 + 되돌리기 가능 여부를 안내에 포함
+      const allowed = (NEXT_STAT[t.task_stat] || [])
+        .filter(s => s !== t.task_stat).map(s => STAT_LABEL[s])
+      const hint = allowed.length ? ` (가능: ${allowed.join(', ')})` : ''
+      const rev = t.can_revert && t.prev_stat
+        ? ` '${STAT_LABEL[t.prev_stat]}'(으)로는 되돌릴 수 있습니다` : ''
+      setErr(`${STAT_LABEL[t.task_stat]} 상태에서는 ${STAT_LABEL[st]}(으)로 변경할 수 없습니다.${hint}${rev}`)
       return
     }
     try {

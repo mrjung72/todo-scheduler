@@ -67,7 +67,7 @@ def _detail_query(db: Session):
 
 
 def _prev_stat(db: Session, task: Task):
-    """현재 상태와 다른 가장 최근 이력 상태 (종결 상태 되돌리기 대상)."""
+    """현재 상태와 다른 가장 최근 이력 상태 (되돌리기 대상)."""
     row = (db.query(TaskChgLog.task_stat)
            .filter(TaskChgLog.taskid == task.taskid,
                    TaskChgLog.task_stat != (task.task_stat or "R"))
@@ -75,7 +75,40 @@ def _prev_stat(db: Session, task: Task):
     return row[0] if row else None
 
 
-def _to_detail(row, cal: dict = None, prev_stat: str = None) -> TaskDetail:
+def _last_chg(db: Session, task: Task):
+    """현재 상태로 변경된 시각 (가장 최근 이력의 등록시각)."""
+    row = (db.query(TaskChgLog.create_date)
+           .filter(TaskChgLog.taskid == task.taskid)
+           .order_by(TaskChgLog.taskchgid.desc()).first())
+    return row[0] if row else None
+
+
+def _revert_reason(task: Task, prev_stat, last_chg, now):
+    """되돌리기 불가 사유. 가능하면 None 반환.
+    F/X는 종료예상시각 미경과(또는 없음), 모든 상태는 변경 후 1시간 이내면 가능."""
+    if not prev_stat:
+        return "되돌릴 이전 상태가 없습니다"
+    if task.task_stat in ("F", "X") and \
+            (not task.task_end_date_estimated or
+             task.task_end_date_estimated > now):
+        return None
+    if not last_chg:
+        return "상태 변경 이력이 없어 되돌릴 수 없습니다"
+    if (now - last_chg) <= timedelta(hours=1):
+        return None
+    if task.task_stat in ("F", "X"):
+        return ("작업종료예상시각이 지났고 상태 변경 후 1시간도 경과하여 "
+                "되돌릴 수 없습니다")
+    return "상태 변경 후 1시간이 지나 되돌릴 수 없습니다"
+
+
+def _revert_ok(task: Task, prev_stat, last_chg, now) -> bool:
+    """되돌리기 가능 여부 (목록/상세 응답의 can_revert 용)."""
+    return _revert_reason(task, prev_stat, last_chg, now) is None
+
+
+def _to_detail(row, cal: dict = None, prev_stat: str = None,
+               can_revert: bool = False) -> TaskDetail:
     (task, req_name, req_dept, req_title, itos_name,
      work_name, work_dept, work_title, work_hours_day, site_name) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
@@ -91,6 +124,7 @@ def _to_detail(row, cal: dict = None, prev_stat: str = None) -> TaskDetail:
         data["weekday_included"] = has_workday_between(
             cal, task.task_start_date, task.task_end_date_estimated)
     data["prev_stat"] = prev_stat
+    data["can_revert"] = can_revert
     return TaskDetail(**data)
 
 
@@ -157,10 +191,24 @@ def list_tasks(
 
     rows = query.order_by(Task.priority, Task.taskid).all()
     cal = get_calendar_map(db)
-    # 종결 상태(F/X) 작업만 직전 상태 조회 (되돌리기 버튼 표시용)
-    prev_map = {r[0].taskid: _prev_stat(db, r[0])
-                for r in rows if r[0].task_stat in ("F", "X")}
-    return [_to_detail(r, cal, prev_map.get(r[0].taskid)) for r in rows]
+    # 되돌리기 판정용 직전 상태·마지막 변경시각을 전 작업 일괄 조회
+    tids = [r[0].taskid for r in rows]
+    prev_map, last_map, cur_map = {}, {}, {}
+    if tids:
+        for tid, st, cd in (db.query(TaskChgLog.taskid, TaskChgLog.task_stat,
+                                     TaskChgLog.create_date)
+                            .filter(TaskChgLog.taskid.in_(tids))
+                            .order_by(TaskChgLog.taskchgid.desc()).all()):
+            if tid not in cur_map:
+                cur_map[tid] = st      # 최신 이력 = 현재 상태
+                last_map[tid] = cd
+            elif st != cur_map[tid] and tid not in prev_map:
+                prev_map[tid] = st     # 현재와 다른 가장 최근 상태
+    now = datetime.now().replace(microsecond=0)
+    return [_to_detail(r, cal, prev_map.get(r[0].taskid),
+                       _revert_ok(r[0], prev_map.get(r[0].taskid),
+                                  last_map.get(r[0].taskid), now))
+            for r in rows]
 
 
 @router.post("/recalculate")
@@ -286,21 +334,17 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
 @router.post("/{taskid}/revert", response_model=TaskOut)
 def revert_task(taskid: int, db: Session = Depends(get_db),
                 me: User = Depends(get_current_user)):
-    """작업완료/작업반려 -> 직전 상태 되돌리기.
-    작업종료예상시각이 지난 작업은 불가 (예상시각이 없으면 허용)."""
+    """직전 상태로 되돌리기.
+    F/X는 종료예상시각 미경과(또는 없음)일 때, 모든 상태는 변경 후 1시간 이내."""
     obj = db.get(Task, taskid)
     if not obj:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
     check_task_access(me, obj.work_userid, obj.siteid)
-    if obj.task_stat not in ("F", "X"):
-        raise HTTPException(400, "작업완료/작업반려 상태에서만 되돌릴 수 있습니다")
-    now = datetime.now().replace(microsecond=0)
-    if obj.task_end_date_estimated and obj.task_end_date_estimated <= now:
-        raise HTTPException(
-            400, "작업종료예상시각이 지난 작업은 되돌릴 수 없습니다")
     prev = _prev_stat(db, obj)
-    if not prev:
-        raise HTTPException(400, "되돌릴 이전 상태가 없습니다")
+    now = datetime.now().replace(microsecond=0)
+    reason = _revert_reason(obj, prev, _last_chg(db, obj), now)
+    if reason:
+        raise HTTPException(400, reason)
     apply_task_stat_change(db, obj, prev, remark="이전 상태로 되돌림",
                            actor_userid=me.userid, allow_revert=True)
     db.commit()

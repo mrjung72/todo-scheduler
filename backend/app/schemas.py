@@ -220,4 +220,5 @@ class TaskDetail(TaskOut):
     work_user_title: Optional[str] = None
     work_hours_day: Optional[float] = None   # 작업자의 하루 개발시간 (None=기본 근무구간)
     weekday_included: Optional[bool] = False   # 휴일작업 기간에 근무일 포함 여부(경고)
-    prev_stat: Optional[str] = None   # 직전 상태 (F/X 되돌리기용)
+    prev_stat: Optional[str] = None   # 직전 상태 (되돌리기용)
+    can_revert: Optional[bool] = False   # 직전 상태로 되돌리기 가능 여부

@@ -675,9 +675,8 @@ function TasksTab() {
 
   const save = (id, patch) => api.put(`/tasks/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
 
-  // 작업완료/작업반려 → 직전 상태 되돌리기 (종료예상시각 미경과 + prev_stat 필요)
-  const canRevert = t => ['F', 'X'].includes(t.task_stat) && t.prev_stat &&
-    (!t.task_end_date_estimated || new Date(t.task_end_date_estimated) > new Date())
+  // 직전 상태 되돌리기: F/X는 종료예상 미경과, 모든 상태는 변경 후 1시간 이내 (서버 판정)
+  const canRevert = t => !!(t.can_revert && t.prev_stat)
   const revertTask = t =>
     window.confirm(`'${STAT_LABEL[t.prev_stat]}' 상태로 되돌릴까요?`) &&
     api.post(`/tasks/${t.taskid}/revert`).then(load).catch(e => alert(errMsg(e)))

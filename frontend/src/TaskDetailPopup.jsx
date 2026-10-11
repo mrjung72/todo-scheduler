@@ -158,11 +158,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => {})
 
-  // 작업완료/작업반려 → 직전 상태 되돌리기 (종료예상시각 미경과 시만)
-  const canRevert = canEdit && ['F', 'X'].includes(task.task_stat) &&
-    task.prev_stat &&
-    (!task.task_end_date_estimated ||
-      new Date(task.task_end_date_estimated) > new Date())
+  // 직전 상태 되돌리기: F/X는 종료예상 미경과, 모든 상태는 변경 후 1시간 이내 (서버 판정)
+  const canRevert = canEdit && task.can_revert && task.prev_stat
   const revert = async () => {
     if (!window.confirm(`'${STAT_LABEL[task.prev_stat]}' 상태로 되돌릴까요?`)) return
     try {
