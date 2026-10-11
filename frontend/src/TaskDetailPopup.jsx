@@ -158,6 +158,20 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => {})
 
+  // 작업완료/작업반려 → 직전 상태 되돌리기 (종료예상시각 미경과 시만)
+  const canRevert = canEdit && ['F', 'X'].includes(task.task_stat) &&
+    task.prev_stat &&
+    (!task.task_end_date_estimated ||
+      new Date(task.task_end_date_estimated) > new Date())
+  const revert = async () => {
+    if (!window.confirm(`'${STAT_LABEL[task.prev_stat]}' 상태로 되돌릴까요?`)) return
+    try {
+      await api.post(`/tasks/${task.taskid}/revert`)
+      onChanged?.()
+      onClose()
+    } catch (e) { alert(e.response?.data?.detail || '처리에 실패했습니다') }
+  }
+
   // 시작일시 수동 설정 (서버에서 고정 처리 + 종료예상일시 재계산)
   const saveStart = async () => {
     try {
@@ -285,6 +299,11 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 bg={taskColorComp(task.taskid)} />}
             {!!task.holiday_work && <span className="pt-chip">휴일작업</span>}
             <span className="pt-chip">{STAT_LABEL[task.task_stat] || task.task_stat}</span>
+            {canRevert &&
+              <button type="button" className="revert-btn"
+                title={`${STAT_LABEL[task.prev_stat]}(으)로 되돌리기`}
+                onMouseDown={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); revert() }}>↩ 되돌림</button>}
           </div>
           <div className="pt-row2">{task.task_name}
             <CopyBtn text={task.task_name || ''} title="작업명 복사"

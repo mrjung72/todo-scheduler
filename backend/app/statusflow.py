@@ -55,14 +55,16 @@ def _check(prev: str, new_stat: str):
 
 
 def apply_task_stat_change(db: Session, task: Task, new_stat: str,
-                           remark: str = None, actor_userid: str = None):
+                           remark: str = None, actor_userid: str = None,
+                           allow_revert: bool = False):
     """작업 task_stat 전이 규칙 적용 + task_chg_log 이력 기록.
-    work_userid = 상태를 실제로 변경한 사용자(actor), 미지정 시 작업자."""
+    work_userid = 상태를 실제로 변경한 사용자(actor), 미지정 시 작업자.
+    allow_revert: 종결 상태(F/X)에서 직전 상태로 되돌리는 전이 허용."""
     prev = task.task_stat or "R"
     if prev == new_stat:
         return
     # 휴일작업은 상태 전이 제약 없이 자유롭게 변경 가능
-    if not task.holiday_work:
+    if not task.holiday_work and not allow_revert:
         _check(prev, new_stat)
     now = datetime.now().replace(microsecond=0)
 

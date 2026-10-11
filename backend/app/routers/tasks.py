@@ -66,7 +66,16 @@ def _detail_query(db: Session):
     )
 
 
-def _to_detail(row, cal: dict = None) -> TaskDetail:
+def _prev_stat(db: Session, task: Task):
+    """현재 상태와 다른 가장 최근 이력 상태 (종결 상태 되돌리기 대상)."""
+    row = (db.query(TaskChgLog.task_stat)
+           .filter(TaskChgLog.taskid == task.taskid,
+                   TaskChgLog.task_stat != (task.task_stat or "R"))
+           .order_by(TaskChgLog.taskchgid.desc()).first())
+    return row[0] if row else None
+
+
+def _to_detail(row, cal: dict = None, prev_stat: str = None) -> TaskDetail:
     (task, req_name, req_dept, req_title, itos_name,
      work_name, work_dept, work_title, work_hours_day, site_name) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
@@ -81,6 +90,7 @@ def _to_detail(row, cal: dict = None) -> TaskDetail:
     if task.holiday_work and cal is not None:
         data["weekday_included"] = has_workday_between(
             cal, task.task_start_date, task.task_end_date_estimated)
+    data["prev_stat"] = prev_stat
     return TaskDetail(**data)
 
 
@@ -147,7 +157,10 @@ def list_tasks(
 
     rows = query.order_by(Task.priority, Task.taskid).all()
     cal = get_calendar_map(db)
-    return [_to_detail(r, cal) for r in rows]
+    # 종결 상태(F/X) 작업만 직전 상태 조회 (되돌리기 버튼 표시용)
+    prev_map = {r[0].taskid: _prev_stat(db, r[0])
+                for r in rows if r[0].task_stat in ("F", "X")}
+    return [_to_detail(r, cal, prev_map.get(r[0].taskid)) for r in rows]
 
 
 @router.post("/recalculate")
@@ -265,6 +278,31 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
         obj.task_end_date_estimated = add_work_hours(
             obj.task_start_date, obj.work_hours_estimated or 0,
             cal_f, hol, uid, get_user_hours_map(db))
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+@router.post("/{taskid}/revert", response_model=TaskOut)
+def revert_task(taskid: int, db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
+    """작업완료/작업반려 -> 직전 상태 되돌리기.
+    작업종료예상시각이 지난 작업은 불가 (예상시각이 없으면 허용)."""
+    obj = db.get(Task, taskid)
+    if not obj:
+        raise HTTPException(404, "작업을 찾을 수 없습니다")
+    check_task_access(me, obj.work_userid, obj.siteid)
+    if obj.task_stat not in ("F", "X"):
+        raise HTTPException(400, "작업완료/작업반려 상태에서만 되돌릴 수 있습니다")
+    now = datetime.now().replace(microsecond=0)
+    if obj.task_end_date_estimated and obj.task_end_date_estimated <= now:
+        raise HTTPException(
+            400, "작업종료예상시각이 지난 작업은 되돌릴 수 없습니다")
+    prev = _prev_stat(db, obj)
+    if not prev:
+        raise HTTPException(400, "되돌릴 이전 상태가 없습니다")
+    apply_task_stat_change(db, obj, prev, remark="이전 상태로 되돌림",
+                           actor_userid=me.userid, allow_revert=True)
     db.commit()
     db.refresh(obj)
     return obj

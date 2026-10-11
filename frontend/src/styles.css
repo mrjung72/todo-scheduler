@@ -376,6 +376,14 @@ pre.log-detail.hljs {
   background: rgba(255,255,255,.9); color: #15803d;
   font-size: 11px; font-weight: 700;
 }
+/* 되돌림 버튼 (작업상세 타이틀) */
+.revert-btn {
+  border: none; border-radius: 3px; padding: 1px 7px; cursor: pointer;
+  background: rgba(255,255,255,.9); color: #b45309;
+  font-size: 11px; font-weight: 700; line-height: 1.4;
+}
+.revert-btn:hover { background: #fff; }
+
 /* 새로고침 버튼 회전 아이콘 */
 .refresh-btn .rf-ico { display: inline-block; }
 .refresh-btn.busy .rf-ico { animation: rfspin .8s linear infinite; }

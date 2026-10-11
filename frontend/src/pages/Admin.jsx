@@ -675,6 +675,13 @@ function TasksTab() {
 
   const save = (id, patch) => api.put(`/tasks/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
 
+  // 작업완료/작업반려 → 직전 상태 되돌리기 (종료예상시각 미경과 + prev_stat 필요)
+  const canRevert = t => ['F', 'X'].includes(t.task_stat) && t.prev_stat &&
+    (!t.task_end_date_estimated || new Date(t.task_end_date_estimated) > new Date())
+  const revertTask = t =>
+    window.confirm(`'${STAT_LABEL[t.prev_stat]}' 상태로 되돌릴까요?`) &&
+    api.post(`/tasks/${t.taskid}/revert`).then(load).catch(e => alert(errMsg(e)))
+
   const recalc = async () => {
     try {
       const { data } = await api.post('/tasks/recalculate')
@@ -948,9 +955,14 @@ function TasksTab() {
                 onSave={v => save(t.taskid, { work_hours_estimated: v })} />
                 <span className="sub"> / {t.work_hours_real ?? '-'}</span></td>
               <td className="c stat-col"><EditableCell value={t.task_stat} disabled={!can(t)}
-                onSave={v => save(t.taskid, { task_stat: v })}
+                onSave={v => canRevert(t) && v === t.prev_stat
+                  ? revertTask(t) : save(t.taskid, { task_stat: v })}
                 options={t.holiday_work ? statOpt
-                  : statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value))} /></td>
+                  : statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value) ||
+                    (canRevert(t) && o.value === t.prev_stat))} />
+                {can(t) && canRevert(t) &&
+                  <button className="link" title={`${STAT_LABEL[t.prev_stat]}(으)로 되돌리기`}
+                    onClick={() => revertTask(t)}>↩</button>}</td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
               <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
