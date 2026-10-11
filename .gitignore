@@ -9,6 +9,7 @@ venv/
 
 uploads/
 app/uploads/
+*.db
 
 
 # SQLite DB
