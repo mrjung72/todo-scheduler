@@ -263,6 +263,18 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     }
   }
 
+  // 상태변경이력 초기화 (스태프) — 현재 상태의 기준 이력 1건만 남김
+  const resetHis = async () => {
+    if (!window.confirm('이 작업의 상태변경이력을 모두 초기화할까요?\n' +
+      '(현재 상태의 기준 이력 1건만 남고 복구할 수 없습니다)')) return
+    try {
+      await api.delete(`/tasks/${task.taskid}/his`)
+      api.get(`/tasks/${task.taskid}/his`)
+        .then(r => setHis(r.data)).catch(console.error)
+      onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '처리에 실패했습니다') }
+  }
+
   // 총 작업일수: 일별 배분이 있으면 실제 작업일수(작업시간이 있는 날),
   // 없으면 예상시간/작업자 하루시간으로 환산
   const dayHours = workHr || cfg?.work_hours_per_day
@@ -309,7 +321,11 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         {pview === 'his' ? (
           <div className="his-cols">
           <div className="his-col">
-          <b className="blk-title">상태변경이력</b>
+          <div className="blk-title"><b>상태변경이력</b>
+            {isStaff && <button className="danger"
+              style={{ marginLeft: 6, fontSize: 12, padding: '1px 8px' }}
+              onClick={resetHis}>초기화</button>}
+          </div>
           <div className="popup-info">
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>

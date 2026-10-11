@@ -5,7 +5,8 @@ from sqlalchemy import or_
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import Task, User, Site, TaskChgLog, WorkScheduleLog
+from ..models import (Task, User, Site, TaskChgLog, WorkScheduleLog,
+                      TaskAttachFile)
 from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail, TaskChgLogOut
 from ..scheduler import (
     recalculate, get_calendar_map, get_holiday_map, get_user_hours_map,
@@ -13,7 +14,7 @@ from ..scheduler import (
     is_working_day, FREE_DAY_STAT, WORK_HOURS_PER_DAY,
 )
 from ..statusflow import apply_task_stat_change, auto_start_due_tasks
-from ..security import get_current_user, check_task_access
+from ..security import get_current_user, check_task_access, require_staff
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -362,6 +363,8 @@ def delete_task(taskid: int, db: Session = Depends(get_db),
     db.query(WorkScheduleLog).filter(
         WorkScheduleLog.taskid == taskid).delete()
     db.query(TaskChgLog).filter(TaskChgLog.taskid == taskid).delete()
+    db.query(TaskAttachFile).filter(
+        TaskAttachFile.taskid == taskid).delete()
     db.delete(obj)
     db.commit()
 
@@ -477,3 +480,19 @@ def task_his(taskid: int, db: Session = Depends(get_db)):
             .order_by(TaskChgLog.taskchgid.desc()).all())
     return [{**{c.name: getattr(h, c.name) for c in TaskChgLog.__table__.columns},
              "work_user_name": name} for h, name in rows]
+
+
+@router.delete("/{taskid}/his", status_code=204)
+def reset_task_his(taskid: int, db: Session = Depends(get_db),
+                   me: User = Depends(require_staff)):
+    """해당 작업의 상태변경이력 초기화 (스태프).
+    전부 삭제 후 현재 상태의 기준 이력 한 건을 남긴다."""
+    obj = db.get(Task, taskid)
+    if not obj:
+        raise HTTPException(404, "작업을 찾을 수 없습니다")
+    db.query(TaskChgLog).filter(TaskChgLog.taskid == taskid).delete()
+    db.add(TaskChgLog(taskid=taskid, task_stat=obj.task_stat or "R",
+                      work_hours=0, remark="이력 초기화",
+                      work_userid=me.userid,
+                      create_date=datetime.now().replace(microsecond=0)))
+    db.commit()

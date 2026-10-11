@@ -78,7 +78,7 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
                          "작업중으로 변경할 수 없습니다")
             if task.task_start_date > now:
                 raise HTTPException(
-                    400, "작업시작일시 이후에만 작업중으로 변경할 수 있습니다")
+                    400, "작업시작일시 이후에 자동으로 작업중 상태로 변경됩니다.")
         # 최초 작업중 진입: 실제 시작일시 = 현재시각.
         # 중단->작업중 재개: 최초 시작일시 유지 (구간별 기간은 이력에 기록)
         if not task.task_start_date or prev == "W":
