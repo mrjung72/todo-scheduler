@@ -324,6 +324,7 @@ function UsersTab() {
   const [form, setForm] = useState(empty)
   const [savedF] = useState(() => loadFilter('admin-users'))
   const [q, setQ] = useState(savedF.q || '')
+  const [siteF, setSiteF] = useState(savedF.site || '')
   const [statF, setStatF] = useState(savedF.stat || '')
   const [gradeF, setGradeF] = useState(savedF.grade || '')
   const [dutyF, setDutyF] = useState(savedF.duty || '')
@@ -395,16 +396,21 @@ function UsersTab() {
   const shown = rows.filter(u =>
     // 자신보다 높은 등급(등급 번호가 작은)의 사용자는 목록에서 제외
     u.user_grade >= myGrade() &&
+    (!siteF || u.default_siteid === siteF) &&
     (!statF || u.user_stat === statF) &&
     (gradeF === '' || u.user_grade === +gradeF) &&
     (dutyF === '' || u.duty_class === dutyF) &&
     (!q || [u.userid, u.user_name, u.dept_name, u.job_title, u.user_tel, u.user_email]
       .some(v => (v || '').toLowerCase().includes(q.toLowerCase()))))
-  const { paged, pager } = usePager(shown, [q, statF, gradeF, dutyF])
+  const { paged, pager } = usePager(shown, [q, siteF, statF, gradeF, dutyF])
 
   return (
     <div>
       <div className="toolbar">
+        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
         <select value={statF} onChange={e => setStatF(e.target.value)}>
           <option value="">전체 상태</option>
           {Object.entries(USER_STAT_LABEL).map(([k, v]) =>
@@ -421,7 +427,7 @@ function UsersTab() {
         <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
-          saveFilter('admin-users', { stat: statF, duty: dutyF, grade: gradeF, q })
+          saveFilter('admin-users', { site: siteF, stat: statF, duty: dutyF, grade: gradeF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <RefreshBtn onClick={load} />
@@ -658,6 +664,7 @@ function TasksTab() {
         onClick={() => setUserSel(uid)}>ⓘ</button>
     : null
   const [endForm, setEndForm] = useState(null)      // {taskid, end} 휴일작업 종료일시 팝업
+  const [reqDateForm, setReqDateForm] = useState(null) // {taskid, req_date} 요청일시 팝업
   const [newId, setNewId] = useState(null)          // 방금 추가한 작업 ID (강조용)
   const [msg, setMsg] = useState('')
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
@@ -716,6 +723,19 @@ function TasksTab() {
         task_end_date_estimated: endForm.end.length === 16 ? endForm.end + ':00' : endForm.end,
       })
       setEndForm(null)
+      load()
+    } catch (e) { alert(errMsg(e)) }
+  }
+  const saveReqDate = async e => {
+    e.preventDefault()
+    try {
+      await api.put(`/tasks/${reqDateForm.taskid}`, {
+        req_date: reqDateForm.req_date
+          ? (reqDateForm.req_date.length === 16
+            ? reqDateForm.req_date + ':00' : reqDateForm.req_date)
+          : null,
+      })
+      setReqDateForm(null)
       load()
     } catch (e) { alert(errMsg(e)) }
   }
@@ -945,7 +965,8 @@ function TasksTab() {
               <td className="c type-col"><EditableCell value={t.task_type} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { task_type: v || null })}
                 options={typeOpt} /></td>
-              <td>{!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
+              <td>{t.priority === 0 && <span className="badge urgent-badge" title="우선순위">긴급</span>}
+                {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
                 <EditableCell value={t.task_name} disabled={!can(t) || (!t.holiday_work && !['R', 'C', 'W'].includes(t.task_stat))}
                 onSave={v => save(t.taskid, { task_name: v })} /></td>
               <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
@@ -975,7 +996,13 @@ function TasksTab() {
                   onSave={v => save(t.taskid, { work_userid: v })}
                   options={devOpt} />
                 : <span>{t.work_user_name || t.work_userid}</span>}{userBtn(t.work_userid)}</td>
-              <td className="c">{fmtDT(t.req_date)}</td>
+              <td className={`c${can(t) ? ' clickable' : ''}`}
+                title={can(t) ? '클릭하면 요청일시를 수정합니다' : undefined}
+                onClick={() => can(t) && setReqDateForm({
+                  taskid: t.taskid,
+                  req_date: t.req_date ? t.req_date.slice(0, 16) : '',
+                })}>
+                {fmtDT(t.req_date) || '-'}</td>
               <td className={`c${can(t) ? ' clickable' : ''}`}
                 title={can(t) ? '클릭하면 시작일시를 수정합니다' : undefined}
                 onClick={() => can(t) && setStartForm({
@@ -1006,7 +1033,7 @@ function TasksTab() {
       <p className="hint">
         우선순위·예상시간·작업자 수정 후 [재적용]을 누르면 대기중(W) 작업의
         시작/종료일시가 작업자별 우선순위 순으로 재계산됩니다.
-        시작일시 셀을 클릭하면 수동 설정(고정)할 수 있습니다.
+        시작일시·요청일시 셀을 클릭하면 수동 설정할 수 있습니다.
       </p>
       {startForm && (
         <div className="popup" onClick={() => setStartForm(null)}>
@@ -1039,6 +1066,23 @@ function TasksTab() {
               <div className="popup-btns">
                 <button type="submit" className="primary">저장</button>
                 <button type="button" onClick={() => setEndForm(null)}>취소</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {reqDateForm && (
+        <div className="popup" onClick={() => setReqDateForm(null)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <h3>요청일시 설정</h3>
+            <form className="holiday-form" onSubmit={saveReqDate}>
+              <label>요청일시
+                <input type="datetime-local" required value={reqDateForm.req_date}
+                  onChange={e => setReqDateForm({ ...reqDateForm, req_date: e.target.value })} />
+              </label>
+              <div className="popup-btns">
+                <button type="submit" className="primary">저장</button>
+                <button type="button" onClick={() => setReqDateForm(null)}>취소</button>
               </div>
             </form>
           </div>

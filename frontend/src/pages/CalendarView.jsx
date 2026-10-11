@@ -380,7 +380,9 @@ export default function CalendarView() {
           return (
             <div className="ev-line">
               <span className="ev-id">#{arg.event.extendedProps.taskid}</span>
-              {prio != null && <span className="ev-prio">{prio}</span>}
+              {prio != null &&
+                <span className={`ev-prio${prio === 0 ? ' urgent' : ''}`}
+                  title="우선순위">{prio === 0 ? '긴급' : prio}</span>}
               {!!arg.event.extendedProps.holiday_work &&
                 <span className="badge hol-badge">휴일</span>}
               {!!arg.event.extendedProps.weekday_included &&

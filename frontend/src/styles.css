@@ -172,6 +172,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .grid td.fit input, .grid td.fit select { width: 70px; }
 .grid td .sub { font-size: 12px; color: #64748b; }  /* 예상/실제 통합 컬럼의 보조값 */
 .hol-badge { background: #fb8c00; color: #fff; border: none; margin-left: 4px; }  /* 일별 작업시간의 휴가 표시 */
+.urgent-badge { background: #dc2626; color: #fff; border: none; margin: 0 4px 0 0; }  /* 우선순위 0 = 긴급 */
 .warn-badge {   /* 휴일작업 기간에 평일 포함 경고 */
   background: #dc2626; color: #fff; border: none; margin-right: 4px;
 }
@@ -230,6 +231,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
   color: #fff; background: #64748b; font-size: 10px; font-weight: 700;
   border-radius: 3px; padding: 0 4px; margin-right: 5px;
 }
+.kb-prio.urgent { background: #dc2626; }   /* 우선순위 0 = 긴급 */
 .kb-req { color: #0f766e; margin-right: 6px; font-weight: 600; }
 .kb-title { font-weight: 600; font-size: 13px; }
 .kb-site { color: #2563eb; margin-right: 5px; }
@@ -279,6 +281,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
   font-weight: 700; margin-right: 4px; flex-shrink: 0;
   background: rgba(255,255,255,.35); border-radius: 3px; padding: 0 4px;
 }
+.ev-prio.urgent { background: #dc2626; color: #fff; }  /* 우선순위 0 = 긴급 */
 .ev-site { font-weight: 700; margin-right: 5px; flex-shrink: 0; }
 .ev-worker { margin-left: 5px; flex-shrink: 0; opacity: .85; }
 .ev-req { margin-right: 4px; flex-shrink: 0; opacity: .9; font-weight: 600; }
@@ -400,6 +403,7 @@ pre.log-detail.hljs {
 .popup-title .pt-chip {
   background: rgba(255,255,255,.3); border-radius: 3px; padding: 0 6px;
 }
+.popup-title .pt-chip.urgent { background: #dc2626; color: #fff; }
 .popup-body p {
   margin: 6px 0; font-size: 14px;
   display: flex; align-items: baseline;

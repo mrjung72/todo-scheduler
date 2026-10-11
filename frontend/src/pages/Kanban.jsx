@@ -155,7 +155,8 @@ export default function Kanban() {
                       <div className="kb-row1">
                         <span className="kb-no">#{t.taskid}</span>
                         {t.priority != null &&
-                          <span className="kb-prio" title="우선순위">{t.priority}</span>}
+                          <span className={`kb-prio${t.priority === 0 ? ' urgent' : ''}`}
+                            title="우선순위">{t.priority === 0 ? '긴급' : t.priority}</span>}
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_type &&
                           <span className="kb-type">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>}

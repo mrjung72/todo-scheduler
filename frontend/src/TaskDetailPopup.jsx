@@ -103,6 +103,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [startEdit, setStartEdit] = useState(null)   // 시작일시 수정 입력값
   const [hoursEdit, setHoursEdit] = useState(null)   // 예상시간 수정 입력값
   const [prioEdit, setPrioEdit] = useState(null)     // 우선순위 수정 입력값
+  const [reqDateEdit, setReqDateEdit] = useState(null) // 요청일시 수정 입력값
   const [recalcBusy, setRecalcBusy] = useState(false)
   // 수정 제한 항목은 작업요청·검토중·대기중(또는 휴일작업)에서만 변경 가능
   const canEditFields = canEdit &&
@@ -220,6 +221,18 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
   }
 
+  // 요청일시 수정 (상태 무관 — 메타 정보)
+  const saveReqDate = async () => {
+    try {
+      const { data } = await api.put(`/tasks/${task.taskid}`, {
+        req_date: reqDateEdit
+          ? (reqDateEdit.length === 16 ? reqDateEdit + ':00' : reqDateEdit)
+          : null })
+      setTf(t => ({ ...t, req_date: data.req_date }))
+      setReqDateEdit(null); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
   const saveReq = async () => {
     try {
       await api.put(`/tasks/${task.taskid}`, { task_req_remark: reqEdit || null })
@@ -297,7 +310,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           <div className="pt-row1">
             <span className="pt-chip">#{task.taskid}</span>
             {prio != null &&
-              <span className="pt-chip">우선순위 {prio}</span>}
+              <span className={`pt-chip${prio === 0 ? ' urgent' : ''}`}>
+                {prio === 0 ? '긴급' : `우선순위 ${prio}`}</span>}
             {(task.site_name || task.siteid) &&
               <span className="pt-chip">{task.site_name || task.siteid}</span>}
             {task.task_type &&
@@ -418,7 +432,19 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <button className="link" onClick={saveHours}>저장</button>
                 <button className="link" onClick={() => setHoursEdit(null)}>취소</button>
               </>)}</p>
-              <p><b>요청일자</b> {fmtDT(task.req_date) || '-'}</p>
+              <p><b>요청일자</b> {reqDateEdit === null ? (<>
+                {fmtDT(tf.req_date ?? task.req_date) || '-'}
+                {canEdit &&
+                  <button className="link" onClick={() =>
+                    setReqDateEdit((tf.req_date ?? task.req_date)
+                      ? (tf.req_date ?? task.req_date).slice(0, 16) : '')}>수정</button>}
+              </>) : (<>
+                <input type="datetime-local" value={reqDateEdit}
+                  onChange={e => setReqDateEdit(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveReqDate()} />
+                <button className="link" onClick={saveReqDate}>저장</button>
+                <button className="link" onClick={() => setReqDateEdit(null)}>취소</button>
+              </>)}</p>
               <p><b>시작</b> {startEdit === null ? (<>
                 {fmtDT(startDate) || '-'}
                 {!!startFixed &&
