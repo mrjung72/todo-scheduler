@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
-import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
+import api, { fmtDT, fmtDTS, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
   taskColor, taskColorComp, uploadWithProgress, downloadFile as dlFile } from './api'
 import ProgressBar from './ProgressBar'
 
@@ -319,7 +319,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <tbody>
                   {(his || []).map(h => (
                     <tr key={h.taskchgid}>
-                      <td className="c">{fmtDT(h.create_date)}</td>
+                      <td className="c">{fmtDTS(h.create_date)}</td>
                       <td>{STAT_LABEL[h.task_stat] ?? h.task_stat}</td>
                       <td>{h.work_user_name || h.work_userid || '-'}</td>
                     </tr>

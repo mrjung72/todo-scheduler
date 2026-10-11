@@ -84,6 +84,12 @@ export const fmtDT = (iso) => {
   return iso.slice(0, 16).replace('T', ' ')
 }
 
+// 초단위까지 출력하는 일시 포맷 (상태변경이력 등)
+export const fmtDTS = (iso) => {
+  if (!iso) return ''
+  return iso.slice(0, 19).replace('T', ' ')
+}
+
 export const STAT_LABEL = {
   R: '작업요청',
   C: '검토중',
