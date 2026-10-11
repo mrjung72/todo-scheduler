@@ -5,17 +5,17 @@
 
 허용 전이:
   R(작업요청) -> C(검토중), X(작업반려)
-  C(검토중)   -> X(작업반려), W(대기중), F(작업완료)
-  W(대기중)   -> C(검토중), X(작업반려), P(작업중), F(작업완료)
+  C(검토중)   -> X(작업반려), W(대기중)
+  W(대기중)   -> C(검토중), X(작업반려), P(작업중)
   P(작업중)   -> X(작업반려), H(작업중단), F(작업완료)
                 -- P에서 벗어날 때 해당 구간의 작업기간을 task_chg_log.work_hours에
                    기록하고 tasks.work_hours_real에 누적
-  H(작업중단) -> P(작업중), X(작업반려), F(작업완료)
+  H(작업중단) -> P(작업중), X(작업반려)
   F(작업완료) -> 변경 불가 (종결)
   X(작업반려) -> 변경 불가 (종결)
 
 공통 규칙:
-  - ->P: 시작일자가 미래이면 불가(W->P). 최초 P 진입 시 task_start_date = 현재시각
+  - ->P: 시작일자가 없거나 미래이면 불가(W->P). 최초 P 진입 시 task_start_date = 현재시각
          (H->P 재개 시에는 최초 시작일 유지, 구간별 기간은 이력에 기록)
   - ->F: task_end_date(실제완료일시) = 현재시각
   - 완료(F) 외 상태로 변경 시 task_end_date = NULL
@@ -34,10 +34,10 @@ from .scheduler import (
 
 ALLOWED_STAT = {
     "R": {"C", "X"},
-    "C": {"X", "W", "F"},
-    "W": {"C", "X", "P", "F"},
+    "C": {"X", "W"},
+    "W": {"C", "X", "P"},
     "P": {"X", "H", "F"},
-    "H": {"P", "X", "F"},
+    "H": {"P", "X"},
     "F": set(),
     "X": set(),
 }
@@ -69,11 +69,16 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
     now = datetime.now().replace(microsecond=0)
 
     if new_stat == "P":
-        # 대기중->작업중: 예정 시작일이 미래이면 작업중으로 변경 불가 (휴일작업 제외)
-        if not task.holiday_work and prev == "W" and \
-                task.task_start_date and task.task_start_date > now:
-            raise HTTPException(
-                400, "작업시작일시 이후에만 작업중으로 변경할 수 있습니다")
+        # 대기중->작업중: 스케줄된 작업시작일시가 없거나 미래이면 변경 불가
+        # (휴일작업·되돌리기는 제약 없음)
+        if not task.holiday_work and not allow_revert and prev == "W":
+            if not task.task_start_date:
+                raise HTTPException(
+                    400, "작업시작일시가 스케줄링되지 않은 작업은 "
+                         "작업중으로 변경할 수 없습니다")
+            if task.task_start_date > now:
+                raise HTTPException(
+                    400, "작업시작일시 이후에만 작업중으로 변경할 수 있습니다")
         # 최초 작업중 진입: 실제 시작일시 = 현재시각.
         # 중단->작업중 재개: 최초 시작일시 유지 (구간별 기간은 이력에 기록)
         if not task.task_start_date or prev == "W":

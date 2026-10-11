@@ -124,10 +124,10 @@ export const TASK_TYPE_LABEL = {
 // 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일, 자기 상태 포함)
 export const NEXT_STAT = {
   R: ['R', 'C', 'X'],
-  C: ['C', 'X', 'W', 'F'],
-  W: ['W', 'C', 'X', 'P', 'F'],
+  C: ['C', 'X', 'W'],
+  W: ['W', 'C', 'X', 'P'],
   P: ['P', 'X', 'H', 'F'],
-  H: ['H', 'P', 'X', 'F'],
+  H: ['H', 'P', 'X'],
   F: ['F'],
   X: ['X'],
 }
