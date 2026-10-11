@@ -3,6 +3,7 @@ import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, isDevWorker,
   resolveUserid, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import ReqUserInput from '../ReqUserInput'
+import RefreshBtn from '../RefreshBtn'
 
 // 3열 배치: 좌 = 검토·요청, 중 = 대기·작업중·중단, 우 = 완료·반려
 const LAYOUT = [
@@ -107,6 +108,7 @@ export default function Kanban() {
           saveFilter('kanban', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         {err && <span className="err">{err}</span>}
       </div>
 

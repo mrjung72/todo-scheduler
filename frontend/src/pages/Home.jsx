@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor } from '../api'
+import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor,
+  loadFilter, saveFilter } from '../api'
+import RefreshBtn from '../RefreshBtn'
 
 /* 모바일 스타일 메인 화면: 작업중(P) 먼저, 그 아래 대기중(W)을 우선순위순으로 표시 */
 export default function Home() {
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
-  const [siteFilter, setSiteFilter] = useState('')
-  const [q, setQ] = useState('')
+  const [savedF] = useState(() => loadFilter('home'))
+  const [siteFilter, setSiteFilter] = useState(savedF.site ?? '')
+  const [q, setQ] = useState(savedF.q || '')
   const [cfg, setCfg] = useState(null)
 
   const load = useCallback(async () => {
@@ -38,6 +41,11 @@ export default function Home() {
           value={q}
           onChange={e => setQ(e.target.value)}
         />
+        <button onClick={() => {
+          saveFilter('home', { site: siteFilter, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
       </div>
       <div className="home-list">
         {tasks.map(t => {

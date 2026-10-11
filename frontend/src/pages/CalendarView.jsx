@@ -7,6 +7,7 @@ import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, TASK_TYPE_LABEL,
   dutyOfGrade, isDevWorker, resolveUserid, loadFilter, saveFilter } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import ReqUserInput from '../ReqUserInput'
+import RefreshBtn from '../RefreshBtn'
 
 const p2 = n => String(n).padStart(2, '0')
 const fmtYMD = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
@@ -345,6 +346,7 @@ export default function CalendarView() {
           saveFilter('calendar', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter, holiday: showHol })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <label className="hint-inline" style={{ cursor: 'pointer' }}>
           <input type="checkbox" checked={showHol}
             onChange={e => setShowHol(e.target.checked)} /> 작업자휴가

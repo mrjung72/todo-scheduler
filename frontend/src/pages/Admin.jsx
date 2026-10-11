@@ -7,6 +7,7 @@ import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
+import RefreshBtn from '../RefreshBtn'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -73,14 +74,21 @@ const TAB_ACCESS = {
 }
 
 export default function Admin() {
-  const [tab, setTab] = useState('tasks')
+  // 탭 선택을 세션에 저장 — 새로고침해도 보던 탭 유지
+  const [tab, setTab] = useState(() => {
+    const saved = sessionStorage.getItem('admin-tab')
+    const allowed = k => isStaff() ||
+      (TAB_ACCESS[myGrade()] || []).includes(k)
+    return saved && allowed(saved) ? saved : 'tasks'
+  })
+  const selTab = k => { setTab(k); sessionStorage.setItem('admin-tab', k) }
   return (
     <div className="admin">
       <div className="tabs">
         {TABS.filter(t => isStaff() ||
           (TAB_ACCESS[myGrade()] || []).includes(t.key)).map(t => (
           <button key={t.key} className={tab === t.key ? 'tab active' : 'tab'}
-            onClick={() => setTab(t.key)}>{t.label}</button>
+            onClick={() => selTab(t.key)}>{t.label}</button>
         ))}
       </div>
       {tab === 'users' && <UsersTab />}
@@ -314,10 +322,11 @@ function UsersTab() {
   const [sites, setSites] = useState([])
   const [cfgHours, setCfgHours] = useState('')
   const [form, setForm] = useState(empty)
-  const [q, setQ] = useState('')
-  const [statF, setStatF] = useState('')
-  const [gradeF, setGradeF] = useState('')
-  const [dutyF, setDutyF] = useState('')
+  const [savedF] = useState(() => loadFilter('admin-users'))
+  const [q, setQ] = useState(savedF.q || '')
+  const [statF, setStatF] = useState(savedF.stat || '')
+  const [gradeF, setGradeF] = useState(savedF.grade || '')
+  const [dutyF, setDutyF] = useState(savedF.duty || '')
   const load = useCallback(() => api.get('/users').then(r => setRows(r.data)), [])
   useEffect(() => {
     load()
@@ -411,6 +420,11 @@ function UsersTab() {
         </select>
         <input placeholder="검색 (ID/이름/부서/직급/연락처/이메일)" value={q}
           onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-users', { stat: statF, duty: dutyF, grade: gradeF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <ExcelButtons name="사용자" cols={cols} rows={shown}
           onUpload={staff ? upload : null} onDone={load} />
       </div>
@@ -577,6 +591,7 @@ function SitesTab() {
   return (
     <div>
       <div className="toolbar">
+        <RefreshBtn onClick={load} />
         <ExcelButtons name="사이트" cols={cols} rows={rows}
           onUpload={staff ? upload : null} onDone={load} />
       </div>
@@ -861,6 +876,7 @@ function TasksTab() {
           saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, req: reqF, work: workF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <ExcelButtons name="작업" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
         {!viewer && <button className="primary" onClick={recalc}>작업스케쥴링 재실행</button>}
@@ -1051,6 +1067,7 @@ function CalendarTab() {
     <div>
       <div className="toolbar">
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
+        <RefreshBtn onClick={load} />
         <span className="hint">휴일(H)로 지정된 날은 스케줄 계산에서 제외됩니다.</span>
         {staff && <>
         <input type="number" className="num" value={year}
@@ -1089,10 +1106,11 @@ const HOL_CAT_LABEL = { A: '종일', P: '일부-오후', M: '일부-오전' }
 
 function HolidaysTab() {
   const today = new Date()
-  const [year, setYear] = useState(today.getFullYear())
+  const [savedF] = useState(() => loadFilter('admin-holidays'))
+  const [year, setYear] = useState(savedF.year || today.getFullYear())
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
-  const [filterUser, setFilterUser] = useState('')
+  const [filterUser, setFilterUser] = useState(savedF.user || '')
   const staff = isStaff()
   const mgr = myGrade() === 3          // 개발매니저: 일반개발자(4)의 휴가 변경 가능
   const viewAll = staff || isViewer()  // 조회전용 등급도 전체 휴가 조회
@@ -1157,6 +1175,11 @@ function HolidaysTab() {
             {userOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         )}
+        <button onClick={() => {
+          saveFilter('admin-holidays', { year, user: filterUser })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <span className="hint">
           종일(A)은 해당일 근무 제외, 일부-오후(P)/일부-오전(M)은 휴가시간만큼 근무시간 차감.
           반영은 [작업목록]의 재적용 시 적용됩니다.
@@ -1352,6 +1375,7 @@ function SchedulesTab() {
           saveFilter('admin-schedules', { site: siteF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <ExcelButtons name="작업이력" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
       </div>
@@ -1561,6 +1585,7 @@ function SchedHisTab() {
           saveFilter('admin-schedhis', { site: siteF, stat: statF, task: taskF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <ExcelButtons name="작업상태변경이력" cols={cols} rows={filtered} />
         {staff && rows.length > 0 &&
           <button className="danger" onClick={delAll}>전체삭제</button>}
@@ -1710,6 +1735,7 @@ function AttachFilesTab() {
           saveFilter('admin-attach', { site: siteF, stat: statF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <ExcelButtons name="첨부파일" cols={cols} rows={filtered}
           onUpload={staff ? uploadCsv : null} onDone={load} />
       </div>
@@ -1780,8 +1806,9 @@ function AttachFilesTab() {
 function BoardsTab() {
   const staff = isStaff()
   const [rows, setRows] = useState([])
-  const [q, setQ] = useState('')
-  const [pubF, setPubF] = useState('')
+  const [savedF] = useState(() => loadFilter('admin-boards'))
+  const [q, setQ] = useState(savedF.q || '')
+  const [pubF, setPubF] = useState(savedF.pub || '')
   const [sel, setSel] = useState(null)         // 내용/댓글 열람 대상
   const load = useCallback(() =>
     api.get('/boards').then(r => setRows(r.data)), [])
@@ -1835,6 +1862,11 @@ function BoardsTab() {
         </select>
         <input placeholder="검색 (제목/작성자)" value={q}
           onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-boards', { pub: pubF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
+        <RefreshBtn onClick={load} />
         <ExcelButtons name="게시판" cols={cols} rows={filtered} />
       </div>
       <table className="grid">

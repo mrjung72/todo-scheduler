@@ -376,6 +376,11 @@ pre.log-detail.hljs {
   background: rgba(255,255,255,.9); color: #15803d;
   font-size: 11px; font-weight: 700;
 }
+/* 새로고침 버튼 회전 아이콘 */
+.refresh-btn .rf-ico { display: inline-block; }
+.refresh-btn.busy .rf-ico { animation: rfspin .8s linear infinite; }
+@keyframes rfspin { to { transform: rotate(360deg); } }
+
 /* 복사 완료 말풍선 */
 .copy-wrap { position: relative; display: inline-flex; }
 .copy-toast {
