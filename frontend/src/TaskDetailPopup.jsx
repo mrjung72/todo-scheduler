@@ -85,7 +85,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     task.work_userid === me.userid ||
     (me.user_grade === 4 && me.default_siteid && task.siteid === me.default_siteid))
   const canAttach = me && [0, 1].includes(me.user_grade)
-  const [pview, setPview] = useState('info')  // info(기본: 작업정보+요청내용) | his
+  const [btab, setBtab] = useState('req')    // 하단 블록 탭: req(요청내용+첨부) | his(작업이력) | chg(상태변경이력)
   const [daily, setDaily] = useState(null)
   const [his, setHis] = useState(null)
   const [logs, setLogs] = useState(null)
@@ -120,6 +120,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
 
   useEffect(() => {
     setTf({})   // 다른 작업으로 열릴 때 이전 수정값 초기화
+    setBtab('req'); setHis(null); setLogs(null)
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => setDaily([]))
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
@@ -266,14 +267,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     finally { setUpPct(null) }
   }
 
-  // 작업이력/작업요청정보 뷰 토글
-  const toggleView = () => {
-    setPview(pview === 'his' ? 'info' : 'his')
-    if (pview !== 'his') {
-      if (!his) api.get(`/tasks/${task.taskid}/his`)
+  // 하단 탭 전환 — 이력 탭 최초 진입 시 이력 로딩
+  const selTab = tab => {
+    setBtab(tab)
+    if (tab === 'his' && !logs) loadLogs()
+    if (tab === 'chg' && !his)
+      api.get(`/tasks/${task.taskid}/his`)
         .then(r => setHis(r.data)).catch(console.error)
-      if (!logs) loadLogs()
-    }
   }
 
   // 상태변경이력 초기화 (스태프) — 현재 상태의 기준 이력 1건만 남김
@@ -332,73 +332,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             <CopyBtn text={task.task_name || ''} title="작업명 복사"
               bg={taskColorComp(task.taskid)} /></div>
         </h3>
-        {pview === 'his' ? (
-          <div className="his-cols">
-          <div className="his-col">
-          <div className="blk-title"><b>상태변경이력</b>
-            {isStaff && <button className="danger"
-              style={{ marginLeft: 6, fontSize: 12, padding: '1px 8px' }}
-              onClick={resetHis}>초기화</button>}
-          </div>
-          <div className="popup-info">
-            <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
-              <table>
-                <thead><tr>
-                  <th>등록일시</th><th>변경상태</th><th>변경자</th>
-                </tr></thead>
-                <tbody>
-                  {(his || []).map(h => (
-                    <tr key={h.taskchgid}>
-                      <td className="c">{fmtDTS(h.create_date)}</td>
-                      <td>{STAT_LABEL[h.task_stat] ?? h.task_stat}</td>
-                      <td>{h.work_user_name || h.work_userid || '-'}</td>
-                    </tr>
-                  ))}
-                  {(!his || !his.length) && (
-                    <tr><td colSpan="3" className="empty">이력이 없습니다</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          </div>
-          <div className="his-col">
-          <div className="blk-title">
-            <b className="blk-title">작업이력</b>
-            <button className="link req-edit-btn"
-              onClick={() => { setLogView({ work_remark: '' })
-                setLogForm({ work_remark: '' }) }}>등록</button>
-          </div>
-          <div className="popup-info">
-            <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
-              <table>
-                <thead><tr>
-                  <th>등록일시</th><th>작업자</th><th>작업내용</th>
-                </tr></thead>
-                <tbody>
-                  {(logs || []).map(l => (
-                    <tr key={l.workschid}>
-                      <td className="c">{fmtDT(l.create_date)}</td>
-                      <td>{l.work_user_name || l.work_userid || '-'}</td>
-                      <td>
-                        <button className="link log-link"
-                          onClick={() => setLogView(l)}>
-                          {l.work_remark || ''}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {(!logs || !logs.length) && (
-                    <tr><td colSpan="3" className="empty">작업이력이 없습니다</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          </div>
-          </div>
-        ) : (
-          <div className="popup-info info-daily">
+        <div className="popup-info info-daily">
             <div className="info-col">
               <p><b>요청자</b> {fmtUser(task.req_user_name, task.req_userid,
                 task.req_user_title, task.req_user_dept)}</p>
@@ -491,21 +425,26 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               </div>
             )}
           </div>
-        )}
-        {pview === 'info' && (
-          <div className="popup-btns">
-            <button onClick={toggleView}>작업이력</button>
-            <button onClick={onClose}>닫기</button>
-          </div>
-        )}
-        {pview === 'info' && (
-          <>
-          <div className="blk-title">
-            작업요청내용
-            {canEdit && reqEdit === null &&
-              <button className="link req-edit-btn"
-                onClick={() => setReqEdit(reqText)}>수정</button>}
-          </div>
+        <div className="btab-bar">
+          <button className={`btab${btab === 'req' ? ' active' : ''}`}
+            onClick={() => selTab('req')}>작업요청내용</button>
+          <button className={`btab${btab === 'his' ? ' active' : ''}`}
+            onClick={() => selTab('his')}>작업이력</button>
+          <button className={`btab${btab === 'chg' ? ' active' : ''}`}
+            onClick={() => selTab('chg')}>상태변경이력</button>
+          {btab === 'req' && canEdit && reqEdit === null &&
+            <button className="link req-edit-btn"
+              onClick={() => setReqEdit(reqText)}>수정</button>}
+          {btab === 'his' &&
+            <button className="link req-edit-btn"
+              onClick={() => { setLogView({ work_remark: '' })
+                setLogForm({ work_remark: '' }) }}>등록</button>}
+          {btab === 'chg' && isStaff &&
+            <button className="danger req-edit-btn"
+              style={{ padding: '1px 8px' }}
+              onClick={resetHis}>초기화</button>}
+        </div>
+        {btab === 'req' ? (
           <div className="popup-info req-info">
             {reqEdit !== null ? (
               <>
@@ -549,12 +488,57 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               </>)}
             </div>
           </div>
-          </>
+        ) : btab === 'his' ? (
+          <div className="popup-info req-info">
+            <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
+              <table>
+                <thead><tr>
+                  <th>등록일시</th><th>작업자</th><th>작업내용</th>
+                </tr></thead>
+                <tbody>
+                  {(logs || []).map(l => (
+                    <tr key={l.workschid}>
+                      <td className="c">{fmtDT(l.create_date)}</td>
+                      <td>{l.work_user_name || l.work_userid || '-'}</td>
+                      <td>
+                        <button className="link log-link"
+                          onClick={() => setLogView(l)}>
+                          {l.work_remark || ''}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(!logs || !logs.length) && (
+                    <tr><td colSpan="3" className="empty">작업이력이 없습니다</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="popup-info req-info">
+            <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
+              <table>
+                <thead><tr>
+                  <th>등록일시</th><th>변경상태</th><th>변경자</th>
+                </tr></thead>
+                <tbody>
+                  {(his || []).map(h => (
+                    <tr key={h.taskchgid}>
+                      <td className="c">{fmtDTS(h.create_date)}</td>
+                      <td>{STAT_LABEL[h.task_stat] ?? h.task_stat}</td>
+                      <td>{h.work_user_name || h.work_userid || '-'}</td>
+                    </tr>
+                  ))}
+                  {(!his || !his.length) && (
+                    <tr><td colSpan="3" className="empty">이력이 없습니다</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
         <div className="popup-btns">
-          <button onClick={toggleView}>
-            {pview === 'his' ? '작업요청정보' : '작업이력'}
-          </button>
           <button onClick={onClose}>닫기</button>
         </div>
       </div>

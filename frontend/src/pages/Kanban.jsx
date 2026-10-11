@@ -154,9 +154,8 @@ export default function Kanban() {
                       style={{ borderLeft: `5px solid ${taskColor(t.taskid)}` }}>
                       <div className="kb-row1">
                         <span className="kb-no">#{t.taskid}</span>
-                        {t.priority != null &&
-                          <span className={`kb-prio${t.priority === 0 ? ' urgent' : ''}`}
-                            title="우선순위">{t.priority === 0 ? '긴급' : t.priority}</span>}
+                        {t.priority === 0 &&
+                          <span className="kb-prio urgent" title="우선순위">긴급</span>}
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_type &&
                           <span className="kb-type">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>}
@@ -167,9 +166,11 @@ export default function Kanban() {
                         {!!t.weekday_included &&
                           <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
                         <span className="kb-req">{t.req_user_name || t.req_userid || '-'}</span>
-                        {t.task_name}
+                        <span className="kb-name" title={t.task_name}>{t.task_name}</span>
                       </div>
                       <div className="kb-meta">
+                        {t.work_userid &&
+                          <span>{t.work_user_name || t.work_userid}</span>}
                         {(t.task_start_date || t.task_end_date_estimated) &&
                           <span>{(t.task_start_date || '').slice(0, 10)} ~ {(t.task_end_date_estimated || '').slice(0, 10)}</span>}
                       </div>

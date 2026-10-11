@@ -215,7 +215,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
 }
 .kb-area.drop-over { outline: 2px dashed #3b82f6; outline-offset: -2px; }
 .kb-card {
-  position: relative;
+  position: relative; min-width: 0;
   background: #fff; border-radius: 6px; padding: 8px 10px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
@@ -233,7 +233,15 @@ table.grid td.clickable:hover { background: #eff6ff; }
 }
 .kb-prio.urgent { background: #dc2626; }   /* 우선순위 0 = 긴급 */
 .kb-req { color: #0f766e; margin-right: 6px; font-weight: 600; }
-.kb-title { font-weight: 600; font-size: 13px; }
+.kb-title {
+  display: flex; align-items: baseline;
+  font-weight: 600; font-size: 13px;
+}
+.kb-title .kb-req, .kb-title .warn-badge { flex-shrink: 0; }
+.kb-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .kb-site { color: #2563eb; margin-right: 5px; }
 .kb-type {
   font-size: 10px; font-weight: 600; color: #7c3aed;
@@ -442,6 +450,16 @@ pre.log-detail.hljs {
 }
 /* 팝업 블록 바깥 타이틀 */
 .blk-title { display: block; font-size: 14px; margin: 10px 0 4px; color: #334155; }
+/* 작업 상세 팝업 하단 탭 (작업요청내용/작업이력) */
+.btab-bar { display: flex; gap: 4px; margin-top: 10px; }
+.btab-bar .btab {
+  padding: 5px 14px; font-size: 13px; cursor: pointer;
+  border: 1px solid #d1d5db; border-bottom: none; border-radius: 6px 6px 0 0;
+  background: #f8fafc;
+}
+.btab-bar .btab.active { background: #f4f7fc; font-weight: 700; }
+.btab-bar .req-edit-btn { margin-left: auto; float: none; }
+.btab-bar + .req-info { border-top-left-radius: 0; }
 /* 상태변경이력/작업이력 좌우 배치 */
 .his-cols { display: flex; gap: 16px; align-items: flex-start; }
 .his-cols .his-col { flex: 1 1 0; min-width: 0; }
