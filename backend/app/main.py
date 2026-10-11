@@ -255,9 +255,8 @@ def migrate(db):
             db.execute(text("DROP TABLE work_schedule_his"))
         db.execute(text("DROP TABLE work_schedule"))
 
-    # 작업상태 코드 체계 변경: 구 C(취소)->X(작업반려), D(보류)->H(작업중단)
-    db.execute(text("UPDATE tasks SET task_stat = 'X' WHERE task_stat = 'C'"))
-    db.execute(text("UPDATE tasks SET task_stat = 'H' WHERE task_stat = 'D'"))
+    # 구 코드 체계 마이그레이션(C=취소->X, D=보류->H)은 0.7.0에서 완료됨.
+    # 현재 C=검토중이므로 재실행하면 검토중 작업이 반려로 오염됨 — 제거함
     # task_attach_files 의 workschid FK 대상을 work_schedule_log 로 재구성
     cols = {r[1] for r in db.execute(
         text("PRAGMA table_info(task_attach_files)"))}
