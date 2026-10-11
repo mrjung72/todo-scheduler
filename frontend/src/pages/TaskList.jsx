@@ -4,7 +4,6 @@ import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor, isDevWorker,
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
-import RefreshBtn from '../RefreshBtn'
 
 const PAGE_SIZE = 20
 
@@ -125,7 +124,6 @@ export default function TaskList() {
           saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, req: reqFilter, worker: workerFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
-        <RefreshBtn onClick={load} />
         <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>
       </div>
 

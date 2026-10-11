@@ -1810,6 +1810,21 @@ function BoardsTab() {
   const [q, setQ] = useState(savedF.q || '')
   const [pubF, setPubF] = useState(savedF.pub || '')
   const [sel, setSel] = useState(null)         // 내용/댓글 열람 대상
+  const [pos, setPos] = useState({ x: 0, y: 0 })  // 팝업 드래그 위치
+  const downOnOverlay = useRef(false)  // 오버레이에서 눌러 오버레이에서 뗀 클릭만 닫기
+  // 타이틀바 드래그로 팝업 이동 (작업상세 팝업과 동일 방식)
+  const onTitleDown = e => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const base = { x: e.clientX - pos.x, y: e.clientY - pos.y }
+    const move = ev => setPos({ x: ev.clientX - base.x, y: ev.clientY - base.y })
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
   const load = useCallback(() =>
     api.get('/boards').then(r => setRows(r.data)), [])
   useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
@@ -1823,9 +1838,11 @@ function BoardsTab() {
       `'${b.title}'의 열람 비밀번호를 해제할까요?\n(해제 후 비공개글은 작성자·관리자만 열람 가능)`) &&
     api.put(`/boards/${b.boardid}`, { passwd: '' })
       .then(load).catch(e => alert(errMsg(e)))
-  const openView = b =>
+  const openView = b => {
+    if (sel?.boardid !== b.boardid) setPos({ x: 0, y: 0 })  // 새 글 열 때만 위치 초기화
     api.get(`/boards/${b.boardid}`).then(r => setSel(r.data))
       .catch(e => alert(errMsg(e)))
+  }
   const delComment = c =>
     window.confirm('댓글을 삭제할까요?') &&
     api.delete(`/boards/${sel.boardid}/comments/${c.commentid}`)
@@ -1918,9 +1935,17 @@ function BoardsTab() {
         [해제]는 비공개글의 열람 비밀번호를 지웁니다.
       </p>
       {sel && (
-        <div className="popup" onClick={() => setSel(null)}>
-          <div className="popup-body task-popup" onClick={e => e.stopPropagation()}>
-            <h3>{!sel.is_public && '🔒 '}{sel.title}
+        <div className="popup"
+          onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
+          onClick={e => {
+            if (e.target === e.currentTarget && downOnOverlay.current) setSel(null)
+            downOnOverlay.current = false
+          }}>
+          <div className="popup-body task-popup" onClick={e => e.stopPropagation()}
+            style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
+            <h3 onMouseDown={onTitleDown}
+              style={{ cursor: 'move', userSelect: 'none' }}>
+              {!sel.is_public && '🔒 '}{sel.title}
               {!sel.is_public && <span className="bd-private">비공개</span>}</h3>
             <p className="bd-meta">
               {sel.user_name || sel.user_id} · {fmtDT(sel.create_date)}
