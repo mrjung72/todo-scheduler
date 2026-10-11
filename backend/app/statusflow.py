@@ -1,7 +1,8 @@
 """작업상태 전이 규칙 + 상태변경이력(task_chg_log) 기록.
 
 상태 체계:
-  R-작업요청, C-검토중, W-대기중, P-작업중, H-작업중단, F-작업완료, X-작업반려
+  R-작업요청, C-검토중, W-대기중, P-작업중, H-작업중단, F-작업완료,
+  X-작업반려, Z-최종완료
 
 허용 전이:
   R(작업요청) -> C(검토중), X(작업반려)
@@ -11,14 +12,16 @@
                 -- P에서 벗어날 때 해당 구간의 작업기간을 task_chg_log.work_hours에
                    기록하고 tasks.work_hours_real에 누적
   H(작업중단) -> P(작업중), X(작업반려)
-  F(작업완료) -> 변경 불가 (종결)
+  F(작업완료) -> Z(최종완료)
   X(작업반려) -> 변경 불가 (종결)
+  Z(최종완료) -> 변경 불가 (종결, 되돌리기도 불가 — 휴일작업 포함 모든 경로 차단)
 
 공통 규칙:
   - ->P: 시작일자가 없거나 미래이면 불가(W->P). 최초 P 진입 시 task_start_date = 현재시각
          (H->P 재개 시에는 최초 시작일 유지, 구간별 기간은 이력에 기록)
   - ->F: task_end_date(실제완료일시) = 현재시각
-  - 완료(F) 외 상태로 변경 시 task_end_date = NULL
+  - ->Z: task_end_date 유지 (F에서 기록된 실제완료일시 그대로)
+  - 완료(F)·최종완료(Z) 외 상태로 변경 시 task_end_date = NULL
   - 모든 상태 변경을 task_chg_log 에 기록.
 """
 from datetime import datetime
@@ -38,11 +41,12 @@ ALLOWED_STAT = {
     "W": {"C", "X", "P"},
     "P": {"X", "H", "F"},
     "H": {"P", "X"},
-    "F": set(),
+    "F": {"Z"},
     "X": set(),
+    "Z": set(),
 }
 STAT_NAME = {"R": "작업요청", "C": "검토중", "W": "대기중", "P": "작업중",
-             "H": "작업중단", "F": "작업완료", "X": "작업반려"}
+             "H": "작업중단", "F": "작업완료", "X": "작업반려", "Z": "최종완료"}
 
 
 def _check(prev: str, new_stat: str):
@@ -63,6 +67,12 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
     prev = task.task_stat or "R"
     if prev == new_stat:
         return
+    # 최종완료는 절대 종결 — 휴일작업·되돌리기 예외 없이 전이 불가.
+    # 최종완료 진입도 작업완료(F)에서만 허용 (휴일작업도 동일)
+    if prev == "Z" or (new_stat == "Z" and prev != "F"):
+        raise HTTPException(
+            400, "최종완료는 작업완료 상태에서만 변경 가능하며, "
+                 "최종완료된 작업은 상태를 변경할 수 없습니다")
     # 휴일작업은 상태 전이 제약 없이 자유롭게 변경 가능
     if not task.holiday_work and not allow_revert:
         _check(prev, new_stat)
@@ -87,8 +97,8 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
         if not task.task_start_date:
             task.task_start_date = now
         task.task_end_date = now      # 실제작업완료일시 = 현재시각
-    else:
-        task.task_end_date = None     # 완료 외 상태는 실제종료 해제
+    elif new_stat != "Z":
+        task.task_end_date = None     # 완료·최종완료 외 상태는 실제종료 해제
     task.task_stat = new_stat
 
     # 작업중 구간이 끝나면 해당 P 이력행에 작업기간 기록 + 실제작업시간 누적

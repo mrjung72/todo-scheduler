@@ -4,11 +4,11 @@ import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, isDevWorker,
 import TaskDetailPopup from '../TaskDetailPopup'
 import ReqUserInput from '../ReqUserInput'
 
-// 3열 배치: 좌 = 검토·요청, 중 = 대기·작업중·중단, 우 = 완료·반려
+// 3열 배치: 좌 = 대기·검토·요청, 중 = 작업중·중단·반려, 우 = 완료·최종완료
 const LAYOUT = [
-  ['C', 'R'],
-  ['W', 'P', 'H'],
-  ['F', 'X'],
+  ['W', 'C', 'R'],
+  ['P', 'H', 'X'],
+  ['F', 'Z'],
 ]
 
 export default function Kanban() {

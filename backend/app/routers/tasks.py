@@ -86,7 +86,10 @@ def _last_chg(db: Session, task: Task):
 
 def _revert_reason(task: Task, prev_stat, last_chg, now):
     """되돌리기 불가 사유. 가능하면 None 반환.
-    F/X는 종료예상시각 미경과(또는 없음), 모든 상태는 변경 후 1시간 이내면 가능."""
+    F/X는 종료예상시각 미경과(또는 없음), 모든 상태는 변경 후 1시간 이내면 가능.
+    Z(최종완료)는 되돌리기 불가."""
+    if task.task_stat == "Z":
+        return "최종완료된 작업은 상태를 되돌릴 수 없습니다"
     if not prev_stat:
         return "되돌릴 이전 상태가 없습니다"
     if task.task_stat in ("F", "X") and \

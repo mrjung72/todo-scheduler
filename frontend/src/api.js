@@ -98,6 +98,7 @@ export const STAT_LABEL = {
   H: '작업중단',
   F: '작업완료',
   X: '작업반려',
+  Z: '최종완료',
 }
 
 // 화면별 검색조건 저장/복원 (localStorage)
@@ -128,8 +129,9 @@ export const NEXT_STAT = {
   W: ['W', 'C', 'X', 'P'],
   P: ['P', 'X', 'H', 'F'],
   H: ['H', 'P', 'X'],
-  F: ['F'],
+  F: ['F', 'Z'],
   X: ['X'],
+  Z: ['Z'],
 }
 
 export const DAY_STAT_LABEL = {

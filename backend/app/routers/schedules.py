@@ -76,7 +76,7 @@ def calendar_events(db: Session = Depends(get_db)):
         .outerjoin(Site, Site.siteid == Task.siteid)
         .filter(or_(Task.task_stat.in_(["W", "P"]),
                     and_(Task.holiday_work == 1,
-                         Task.task_stat.notin_(["F", "X"]))))
+                         Task.task_stat.notin_(["F", "X", "Z"]))))
         .all()
     )
     cal = get_calendar_map(db)
