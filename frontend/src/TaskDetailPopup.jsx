@@ -114,6 +114,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const estHours = tf.work_hours_estimated ?? task.work_hours_estimated
   const prio = tf.priority ?? task.priority
   const fileRef = useRef(null)
+  const tabRef = useRef(null)               // 탭 콘텐츠 — 탭 전환 시 높이 유지용
+  const [minH, setMinH] = useState(0)       // 지금까지 표시된 최대 높이
   const downOnOverlay = useRef(false)   // mousedown이 오버레이에서 시작됐는지
   const { pos, onDown } = useDrag()           // 메인 팝업 드래그
   const { pos: logPos, onDown: logOnDown } = useDrag()  // 작업내용 팝업 드래그
@@ -132,7 +134,15 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         if (u) setWorkHr(u.work_hours_day)
       }).catch(() => {})
     loadFiles()   // 첨부파일 목록
+    setMinH(0)    // 작업 전환 시 높이 기준 리셋
   }, [task.taskid])
+
+  // 탭 전환으로 내용이 줄어도 팝업 높이는 유지 (탭 콘텐츠의 최대 높이를 min-height로)
+  // — 팝업 전체가 아닌 탭 영역에 적용하므로 사용자가 창을 직접 줄이는 것은 가능
+  useEffect(() => {
+    const h = tabRef.current?.offsetHeight
+    if (h && h > minH) setMinH(h)
+  })
 
   const loadLogs = () =>
     api.get('/schedules', { params: { taskid: task.taskid } })
@@ -445,7 +455,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               onClick={resetHis}>초기화</button>}
         </div>
         {btab === 'req' ? (
-          <div className="popup-info req-info">
+          <div className="popup-info req-info" ref={tabRef}
+            style={{ minHeight: minH || undefined }}>
             {reqEdit !== null ? (
               <>
                 <textarea className="req-edit" rows="10" value={reqEdit}
@@ -489,7 +500,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             </div>
           </div>
         ) : btab === 'his' ? (
-          <div className="popup-info req-info">
+          <div className="popup-info req-info" ref={tabRef}
+            style={{ minHeight: minH || undefined }}>
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
                 <thead><tr>
@@ -516,7 +528,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             </div>
           </div>
         ) : (
-          <div className="popup-info req-info">
+          <div className="popup-info req-info" ref={tabRef}
+            style={{ minHeight: minH || undefined }}>
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
                 <thead><tr>
