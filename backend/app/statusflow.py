@@ -22,12 +22,14 @@
     스케쥴미적용(schedule_apply='N'): C->O 경로만 허용 (W 불가)
   - ->P: 시작일자가 없거나 미래이면 불가(W->P). 최초 P 진입 시 task_start_date = 현재시각
          (H->P 재개 시에는 최초 시작일 유지, 구간별 기간은 이력에 기록)
+  - ->W: task_start_date·task_end_date_estimated·start_fixed 초기화 (재배치 대기, 휴일작업 제외)
   - ->O: task_start_date = 현재시각 (스케줄링 없이 즉시 시작)
   - ->F: task_end_date(실제완료일시) = 현재시각
   - ->Z: task_end_date 유지 (F에서 기록된 실제완료일시 그대로)
   - 완료(F)·최종완료(Z) 외 상태로 변경 시 task_end_date = NULL
   - 모든 상태 변경을 task_chg_log 에 기록.
 """
+import math
 from datetime import datetime
 
 from fastapi import HTTPException
@@ -109,6 +111,14 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
         # 중단->작업중 재개: 최초 시작일시 유지 (구간별 기간은 이력에 기록)
         if not task.task_start_date or prev == "W":
             task.task_start_date = now
+    if new_stat == "W" and not task.holiday_work:
+        # 대기중 진입 시 기존 스케줄(시작·종료예상·고정) 초기화 —
+        # 재계산 전까지 미배치 상태. 과거 시작일시가 남아 있으면
+        # auto_start_due_tasks 가 곧바로 작업중으로 되돌려 버린다
+        # (휴일작업은 시작·종료일시를 수동 지정하므로 유지)
+        task.task_start_date = None
+        task.task_end_date_estimated = None
+        task.start_fixed = 0
     if new_stat == "O":
         task.task_start_date = now     # 단순업무중 진입 = 즉시 작업 시작
     if new_stat == "F":
@@ -132,8 +142,8 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
                 stint_start, now, cal, get_holiday_map(db),
                 task.work_userid or "", get_user_hours_map(db))
             last_p.work_hours = hours
-            task.work_hours_real = round(
-                (task.work_hours_real or 0) + hours, 2)
+            task.work_hours_real = math.ceil(
+                (task.work_hours_real or 0) + hours)
     db.add(TaskChgLog(taskid=task.taskid, task_stat=new_stat,
                       work_hours=0, remark=remark,
                       work_userid=actor_userid or task.work_userid,

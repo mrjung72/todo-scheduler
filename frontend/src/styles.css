@@ -224,6 +224,10 @@ table.grid td.clickable:hover { background: #eff6ff; }
   position: absolute; right: 8px; bottom: 8px;
   font-size: 11px; padding: 1px 8px; line-height: 1.6;
 }
+.kb-card.sel {
+  background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 50%, #fef3c7 100%);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 2px #a855f7;
+}
 .kb-card[draggable="true"] { cursor: grab; }
 .kb-card[draggable="true"]:active { cursor: grabbing; }
 .kb-row1 { font-size: 12px; margin-bottom: 3px; }

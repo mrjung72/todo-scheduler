@@ -27,6 +27,7 @@ export default function Kanban() {
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
+  const [selId, setSelId] = useState(null) // 선택한 카드 (배경 강조, 드래그 후에도 유지)
 
   // 단순업무중(O) 카드의 예상 종료 = 시작일시 + 예상작업시간 (단순 시간 가산, 스케줄링 무관)
   const oEnd = t => {
@@ -155,8 +156,10 @@ export default function Kanban() {
                 </h4>
                 <div className="kb-cards">
                   {(byStat[st] || []).map(t => (
-                    <div className="kb-card" key={t.taskid}
+                    <div className={'kb-card' + (t.taskid === selId ? ' sel' : '')}
+                      key={t.taskid}
                       draggable={canMove(t)}
+                      onClick={() => setSelId(t.taskid)}
                       onDragStart={e =>
                         e.dataTransfer.setData('text/taskid', String(t.taskid))}
                       style={{ borderLeft: `5px solid ${taskColor(t.taskid)}` }}>

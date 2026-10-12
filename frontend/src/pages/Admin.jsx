@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
-  GRADE_LABEL, NEXT_STAT, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
+  GRADE_LABEL, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
   loadFilter, saveFilter, downloadFile, resolveUserid } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
@@ -935,7 +935,7 @@ function TasksTab() {
           </select>
         )}
         <input required placeholder="작업명" value={form.task_name} maxLength={100}
-          style={{ minWidth: 300 }}
+          size={30}
           onChange={e => setForm({ ...form, task_name: e.target.value })} />
         <label className="chk">
           <input type="checkbox" checked={!!form.urgent}
@@ -972,28 +972,17 @@ function TasksTab() {
                 options={typeOpt} /></td>
               <td>{t.priority === 0 && <span className="badge urgent-badge" title="우선순위">긴급</span>}
                 {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
-                <EditableCell value={t.task_name} disabled={!can(t) || (!t.holiday_work && !['R', 'C', 'W'].includes(t.task_stat))}
-                onSave={v => save(t.taskid, { task_name: v })} /></td>
-              <td className="r fit"><EditableCell type="number" value={t.priority} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
-                onSave={v => save(t.taskid, { priority: v })} /></td>
-              <td className="r fit"><EditableCell type="number" value={t.work_hours_estimated} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
-                onSave={v => save(t.taskid, { work_hours_estimated: v })} />
+                <button type="button" className="link" title={t.task_name}
+                  onClick={() => setSelTask(t)}>
+                  {t.task_name?.length > 25 ? t.task_name.slice(0, 25) + '…' : t.task_name}</button></td>
+              <td className="r fit">{t.priority}</td>
+              <td className="r fit">{t.work_hours_estimated}
                 <span className="sub"> / {t.work_hours_real ?? '-'}</span></td>
-              <td className="c stat-col"><EditableCell value={t.task_stat} disabled={!can(t)}
-                onSave={v => canRevert(t) && v === t.prev_stat
-                  ? revertTask(t) : save(t.taskid, { task_stat: v })}
-                options={t.holiday_work ? statOpt
-                  : statOpt.filter(o =>
-                    (NEXT_STAT[t.task_stat]?.includes(o.value) &&
-                      (o.value !== 'O' || t.schedule_apply === 'N') &&
-                      (o.value !== 'W' || t.schedule_apply !== 'N')) ||
-                    (canRevert(t) && o.value === t.prev_stat))} />
+              <td className="c stat-col">{STAT_LABEL[t.task_stat] || t.task_stat}
                 {can(t) && canRevert(t) &&
                   <button className="link" title={`${STAT_LABEL[t.prev_stat]}(으)로 되돌리기`}
                     onClick={() => revertTask(t)}>↩</button>}</td>
-              <td className="c fit"><EditableCell value={t.schedule_apply || 'Y'} disabled={!can(t) || !['R', 'C'].includes(t.task_stat)}
-                onSave={v => save(t.taskid, { schedule_apply: v })}
-                options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
+              <td className="c fit">{t.schedule_apply === 'N' ? 'N' : 'Y'}</td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
               <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
@@ -1032,7 +1021,6 @@ function TasksTab() {
                 })}>
                 {fmtDT(t.task_end_date || t.task_end_date_estimated) || '-'}</td>
               <td>
-                <button onClick={() => setSelTask(t)}>상세</button>
                 {['R', 'C', 'W', 'H', 'X'].includes(t.task_stat) && can(t) &&
                   <button className="danger" onClick={() => del(t.taskid)}>삭제</button>}
               </td>
