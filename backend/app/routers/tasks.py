@@ -306,12 +306,16 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     if "work_hours_real" in data and data["work_hours_real"] != obj.work_hours_real:
         raise HTTPException(400, "실제 작업시간은 자동 집계되므로 직접 수정할 수 없습니다")
     # 스케쥴적용 여부는 경로가 갈리기 전(작업요청·검토중)에만 변경 가능
-    if "schedule_apply" in data and data["schedule_apply"] != obj.schedule_apply \
-            and eff_stat not in ("R", "C"):
+    sched_chg = ("schedule_apply" in data and
+                 data["schedule_apply"] != obj.schedule_apply)
+    if sched_chg and eff_stat not in ("R", "C"):
         raise HTTPException(
             400, "스케쥴적용 여부는 작업요청·검토중 상태에서만 변경할 수 있습니다")
     for k, v in data.items():
         setattr(obj, k, v)
+    # 스케쥴적용 여부 변경 시 상태변경이력 초기화 — 이전 경로로 되돌릴 수 없게 한다
+    if sched_chg:
+        db.query(TaskChgLog).filter(TaskChgLog.taskid == taskid).delete()
     # 일반 작업은 시작일시를 휴일에 설정 불가
     if "task_start_date" in data:
         _check_start_not_holiday(db, obj.holiday_work, obj.task_start_date)
@@ -323,6 +327,11 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     if new_stat is not None:
         apply_task_stat_change(db, obj, new_stat, remark,
                                actor_userid=me.userid)
+    if sched_chg:
+        db.add(TaskChgLog(taskid=taskid, task_stat=obj.task_stat or "R",
+                          work_hours=0, remark="스케쥴적용 변경 (이력 초기화)",
+                          work_userid=me.userid,
+                          create_date=datetime.now().replace(microsecond=0)))
     # 예상 작업시간 변경 시 시작일시가 잡힌 작업의 종료예상일시 재계산
     # (휴일작업은 종료일시를 직접 입력하므로 자동 재계산 제외)
     if "work_hours_estimated" in data and obj.task_start_date \

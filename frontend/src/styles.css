@@ -263,7 +263,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .kb-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
 .kb-meta {
   display: flex; gap: 8px; flex-wrap: wrap;
-  font-size: 11px; color: #94a3b8; margin-top: 4px;
+  font-size: 12px; color: #475569; margin-top: 4px;
 }
 .kb-empty { grid-column: 1 / -1; color: #94a3b8; font-size: 12px; text-align: center; padding: 12px; }
 
@@ -540,6 +540,7 @@ td.req-col input { width: 120px; }
 .home-stat.st-Z { background: #d1fae5; color: #065f46; }
 .home-stat.st-O { background: #cffafe; color: #0e7490; }
 .home-card .kb-meta .kb-req { font-size: 11px; }
+.home-req-date { font-size: 12px; color: #475569; margin-left: 4px; flex-shrink: 0; }
 .home-empty { text-align: center; color: #9ca3af; padding: 40px 0; }
 
 /* 게시판 */

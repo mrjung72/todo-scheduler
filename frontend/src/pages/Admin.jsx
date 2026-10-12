@@ -665,6 +665,7 @@ function TasksTab() {
     : null
   const [endForm, setEndForm] = useState(null)      // {taskid, end} 휴일작업 종료일시 팝업
   const [reqDateForm, setReqDateForm] = useState(null) // {taskid, req_date} 요청일시 팝업
+  const [nameEdit, setNameEdit] = useState(null)    // {taskid, value} 작업명 인라인 수정
   const [newId, setNewId] = useState(null)          // 방금 추가한 작업 ID (강조용)
   const [msg, setMsg] = useState('')
   const load = useCallback(() => api.get('/tasks').then(r => setRows(r.data)), [])
@@ -972,9 +973,28 @@ function TasksTab() {
                 options={typeOpt} /></td>
               <td>{t.priority === 0 && <span className="badge urgent-badge" title="우선순위">긴급</span>}
                 {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
-                <button type="button" className="link" title={t.task_name}
-                  onClick={() => setSelTask(t)}>
-                  {t.task_name?.length > 25 ? t.task_name.slice(0, 25) + '…' : t.task_name}</button></td>
+                {nameEdit?.taskid === t.taskid ? (<>
+                  <input size={30} maxLength={100} value={nameEdit.value} autoFocus
+                    onChange={e => setNameEdit({ ...nameEdit, value: e.target.value })}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        save(t.taskid, { task_name: nameEdit.value })
+                        setNameEdit(null)
+                      } else if (e.key === 'Escape') setNameEdit(null)
+                    }} />
+                  <button className="link" onClick={() => {
+                    save(t.taskid, { task_name: nameEdit.value })
+                    setNameEdit(null)
+                  }}>저장</button>
+                  <button className="link" onClick={() => setNameEdit(null)}>취소</button>
+                </>) : (<>
+                  <button type="button" className="link" title={t.task_name}
+                    onClick={() => setSelTask(t)}>
+                    {t.task_name?.length > 25 ? t.task_name.slice(0, 25) + '…' : t.task_name}</button>
+                  {can(t) && (!!t.holiday_work || ['R', 'C', 'W'].includes(t.task_stat)) &&
+                    <button type="button" title="작업명 수정"
+                      onClick={() => setNameEdit({ taskid: t.taskid, value: t.task_name })}>수정</button>}
+                </>)}</td>
               <td className="r fit">{t.priority}</td>
               <td className="r fit">{t.work_hours_estimated}
                 <span className="sub"> / {t.work_hours_real ?? '-'}</span></td>

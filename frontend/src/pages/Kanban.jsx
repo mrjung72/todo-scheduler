@@ -29,14 +29,6 @@ export default function Kanban() {
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
   const [selId, setSelId] = useState(null) // 선택한 카드 (배경 강조, 드래그 후에도 유지)
 
-  // 단순업무중(O) 카드의 예상 종료 = 시작일시 + 예상작업시간 (단순 시간 가산, 스케줄링 무관)
-  const oEnd = t => {
-    const d = new Date(t.task_start_date)
-    d.setHours(d.getHours() + (t.work_hours_estimated || 0))
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
-      `${String(d.getDate()).padStart(2, '0')}`
-  }
-
   // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
   const canMove = t => me && ([0, 1].includes(me.user_grade) ||
     t.work_userid === me.userid ||
@@ -176,17 +168,12 @@ export default function Kanban() {
                       <div className="kb-title">
                         {!!t.weekday_included &&
                           <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
-                        <span className="kb-req">{t.req_user_name || t.req_userid || '-'}</span>
                         <span className="kb-name" title={t.task_name}>{t.task_name}</span>
                       </div>
                       <div className="kb-meta">
-                        {t.work_userid &&
-                          <span>{t.work_user_name || t.work_userid}</span>}
-                        {t.task_stat === 'O'
-                          ? t.task_start_date &&
-                            <span>{(t.task_start_date || '').slice(0, 10)} ~ {oEnd(t).slice(0, 10)}</span>
-                          : (t.task_start_date || t.task_end_date_estimated) &&
-                            <span>{(t.task_start_date || '').slice(0, 10)} ~ {(t.task_end_date_estimated || '').slice(0, 10)}</span>}
+                        <span>{t.req_user_name || t.req_userid || '-'}</span>
+                        {t.req_date &&
+                          <span>{(t.req_date || '').slice(0, 19).replace('T', ' ')}</span>}
                       </div>
                       <button className="kb-detail" title="작업 상세"
                         onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>

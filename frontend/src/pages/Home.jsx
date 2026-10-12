@@ -61,18 +61,20 @@ export default function Home() {
                 </span>
               </div>
               <div className="kb-title">
-                <span className="kb-req">{t.req_user_name || t.req_userid || '-'}</span>
-                {t.task_name}
-              </div>
-              <div className="kb-meta">
+                <span className="kb-name" title={t.task_name}>{t.task_name}</span>
                 <span className="kb-req">{t.work_user_name || t.work_userid || '-'}</span>
-                {(t.task_start_date || t.task_end_date_estimated) &&
-                  <span>{fmtDT(t.task_start_date)} ~ {fmtDT(t.task_end_date_estimated)}</span>}
-                <span>{t.work_hours_estimated}h
+                <span className="home-req-date">{t.work_hours_estimated}h
                   {(t.work_hours_estimated &&
                     (t.work_hours_day || cfg?.work_hours_per_day)) ?
-                    ` (총 ${+(t.work_hours_estimated / (t.work_hours_day || cfg.work_hours_per_day)).toFixed(1)}일)` : ''}
+                    ` (총 ${Math.ceil(t.work_hours_estimated / (t.work_hours_day || cfg.work_hours_per_day))}일)` : ''}
                 </span>
+                {t.task_start_date &&
+                  <span className="home-req-date">{fmtDT(t.task_start_date)}</span>}
+              </div>
+              <div className="kb-meta">
+                <span>{t.req_user_name || t.req_userid || '-'}</span>
+                {t.req_date &&
+                  <span>{(t.req_date || '').slice(0, 19).replace('T', ' ')}</span>}
               </div>
             </div>
           )
