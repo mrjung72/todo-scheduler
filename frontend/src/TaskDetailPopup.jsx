@@ -104,6 +104,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [hoursEdit, setHoursEdit] = useState(null)   // 예상시간 수정 입력값
   const [prioEdit, setPrioEdit] = useState(null)     // 우선순위 수정 입력값
   const [reqDateEdit, setReqDateEdit] = useState(null) // 요청일시 수정 입력값
+  const [schedEdit, setSchedEdit] = useState(null)     // 스케쥴적용(Y/N) 수정 입력값
   const [recalcBusy, setRecalcBusy] = useState(false)
   // 수정 제한 항목은 작업요청·검토중·대기중(또는 휴일작업)에서만 변경 가능
   const canEditFields = canEdit &&
@@ -111,6 +112,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const startDate = tf.task_start_date ?? task.task_start_date
   const endEst = tf.task_end_date_estimated ?? task.task_end_date_estimated
   const startFixed = tf.start_fixed ?? task.start_fixed
+  const schedApply = tf.schedule_apply ?? task.schedule_apply ?? 'Y'
   const estHours = tf.work_hours_estimated ?? task.work_hours_estimated
   const prio = tf.priority ?? task.priority
   const fileRef = useRef(null)
@@ -232,6 +234,16 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
   }
 
+  // 스케쥴적용 여부 수정 (작업요청·검토중 상태에서만 — 경로가 갈리기 전)
+  const saveSched = async () => {
+    try {
+      const { data } = await api.put(`/tasks/${task.taskid}`, {
+        schedule_apply: schedEdit })
+      setTf(t => ({ ...t, schedule_apply: data.schedule_apply }))
+      setSchedEdit(null); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
   // 요청일시 수정 (상태 무관 — 메타 정보)
   const saveReqDate = async () => {
     try {
@@ -331,6 +343,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               <CopyBtn text={task.task_csrid} title="CSR번호 복사"
                 bg={taskColorComp(task.taskid)} />}
             {!!task.holiday_work && <span className="pt-chip">휴일작업</span>}
+            {schedApply === 'N' && <span className="pt-chip">스케쥴미적용</span>}
             <span className="pt-chip">{STAT_LABEL[task.task_stat] || task.task_stat}</span>
             {canRevert &&
               <button type="button" className="revert-btn"
@@ -376,6 +389,20 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <button className="link" onClick={saveHours}>저장</button>
                 <button className="link" onClick={() => setHoursEdit(null)}>취소</button>
               </>)}</p>
+              <p><b>스케쥴</b> {schedEdit === null ? (<>
+                {schedApply === 'N' ? '미적용 (단순업무)' : '적용'}
+                {canEdit && ['R', 'C'].includes(task.task_stat) &&
+                  <button className="link"
+                    onClick={() => setSchedEdit(schedApply)}>수정</button>}
+              </>) : (<>
+                <select value={schedEdit}
+                  onChange={e => setSchedEdit(e.target.value)}>
+                  <option value="Y">적용 (스케쥴링 작업)</option>
+                  <option value="N">미적용 (단순업무)</option>
+                </select>
+                <button className="link" onClick={saveSched}>저장</button>
+                <button className="link" onClick={() => setSchedEdit(null)}>취소</button>
+              </>)}</p>
               <p><b>요청일자</b> {reqDateEdit === null ? (<>
                 {fmtDT(tf.req_date ?? task.req_date) || '-'}
                 {canEdit &&
@@ -406,7 +433,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <button className="link" onClick={() => setStartEdit(null)}>취소</button>
               </>)}</p>
               <p><b>종료(예상)</b> {fmtDT(endEst) || '-'}
-                {canEdit &&
+                {canEdit && schedApply !== 'N' &&
                   <button onClick={doRecalc} disabled={recalcBusy}
                     style={{ marginLeft: 12 }}
                     title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}

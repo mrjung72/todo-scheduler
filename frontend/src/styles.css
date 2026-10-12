@@ -203,6 +203,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
 .kb-area.st-F .kb-head { color: #15803d; border-color: #bbf7d0; background: #f0fdf4; }
 .kb-area.st-X .kb-head { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
 .kb-area.st-Z .kb-head { color: #065f46; border-color: #a7f3d0; background: #ecfdf5; }
+.kb-area.st-O .kb-head { color: #0e7490; border-color: #a5f3fc; background: #ecfeff; }
 .kb-count {
   background: #fff; border-radius: 12px; padding: 1px 10px;
   font-size: 13px; color: #334155; font-weight: 700;
@@ -533,6 +534,7 @@ td.req-col input { width: 120px; }
 .home-stat.st-F { background: #dcfce7; color: #15803d; }
 .home-stat.st-X { background: #fee2e2; color: #b91c1c; }
 .home-stat.st-Z { background: #d1fae5; color: #065f46; }
+.home-stat.st-O { background: #cffafe; color: #0e7490; }
 .home-card .kb-meta .kb-req { font-size: 11px; }
 .home-empty { text-align: center; color: #9ca3af; padding: 40px 0; }
 

@@ -78,6 +78,7 @@ class TaskBase(BaseModel):
     task_end_date_estimated: Optional[datetime] = None
     req_date: Optional[datetime] = None
     holiday_work: Optional[int] = 0       # 휴일작업 여부 (전이/스케줄 제약 없음)
+    schedule_apply: Optional[str] = "Y"   # Y=스케줄링 대상(W→P), N=단순업무(C→O→F)
 
 
 class TaskCreate(TaskBase):
@@ -103,6 +104,7 @@ class TaskUpdate(BaseModel):
     task_end_date_estimated: Optional[datetime] = None
     req_date: Optional[datetime] = None
     holiday_work: Optional[int] = None
+    schedule_apply: Optional[str] = None
     stat_remark: Optional[str] = None   # 작업상태 변경 시 이력 비고
 
 

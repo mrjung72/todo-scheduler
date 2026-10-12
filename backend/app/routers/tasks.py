@@ -305,6 +305,11 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     # 실제 작업시간은 상태전이(P 구간) 시 자동 집계 — 직접 수정 불가
     if "work_hours_real" in data and data["work_hours_real"] != obj.work_hours_real:
         raise HTTPException(400, "실제 작업시간은 자동 집계되므로 직접 수정할 수 없습니다")
+    # 스케쥴적용 여부는 경로가 갈리기 전(작업요청·검토중)에만 변경 가능
+    if "schedule_apply" in data and data["schedule_apply"] != obj.schedule_apply \
+            and eff_stat not in ("R", "C"):
+        raise HTTPException(
+            400, "스케쥴적용 여부는 작업요청·검토중 상태에서만 변경할 수 있습니다")
     for k, v in data.items():
         setattr(obj, k, v)
     # 일반 작업은 시작일시를 휴일에 설정 불가

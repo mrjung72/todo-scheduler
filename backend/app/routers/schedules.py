@@ -4,6 +4,8 @@
 - 이벤트: tasks 의 task_start_date/task_end_date_estimated 기준 (대기중/작업중만)
 - 변경이력: 상태 전이 시 statusflow에서 자동 기록된 로그 조회/삭제
 """
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, aliased
@@ -74,7 +76,7 @@ def calendar_events(db: Session = Depends(get_db)):
         .outerjoin(WorkUser, WorkUser.userid == Task.work_userid)
         .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(Site, Site.siteid == Task.siteid)
-        .filter(or_(Task.task_stat.in_(["W", "P"]),
+        .filter(or_(Task.task_stat.in_(["W", "P", "O"]),
                     and_(Task.holiday_work == 1,
                          Task.task_stat.notin_(["F", "X", "Z"]))))
         .all()
@@ -87,13 +89,20 @@ def calendar_events(db: Session = Depends(get_db)):
     for (task, work_user_name, work_user_dept, work_user_title, work_hours_day,
          site_name, req_userid, req_user_name,
          req_user_dept, req_user_title) in rows:
-        if not task.task_start_date or not task.task_end_date_estimated:
+        if not task.task_start_date:
+            continue
+        # 단순업무중(O)은 스케줄링과 무관 — 종료예상이 없으면 시작+예상시간으로 표시
+        end_est = task.task_end_date_estimated or \
+            (task.task_start_date +
+             timedelta(hours=task.work_hours_estimated or 0)
+             if task.task_stat == "O" else None)
+        if not end_est:
             continue
         events.append({
             "id": str(task.taskid),
             "title": task.task_name,
             "start": task.task_start_date.isoformat(),
-            "end": task.task_end_date_estimated.isoformat(),
+            "end": end_est.isoformat(),
             "extendedProps": {
                 "taskid": task.taskid,
                 "task_csrid": task.task_csrid,
@@ -116,6 +125,7 @@ def calendar_events(db: Session = Depends(get_db)):
                 "task_req_remark": task.task_req_remark,
                 "start_fixed": task.start_fixed,
                 "holiday_work": task.holiday_work,
+                "schedule_apply": task.schedule_apply or "Y",
                 # 휴일작업인데 기간에 근무일 포함 시 경고 플래그
                 "weekday_included": bool(task.holiday_work) and
                     has_workday_between(cal, task.task_start_date,
@@ -123,7 +133,8 @@ def calendar_events(db: Session = Depends(get_db)):
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도
                 # (시작일이 휴일이면 그 날짜도 작업가능일로 간주해 분해,
                 #  건너뛴 고정·휴일/선순번 작업의 기간은 제외)
-                "daily": daily_breakdown(
+                # 단순업무중(O)은 스케줄링과 무관 — 분해 없이 전체 구간 표시
+                "daily": None if task.task_stat == "O" else daily_breakdown(
                     task.task_start_date, task.task_end_date_estimated,
                     workday_cal(cal, task.task_start_date.date()),
                     hol, task.work_userid or "", uhours,

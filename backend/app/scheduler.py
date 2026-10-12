@@ -17,6 +17,7 @@ calendar_define 에 없는 날짜는 월~금=근무일, 토/일=휴일로 간주
 import os
 from datetime import datetime, timedelta, date, time
 from dotenv import load_dotenv
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .models import CalendarDefine, Task, UserHoliday, User
@@ -342,9 +343,11 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
     hol = get_holiday_map(db)
     uhours = get_user_hours_map(db)   # 개발자별 하루 개발시간
 
-    # 대기중(W) 작업만 재계산, 휴일작업은 자동 스케줄링 대상에서 제외
+    # 대기중(W) 작업만 재계산, 휴일작업·스케쥴미적용(단순업무)은 자동 스케줄링 제외
     task_q = db.query(Task).filter(Task.task_stat == "W") \
-                           .filter(Task.holiday_work != 1)
+                           .filter(Task.holiday_work != 1) \
+                           .filter(or_(Task.schedule_apply.is_(None),
+                                      Task.schedule_apply != "N"))
     if only_userid:
         task_q = task_q.filter(Task.work_userid == only_userid)
     rows = task_q.all()

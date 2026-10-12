@@ -99,6 +99,7 @@ export const STAT_LABEL = {
   F: '작업완료',
   X: '작업반려',
   Z: '최종완료',
+  O: '단순업무중',
 }
 
 // 화면별 검색조건 저장/복원 (localStorage)
@@ -123,12 +124,14 @@ export const TASK_TYPE_LABEL = {
 }
 
 // 작업상태 허용 전이 (백엔드 statusflow.ALLOWED_STAT과 동일, 자기 상태 포함)
+// C의 W/O 분기는 스케쥴적용 여부(schedule_apply)에 따라 서버에서 검증
 export const NEXT_STAT = {
   R: ['R', 'C', 'X'],
-  C: ['C', 'X', 'W'],
+  C: ['C', 'X', 'W', 'O'],
   W: ['W', 'C', 'X', 'P'],
   P: ['P', 'X', 'H', 'F'],
   H: ['H', 'P', 'X'],
+  O: ['O', 'F', 'X'],
   F: ['F', 'Z'],
   X: ['X'],
   Z: ['Z'],

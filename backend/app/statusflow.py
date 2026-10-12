@@ -2,23 +2,27 @@
 
 상태 체계:
   R-작업요청, C-검토중, W-대기중, P-작업중, H-작업중단, F-작업완료,
-  X-작업반려, Z-최종완료
+  X-작업반려, Z-최종완료, O-단순업무중(스케쥴 미적용 작업)
 
 허용 전이:
   R(작업요청) -> C(검토중), X(작업반려)
-  C(검토중)   -> X(작업반려), W(대기중)
+  C(검토중)   -> X(작업반려), W(대기중, schedule_apply='Y'), O(단순업무중, 'N')
   W(대기중)   -> C(검토중), X(작업반려), P(작업중)
   P(작업중)   -> X(작업반려), H(작업중단), F(작업완료)
                 -- P에서 벗어날 때 해당 구간의 작업기간을 task_chg_log.work_hours에
                    기록하고 tasks.work_hours_real에 누적
   H(작업중단) -> P(작업중), X(작업반려)
+  O(단순업무중) -> F(작업완료), X(작업반려)   -- 스케줄링과 무관한 단순업무
   F(작업완료) -> Z(최종완료)
   X(작업반려) -> 변경 불가 (종결)
   Z(최종완료) -> 변경 불가 (종결, 되돌리기도 불가 — 휴일작업 포함 모든 경로 차단)
 
 공통 규칙:
+  - 스케쥴적용(schedule_apply='Y'): C->W 경로만 허용 (O 불가)
+    스케쥴미적용(schedule_apply='N'): C->O 경로만 허용 (W 불가)
   - ->P: 시작일자가 없거나 미래이면 불가(W->P). 최초 P 진입 시 task_start_date = 현재시각
          (H->P 재개 시에는 최초 시작일 유지, 구간별 기간은 이력에 기록)
+  - ->O: task_start_date = 현재시각 (스케줄링 없이 즉시 시작)
   - ->F: task_end_date(실제완료일시) = 현재시각
   - ->Z: task_end_date 유지 (F에서 기록된 실제완료일시 그대로)
   - 완료(F)·최종완료(Z) 외 상태로 변경 시 task_end_date = NULL
@@ -37,16 +41,18 @@ from .scheduler import (
 
 ALLOWED_STAT = {
     "R": {"C", "X"},
-    "C": {"X", "W"},
+    "C": {"X", "W", "O"},
     "W": {"C", "X", "P"},
     "P": {"X", "H", "F"},
     "H": {"P", "X"},
+    "O": {"F", "X"},
     "F": {"Z"},
     "X": set(),
     "Z": set(),
 }
 STAT_NAME = {"R": "작업요청", "C": "검토중", "W": "대기중", "P": "작업중",
-             "H": "작업중단", "F": "작업완료", "X": "작업반려", "Z": "최종완료"}
+             "H": "작업중단", "F": "작업완료", "X": "작업반려", "Z": "최종완료",
+             "O": "단순업무중"}
 
 
 def _check(prev: str, new_stat: str):
@@ -76,6 +82,16 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
     # 휴일작업은 상태 전이 제약 없이 자유롭게 변경 가능
     if not task.holiday_work and not allow_revert:
         _check(prev, new_stat)
+        # 스케쥴적용 여부에 따라 C 이후 경로가 갈린다:
+        #   'Y' = 대기중(W) 경로만, 'N' = 단순업무중(O) 경로만 허용
+        if prev == "C" and new_stat == "O" and task.schedule_apply != "N":
+            raise HTTPException(
+                400, "스케쥴적용 작업은 단순업무중으로 변경할 수 없습니다. "
+                     "대기중으로 변경하세요")
+        if prev == "C" and new_stat == "W" and task.schedule_apply == "N":
+            raise HTTPException(
+                400, "스케쥴미적용 작업은 대기중으로 변경할 수 없습니다. "
+                     "단순업무중으로 변경하세요")
     now = datetime.now().replace(microsecond=0)
 
     if new_stat == "P":
@@ -93,6 +109,8 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
         # 중단->작업중 재개: 최초 시작일시 유지 (구간별 기간은 이력에 기록)
         if not task.task_start_date or prev == "W":
             task.task_start_date = now
+    if new_stat == "O":
+        task.task_start_date = now     # 단순업무중 진입 = 즉시 작업 시작
     if new_stat == "F":
         if not task.task_start_date:
             task.task_start_date = now

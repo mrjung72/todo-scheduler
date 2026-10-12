@@ -52,7 +52,8 @@ class Task(Base):
     priority = Column(Integer, default=0)
     work_hours_estimated = Column(REAL, default=0)
     work_hours_real = Column(REAL, default=0)
-    # R-작업요청, C-검토중, W-대기중, P-작업중, H-작업중단, F-작업완료, X-작업반려
+    # R-작업요청, C-검토중, W-대기중, P-작업중, H-작업중단, F-작업완료,
+    # X-작업반려, Z-최종완료, O-단순업무중(스케쥴 미적용 작업)
     task_stat = Column(Text, default="R")
     # SQ-단순문의, FI-기능개선, BF-오류수정, DE-데이터추출, DM-데이터변경
     task_type = Column(Text)
@@ -66,6 +67,9 @@ class Task(Base):
     task_end_date_estimated = Column(DateTime)  # 작업 예상 종료 일시 (자동계산)
     start_fixed = Column(Integer, default=0)    # 시작일시 수동 고정 여부
     holiday_work = Column(Integer, default=0)   # 휴일작업 여부 (상태전이·스케줄 제약 없음)
+    # 스케쥴적용 여부: Y(기본)=자동 스케줄링 대상(W→P 경로),
+    # N=스케줄 미적용 단순업무 (C→O→F 경로, 스케줄링과 무관)
+    schedule_apply = Column(Text, default="Y")
     req_date = Column(DateTime)                 # 요청일자
     create_date = Column(DateTime, default=datetime.now)
 

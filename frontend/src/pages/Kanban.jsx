@@ -4,11 +4,11 @@ import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, isDevWorker,
 import TaskDetailPopup from '../TaskDetailPopup'
 import ReqUserInput from '../ReqUserInput'
 
-// 3열 배치: 좌 = 대기·검토·요청, 중 = 작업중·중단·반려, 우 = 완료·최종완료
+// 3열 배치: 좌 = 대기·검토·요청, 중 = 작업중·중단·단순업무중, 우 = 완료·최종완료·반려
 const LAYOUT = [
   ['W', 'C', 'R'],
-  ['P', 'H', 'X'],
-  ['F', 'Z'],
+  ['P', 'H', 'O'],
+  ['F', 'Z', 'X'],
 ]
 
 export default function Kanban() {
@@ -27,6 +27,14 @@ export default function Kanban() {
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
+
+  // 단순업무중(O) 카드의 예상 종료 = 시작일시 + 예상작업시간 (단순 시간 가산, 스케줄링 무관)
+  const oEnd = t => {
+    const d = new Date(t.task_start_date)
+    d.setHours(d.getHours() + (t.work_hours_estimated || 0))
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
+      `${String(d.getDate()).padStart(2, '0')}`
+  }
 
   // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
   const canMove = t => me && ([0, 1].includes(me.user_grade) ||
@@ -171,8 +179,11 @@ export default function Kanban() {
                       <div className="kb-meta">
                         {t.work_userid &&
                           <span>{t.work_user_name || t.work_userid}</span>}
-                        {(t.task_start_date || t.task_end_date_estimated) &&
-                          <span>{(t.task_start_date || '').slice(0, 10)} ~ {(t.task_end_date_estimated || '').slice(0, 10)}</span>}
+                        {t.task_stat === 'O'
+                          ? t.task_start_date &&
+                            <span>{(t.task_start_date || '').slice(0, 10)} ~ {oEnd(t).slice(0, 10)}</span>
+                          : (t.task_start_date || t.task_end_date_estimated) &&
+                            <span>{(t.task_start_date || '').slice(0, 10)} ~ {(t.task_end_date_estimated || '').slice(0, 10)}</span>}
                       </div>
                       <button className="kb-detail" title="작업 상세"
                         onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>

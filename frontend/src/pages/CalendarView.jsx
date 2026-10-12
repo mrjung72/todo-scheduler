@@ -140,7 +140,8 @@ export default function CalendarView() {
   const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [showHol, setShowHol] = useState(savedF.holiday !== false)  // 작업자휴가 표시 여부
-  // 달력은 대기중(W)/작업중(P) 스케줄만 표시 (서버에서도 W,P만 반환)
+  // 작업 구분 필터: Y=스케쥴링작업(기본), N=비스케쥴링작업(단순업무), ''=전체
+  const [schedF, setSchedF] = useState(savedF.sched ?? 'Y')
   const emptyHol = { kind: 'user', work_userid: '', holiday_category: 'A',
     holiday_half: 'PM', holiday_hours: 4, holiday_remark: '', date_stat: 'H' }
   const [holForm, setHolForm] = useState(null)  // {date:'yyyy-mm-dd', ...emptyHol}
@@ -301,6 +302,8 @@ export default function CalendarView() {
   const reqUid = resolveUserid(reqFilter, users)
   const filtered = events.filter(e => {
     const p = e.extendedProps || {}
+    if (schedF === 'Y' && p.schedule_apply === 'N') return false
+    if (schedF === 'N' && p.schedule_apply !== 'N') return false
     if (siteFilter && p.siteid !== siteFilter) return false
     if (typeFilter && p.task_type !== typeFilter) return false
     if (reqUid && p.req_userid !== reqUid) return false
@@ -342,13 +345,18 @@ export default function CalendarView() {
           onChange={e => setQ(e.target.value)}
         />
         <button onClick={() => {
-          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter, holiday: showHol })
+          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter, holiday: showHol, sched: schedF })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <label className="hint-inline" style={{ cursor: 'pointer' }}>
           <input type="checkbox" checked={showHol}
             onChange={e => setShowHol(e.target.checked)} /> 작업자휴가
         </label>
+        <select value={schedF} onChange={e => setSchedF(e.target.value)}>
+          <option value="Y">스케쥴링작업</option>
+          <option value="N">비스케쥴링작업</option>
+          <option value="">전체</option>
+        </select>
         <span className="hint-notice">대기중/작업중 작업만 표시</span>
       </div>
       <FullCalendar

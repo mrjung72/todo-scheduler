@@ -643,7 +643,7 @@ function SitesTab() {
 function TasksTab() {
   const empty = { task_name: '', siteid: '', urgent: false, work_hours_estimated: 4,
     task_stat: 'R', task_type: '', task_csrid: '', task_req_remark: '', req_userid: '',
-    itos_userid: '', work_userid: '', holiday_work: 0 }
+    itos_userid: '', work_userid: '', holiday_work: 0, schedule_apply: 'Y' }
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
   const [sites, setSites] = useState([])
@@ -947,13 +947,18 @@ function TasksTab() {
             onChange={e => setForm({ ...form, holiday_work: e.target.checked ? 1 : 0 })} />
           휴일작업
         </label>
+        <label className="chk" title="체크 해제 시 스케줄링 없이 단순업무로 처리">
+          <input type="checkbox" checked={form.schedule_apply !== 'N'}
+            onChange={e => setForm({ ...form, schedule_apply: e.target.checked ? 'Y' : 'N' })} />
+          스케쥴적용
+        </label>
         <button type="submit">작업추가</button>
         <span className="hint">상세내용은 작업 등록 후 상세화면에서 입력해 주세요.</span>
       </form>}
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>사이트</th><th>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
-          <th>상태</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
+          <th>상태</th><th className="fit">스케쥴<br/>적용</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
           <th>요청일시</th><th>시작일시</th><th>종료일시</th><th></th>
         </tr></thead>
         <tbody>
@@ -978,11 +983,17 @@ function TasksTab() {
                 onSave={v => canRevert(t) && v === t.prev_stat
                   ? revertTask(t) : save(t.taskid, { task_stat: v })}
                 options={t.holiday_work ? statOpt
-                  : statOpt.filter(o => NEXT_STAT[t.task_stat]?.includes(o.value) ||
+                  : statOpt.filter(o =>
+                    (NEXT_STAT[t.task_stat]?.includes(o.value) &&
+                      (o.value !== 'O' || t.schedule_apply === 'N') &&
+                      (o.value !== 'W' || t.schedule_apply !== 'N')) ||
                     (canRevert(t) && o.value === t.prev_stat))} />
                 {can(t) && canRevert(t) &&
                   <button className="link" title={`${STAT_LABEL[t.prev_stat]}(으)로 되돌리기`}
                     onClick={() => revertTask(t)}>↩</button>}</td>
+              <td className="c fit"><EditableCell value={t.schedule_apply || 'Y'} disabled={!can(t) || !['R', 'C'].includes(t.task_stat)}
+                onSave={v => save(t.taskid, { schedule_apply: v })}
+                options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
               <td><EditableCell value={t.task_csrid} disabled={!can(t)}
                 onSave={v => save(t.taskid, { task_csrid: v })} /></td>
               <td className="c req-col"><SearchUserCell value={t.req_userid} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
