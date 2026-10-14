@@ -95,8 +95,8 @@ def calendar_events(db: Session = Depends(get_db)):
         # 단순업무중(O)은 스케줄링과 무관 — 종료예상이 없으면 시작+예상시간으로 표시
         end_est = task.task_end_date_estimated or \
             (elapsed_work_end(task.task_start_date,
-                              task.work_hours_estimated or 0, hol,
-                              task.work_userid)
+                              task.work_hours_estimated or 0, cal, hol,
+                              task.work_userid, uhours)
              if task.task_stat == "O" else None)
         if not end_est:
             continue
@@ -135,12 +135,15 @@ def calendar_events(db: Session = Depends(get_db)):
                 # 일별 작업 분해: 달력 작업바를 시간 비례로 채우는 용도
                 # (시작일이 휴일이면 그 날짜도 작업가능일로 간주해 분해,
                 #  건너뛴 고정·휴일/선순번 작업의 기간은 제외)
-                # 단순업무중(O)은 스케줄링과 무관 — 분해 없이 전체 구간 표시
-                "daily": None if task.task_stat == "O" else daily_breakdown(
-                    task.task_start_date, task.task_end_date_estimated,
-                    workday_cal(cal, task.task_start_date.date()),
+                # 단순업무중(O)도 동일하게 근무일·휴가·하루시간을 반영하되
+                # 다른 작업 점유구간(busy)과는 무관하게 독립 계산
+                "daily": daily_breakdown(
+                    task.task_start_date, end_est,
+                    cal if task.task_stat == "O"
+                    else workday_cal(cal, task.task_start_date.date()),
                     hol, task.work_userid or "", uhours,
-                    _busy_for(task, all_tasks)),
+                    None if task.task_stat == "O"
+                    else _busy_for(task, all_tasks)),
             },
         })
     return events

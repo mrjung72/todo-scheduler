@@ -350,10 +350,11 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     if "work_hours_estimated" in data and obj.task_start_date \
             and not obj.holiday_work:
         if obj.schedule_apply == "N":
-            # 비스케쥴링 작업: 종료예상 = 시작 + 예상시간 (휴가 제외 경과시간)
+            # 비스케쥴링 작업: 근무일·휴가·하루시간 반영, 다른 작업과 무관하게 계산
             obj.task_end_date_estimated = elapsed_work_end(
                 obj.task_start_date, obj.work_hours_estimated or 0,
-                get_holiday_map(db), obj.work_userid)
+                get_calendar_map(db), get_holiday_map(db), obj.work_userid,
+                get_user_hours_map(db))
         else:
             cal = get_calendar_map(db)
             hol = get_holiday_map(db)
@@ -427,9 +428,10 @@ def set_start(taskid: int, body: StartSet, db: Session = Depends(get_db),
     task.task_start_date = body.start_datetime
     task.start_fixed = 1
     if task.schedule_apply == 'N':
-        # 비스케쥴링 작업: 종료예상 = 시작 + 예상시간 (휴가 제외 경과시간)
+        # 비스케쥴링 작업: 근무일·휴가·하루시간 반영, 다른 작업과 무관하게 계산
         task.task_end_date_estimated = elapsed_work_end(
-            body.start_datetime, task.work_hours_estimated or 0, hol, uid)
+            body.start_datetime, task.work_hours_estimated or 0,
+            cal, hol, uid, get_user_hours_map(db))
     elif task.holiday_work:
         # 휴일작업은 종료일시를 직접 입력 — 자동 재계산 없이 근무일 포함만 검증
         if has_workday_between(

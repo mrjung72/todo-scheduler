@@ -130,7 +130,8 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
             task.task_start_date = now
         task.task_end_date_estimated = elapsed_work_end(
             task.task_start_date, task.work_hours_estimated or 0,
-            get_holiday_map(db), task.work_userid)
+            get_calendar_map(db), get_holiday_map(db), task.work_userid,
+            get_user_hours_map(db))
     if new_stat == "F":
         if not task.task_start_date:
             task.task_start_date = now
@@ -188,7 +189,8 @@ def auto_finish_due_tasks(db: Session) -> int:
             # 비스케쥴링 작업: 종료예상 미설정 시 시작 + 예상시간(휴가 제외)
             end = elapsed_work_end(task.task_start_date,
                                    task.work_hours_estimated or 0,
-                                   get_holiday_map(db), task.work_userid)
+                                   get_calendar_map(db), get_holiday_map(db),
+                                   task.work_userid, get_user_hours_map(db))
         if end and end <= now:
             apply_task_stat_change(db, task, "F",
                                    remark="종료예상 경과로 자동 완료")
