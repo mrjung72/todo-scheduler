@@ -11,7 +11,11 @@
   P(작업중)   -> X(작업반려), H(작업중단), F(작업완료)
                 -- P에서 벗어날 때 해당 구간의 작업기간을 task_chg_log.work_hours에
                    기록하고 tasks.work_hours_real에 누적
+                -- P->H 진입 시 남은 예상시간(예상시간 - 구간작업시간)을
+                   work_hours_estimated에 기록
   H(작업중단) -> P(작업중), X(작업반려)
+                -- H->P 재개 시 종료예상일시 = 현재시각 + 남은 예상시간
+                   (근무일·휴가·하루시간 반영) 으로 재계산
   O(단순업무중) -> F(작업완료), X(작업반려)   -- 스케줄링과 무관한 단순업무
   F(작업완료) -> Z(최종완료)
   X(작업반려) -> 변경 불가 (종결)
@@ -38,7 +42,7 @@ from sqlalchemy.orm import Session
 from .models import TaskChgLog, Task
 from .scheduler import (
     get_calendar_map, get_holiday_map, get_user_hours_map, workday_cal,
-    work_hours_between, elapsed_work_end,
+    work_hours_between, elapsed_work_end, add_work_hours,
 )
 
 ALLOWED_STAT = {
@@ -115,6 +119,14 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
         # 중단->작업중 재개: 최초 시작일시 유지 (구간별 기간은 이력에 기록)
         if not task.task_start_date or prev == "W":
             task.task_start_date = now
+        if prev == "H" and not task.holiday_work:
+            # 중단->작업중 재개: 남은 예상시간을 현재시각 기준으로 다시 배분해
+            # 종료예상일시 갱신 (중단 시점에 work_hours_estimated 가 남은시간으로
+            # 갱신돼 있음)
+            task.task_end_date_estimated = add_work_hours(
+                now, task.work_hours_estimated or 0,
+                get_calendar_map(db), get_holiday_map(db),
+                task.work_userid or "", get_user_hours_map(db))
     if new_stat == "W" and not task.holiday_work:
         # 대기중 진입 시 기존 스케줄(시작·종료예상·고정) 초기화 —
         # 재계산 전까지 미배치 상태. 과거 시작일시가 남아 있으면
@@ -140,21 +152,29 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
         task.task_end_date = None     # 완료·최종완료 외 상태는 실제종료 해제
     task.task_stat = new_stat
 
-    # 작업중 구간이 끝나면 해당 P 이력행에 작업기간 기록 + 실제작업시간 누적
-    if prev == "P":
+    # 작업중·단순업무중 구간이 끝나면 해당 P/O 이력행에 작업기간 기록
+    # + 실제작업시간 누적
+    if prev in ("P", "O"):
         last_p = (db.query(TaskChgLog)
                   .filter(TaskChgLog.taskid == task.taskid,
-                          TaskChgLog.task_stat == "P")
+                          TaskChgLog.task_stat == prev)
                   .order_by(TaskChgLog.taskchgid.desc()).first())
         if last_p:
             stint_start = last_p.create_date or task.task_start_date or now
-            cal = workday_cal(get_calendar_map(db), stint_start.date())
+            cal = get_calendar_map(db)
+            if prev == "P":
+                cal = workday_cal(cal, stint_start.date())
             hours = work_hours_between(
                 stint_start, now, cal, get_holiday_map(db),
                 task.work_userid or "", get_user_hours_map(db))
             last_p.work_hours = hours
             task.work_hours_real = math.ceil(
                 (task.work_hours_real or 0) + hours)
+            if new_stat == "H":
+                # 작업중단: 남은 예상시간 = 예상시간 - 이번 구간 작업시간
+                # (이전 중단 구간은 진입 시 이미 차감돼 있음)
+                task.work_hours_estimated = max(
+                    0.0, round((task.work_hours_estimated or 0) - hours, 2))
     db.add(TaskChgLog(taskid=task.taskid, task_stat=new_stat,
                       work_hours=0, remark=remark,
                       work_userid=actor_userid or task.work_userid,

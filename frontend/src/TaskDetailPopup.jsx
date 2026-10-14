@@ -445,6 +445,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     style={{ marginLeft: 12 }}
                     title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}
               </p>
+              <p><b>종료(실제)</b> {fmtDT(task.task_end_date) || '-'}</p>
             </div>
             {daily && daily.length > 0 && (
               <div className="daily">
