@@ -43,13 +43,16 @@ def list_work_logs(
 
 def _busy_for(task, all_tasks) -> list:
     """작업이 건너뛰는 점유구간 목록 — 같은 작업자의 고정·휴일 작업과
-    우선순위가 앞선 작업의 기간 (일별 작업시간 계산에서 제외)."""
+    우선순위가 앞선 작업의 기간 (일별 작업시간 계산에서 제외).
+    비스케쥴링(N) 작업은 독립 스케줄링이므로 점유구간에서 제외."""
     if task.start_fixed or task.holiday_work:
         return []
     my_key = (task.priority or 0, task.taskid)
     out = []
     for o in all_tasks:
         if o.taskid == task.taskid or o.work_userid != task.work_userid:
+            continue
+        if o.schedule_apply == "N":
             continue
         if not o.task_start_date or not o.task_end_date_estimated:
             continue
