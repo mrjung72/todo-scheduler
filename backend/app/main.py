@@ -75,7 +75,7 @@ def seed(db):
             User(userid="itos01", user_name="김아이티", dept_name="IT운영팀",
                  job_title="대리", user_grade=5, password=pw, user_stat="Y"),
             User(userid="req01", user_name="박현업", dept_name="영업팀",
-                 job_title="과장", user_grade=7, password=pw, user_stat="Y"),
+                 job_title="과장", user_grade=6, password=pw, user_stat="Y"),
             User(userid="dev01", user_name="이개발", dept_name="개발팀",
                  job_title="선임", user_grade=1, password=pw, user_stat="Y"),
             User(userid="dev02", user_name="최코더", dept_name="개발팀",
@@ -122,25 +122,20 @@ def migrate(db):
         db.execute(text("ALTER TABLE users ADD COLUMN work_hours_day REAL"))
     if "duty_class" not in cols:
         db.execute(text("ALTER TABLE users ADD COLUMN duty_class TEXT"))
-    # 담당분류코드는 등급에서 자동 산출 (매 기동 시 동기화)
-    db.execute(text("""
-        UPDATE users SET duty_class = CASE
-            WHEN user_grade BETWEEN 0 AND 1 THEN 'A'
-            WHEN user_grade BETWEEN 2 AND 4 THEN 'D'
-            WHEN user_grade BETWEEN 5 AND 7 THEN 'B'
-            ELSE 'G' END"""))
     # 사용자 등급 체계 개편 마이그레이션 (schema_meta 의 grade_scheme 버전으로 1회만 실행)
     # v1: 2=IT담당자,3=현업담당자,4=일반개발자 -> v2: 2=일반개발자,5=IT,7=현업
-    # v3(현재): 3=개발매니저,4=일반개발자,5=IT,7=현업
+    # v3: 3=개발매니저,4=일반개발자,5=IT,7=현업
+    # v4(현재): 6=현업담당자,7=협력업체,8=거래처 — 구 7(현업)을 6으로 이관
     db.execute(text(
         "CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT)"))
-    if not db.execute(text(
-            "SELECT value FROM schema_meta WHERE key='grade_scheme'")).scalar():
-        # v1 체계 판별: 3·4 등급이 있고 5·7 등급이 없어야 함 (v3에도 3·4가 있으므로)
+    scheme = db.execute(text(
+        "SELECT value FROM schema_meta WHERE key='grade_scheme'")).scalar()
+    if not scheme:
+        # v1 체계 판별: 3·4 등급이 있고 5·6·7 등급이 없어야 함 (v3 이후에도 3·4 존재)
         has_34 = db.execute(text(
             "SELECT 1 FROM users WHERE user_grade IN (3, 4) LIMIT 1")).first()
         has_57 = db.execute(text(
-            "SELECT 1 FROM users WHERE user_grade IN (5, 7) LIMIT 1")).first()
+            "SELECT 1 FROM users WHERE user_grade IN (5, 6, 7) LIMIT 1")).first()
         if has_34 and not has_57:
             # v1 -> v2
             db.execute(text("""
@@ -153,6 +148,19 @@ def migrate(db):
         db.execute(text("UPDATE users SET user_grade = 4 WHERE user_grade = 2"))
         db.execute(text(
             "INSERT INTO schema_meta (key, value) VALUES ('grade_scheme', '3')"))
+        scheme = "3"
+    if scheme == "3":
+        # v3 -> v4: 현업담당자 7 -> 6 (신 체계에서 7은 협력업체)
+        db.execute(text("UPDATE users SET user_grade = 6 WHERE user_grade = 7"))
+        db.execute(text(
+            "UPDATE schema_meta SET value = '4' WHERE key = 'grade_scheme'"))
+    # 담당분류코드는 등급에서 자동 산출 (매 기동 시 동기화, 등급 이관 이후 실행)
+    db.execute(text("""
+        UPDATE users SET duty_class = CASE
+            WHEN user_grade BETWEEN 0 AND 1 THEN 'A'
+            WHEN user_grade BETWEEN 2 AND 4 THEN 'D'
+            WHEN user_grade BETWEEN 5 AND 8 THEN 'B'
+            ELSE 'G' END"""))
     cols = {r[1] for r in db.execute(text("PRAGMA table_info(tasks)"))}
     if "work_userid" not in cols:
         db.execute(text("ALTER TABLE tasks ADD COLUMN work_userid TEXT"))

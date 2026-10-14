@@ -155,11 +155,13 @@ export const GRADE_LABEL = {
   3: '개발매니저',
   4: '일반개발자',
   5: 'IT업무담당자',
-  7: '현업담당자',
+  6: '현업담당자',
+  7: '협력업체',
+  8: '거래처',
   9: '기타사용자',
 }
 
-// 담당분류코드: A-어드민(0~1), D-개발담당(2~4), B-업무담당(5~7), G-기타(8~9)
+// 담당분류코드: A-어드민(0~1), D-개발담당(2~4), B-업무담당(5~8), G-기타(9)
 export const DUTY_LABEL = {
   A: '어드민',
   D: '개발담당',
@@ -167,7 +169,7 @@ export const DUTY_LABEL = {
   G: '기타',
 }
 export const dutyOfGrade = g =>
-  g == null ? null : g <= 1 ? 'A' : g <= 4 ? 'D' : g <= 7 ? 'B' : 'G'
+  g == null ? null : g <= 1 ? 'A' : g <= 4 ? 'D' : g <= 8 ? 'B' : 'G'
 
 // 작업자(개발자) 대상 판별: 개발담당(D) + 수석개발자(등급1)
 export const isDevGrade = g => g === 1 || dutyOfGrade(g) === 'D'

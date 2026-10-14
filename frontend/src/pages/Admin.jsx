@@ -60,8 +60,8 @@ const canTask = t => isStaff() || t.work_userid === myId() ||
 // admin 계정은 본인 외에는 수정 불가 (수석개발자 포함)
 const isProtectedUser = u => u.userid === 'admin' && myId() !== 'admin'
 // 등급별 관리 가능한 대상 등급 (백엔드 MANAGED_GRADES와 동일)
-// 0-관리자: 전체 / 1-수석개발자: 관리자(0) 외 전체 / 3-개발매니저: 일반개발자(4)만 / 5-IT담당자: 7·9
-const MANAGED_GRADES = { 0: [0, 1, 3, 4, 5, 7, 9], 1: [1, 3, 4, 5, 7, 9], 3: [4], 5: [7, 9] }
+// 0-관리자: 전체 / 1-수석개발자: 관리자(0) 외 전체 / 3-개발매니저: 일반개발자(4)만 / 5-IT담당자: 6·7·8·9
+const MANAGED_GRADES = { 0: [0, 1, 3, 4, 5, 6, 7, 8, 9], 1: [1, 3, 4, 5, 6, 7, 8, 9], 3: [4], 5: [6, 7, 8, 9] }
 const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_grade)
 
 // 비스태프 등급별 관리자 탭 접근
