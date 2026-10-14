@@ -24,6 +24,9 @@ export default function Kanban() {
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
   const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
+  // 요청일시 기간 필터: 구분(최근/지난) + 기간
+  const [reqDir, setReqDir] = useState(savedF.rdir || '')
+  const [reqPeriod, setReqPeriod] = useState(savedF.rperiod || '')
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
@@ -43,9 +46,19 @@ export default function Kanban() {
     const reqUid = resolveUserid(reqFilter, users)
     if (reqUid) params.req_userid = reqUid
     if (workerFilter) params.work_userid = workerFilter
+    // 요청일시 기간: 최근=기준시각 이후 / 지난=기준시각 이전
+    if (reqDir && reqPeriod) {
+      const base = new Date()
+      const v = parseInt(reqPeriod, 10)
+      if (reqPeriod.endsWith('m')) base.setMonth(base.getMonth() - v)
+      else base.setDate(base.getDate() - v)
+      const iso = base.toISOString().slice(0, 19).replace('T', ' ')
+      if (reqDir === 'recent') params.req_from = iso
+      else params.req_to = iso
+    }
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, siteFilter, typeFilter, reqFilter, workerFilter, users])
+  }, [q, siteFilter, typeFilter, reqFilter, workerFilter, reqDir, reqPeriod, users])
 
   useEffect(() => { load().catch(console.error) }, [load])
   useEffect(() => {
@@ -123,10 +136,34 @@ export default function Kanban() {
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
         />
+        <select value={reqDir} title="요청일시 구분"
+          onChange={e => { setReqDir(e.target.value); setReqPeriod('') }}>
+          <option value="">요청일시(전체)</option>
+          <option value="recent">최근</option>
+          <option value="past">지난</option>
+        </select>
+        <select value={reqPeriod} title="요청일시 기간" disabled={!reqDir}
+          onChange={e => setReqPeriod(e.target.value)}>
+          <option value="">기간(선택)</option>
+          {reqDir === 'recent' && (<>
+            <option value="1">1일</option>
+            <option value="3">3일</option>
+            <option value="7">1주일</option>
+            <option value="1m">1달</option>
+            <option value="3m">3달</option>
+          </>)}
+          {reqDir === 'past' && (<>
+            <option value="7">1주일</option>
+            <option value="1m">1달</option>
+            <option value="3m">3달</option>
+          </>)}
+        </select>
         <button onClick={() => {
-          saveFilter('kanban', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter })
+          saveFilter('kanban', { site: siteFilter, q, type: typeFilter, req: reqFilter,
+            worker: workerFilter, rdir: reqDir, rperiod: reqPeriod })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <span className="kb-total">총 {tasks.length}건</span>
         <button className="flow-btn" title="작업 처리 프로세스 보기"
           onClick={() => setFlowOpen(true)}>처리 프로세스</button>
         {err && <span className="err">{err}</span>}

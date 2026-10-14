@@ -141,6 +141,8 @@ def list_tasks(
     task_type: str = Query(None),
     req_userid: str = Query(None),
     work_userid: str = Query(None),
+    req_from: datetime = Query(None, description="요청일시 이후"),
+    req_to: datetime = Query(None, description="요청일시 이전"),
     db: Session = Depends(get_db),
 ):
     auto_start_due_tasks(db)   # 예정시작 지난 대기 작업은 자동으로 작업중 전이
@@ -154,6 +156,12 @@ def list_tasks(
 
     if work_userid:
         query = query.filter(Task.work_userid == work_userid)
+
+    if req_from:
+        query = query.filter(Task.req_date >= req_from)
+
+    if req_to:
+        query = query.filter(Task.req_date <= req_to)
 
     if task_type:
         types = [s for s in str(task_type).split(',') if s]
