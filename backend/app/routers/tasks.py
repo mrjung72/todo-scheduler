@@ -11,9 +11,10 @@ from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail, TaskChgLogOut
 from ..scheduler import (
     recalculate, get_calendar_map, get_holiday_map, get_user_hours_map,
     add_work_hours, workday_cal, daily_breakdown, has_workday_between,
-    is_working_day, FREE_DAY_STAT, WORK_HOURS_PER_DAY,
+    is_working_day, FREE_DAY_STAT, WORK_HOURS_PER_DAY, elapsed_work_end,
 )
-from ..statusflow import apply_task_stat_change, auto_start_due_tasks
+from ..statusflow import (apply_task_stat_change, auto_start_due_tasks,
+                          auto_finish_due_tasks)
 from ..security import get_current_user, check_task_access, require_staff
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -146,6 +147,7 @@ def list_tasks(
     db: Session = Depends(get_db),
 ):
     auto_start_due_tasks(db)   # 예정시작 지난 대기 작업은 자동으로 작업중 전이
+    auto_finish_due_tasks(db)  # 종료예상 경과한 작업중·단순업무중은 자동 완료
     query = _detail_query(db)
 
     if siteid:
@@ -305,6 +307,9 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     restricted = {"task_name", "task_type", "priority", "req_userid", "itos_userid",
                   "work_hours_estimated", "work_userid"}
     eff_stat = new_stat if new_stat is not None else obj.task_stat
+    # 예상작업시간은 작업중(P)·단순업무중(O, 비스케쥴링)에서도 변경 가능
+    if eff_stat == "P" or (obj.schedule_apply == "N" and eff_stat == "O"):
+        restricted = restricted - {"work_hours_estimated"}
     # 휴일작업은 상태와 무관하게 자유 수정 가능
     if not obj.holiday_work and eff_stat not in ("R", "C", "W") and \
             any(f in data and data[f] != getattr(obj, f) for f in restricted):
@@ -324,8 +329,8 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     # 스케쥴적용 여부 변경 시 상태변경이력 초기화 — 이전 경로로 되돌릴 수 없게 한다
     if sched_chg:
         db.query(TaskChgLog).filter(TaskChgLog.taskid == taskid).delete()
-    # 일반 작업은 시작일시를 휴일에 설정 불가
-    if "task_start_date" in data:
+    # 일반 작업은 시작일시를 휴일에 설정 불가 (비스케쥴링 작업 제외)
+    if "task_start_date" in data and obj.schedule_apply != "N":
         _check_start_not_holiday(db, obj.holiday_work, obj.task_start_date)
     # 휴일작업은 기간에 근무일을 포함할 수 없음 (공휴일 등 H 등록일은 허용)
     if obj.holiday_work and has_workday_between(
@@ -344,14 +349,20 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     # (휴일작업은 종료일시를 직접 입력하므로 자동 재계산 제외)
     if "work_hours_estimated" in data and obj.task_start_date \
             and not obj.holiday_work:
-        cal = get_calendar_map(db)
-        hol = get_holiday_map(db)
-        uid = obj.work_userid or ""
-        # 고정 시작일이 휴일이면 그날은 경과시간 그대로 적용
-        cal_f = workday_cal(cal, obj.task_start_date.date())
-        obj.task_end_date_estimated = add_work_hours(
-            obj.task_start_date, obj.work_hours_estimated or 0,
-            cal_f, hol, uid, get_user_hours_map(db))
+        if obj.schedule_apply == "N":
+            # 비스케쥴링 작업: 종료예상 = 시작 + 예상시간 (휴가 제외 경과시간)
+            obj.task_end_date_estimated = elapsed_work_end(
+                obj.task_start_date, obj.work_hours_estimated or 0,
+                get_holiday_map(db), obj.work_userid)
+        else:
+            cal = get_calendar_map(db)
+            hol = get_holiday_map(db)
+            uid = obj.work_userid or ""
+            # 고정 시작일이 휴일이면 그날은 경과시간 그대로 적용
+            cal_f = workday_cal(cal, obj.task_start_date.date())
+            obj.task_end_date_estimated = add_work_hours(
+                obj.task_start_date, obj.work_hours_estimated or 0,
+                cal_f, hol, uid, get_user_hours_map(db))
     db.commit()
     db.refresh(obj)
     return obj
@@ -411,10 +422,15 @@ def set_start(taskid: int, body: StartSet, db: Session = Depends(get_db),
     uid = task.work_userid or ""
     # 입력값 그대로 저장 (휴일/근무시간 스냅 없음). 지정일이 휴일이면
     # 근무구간을 무시하고 그날의 경과시간 그대로 작업시간을 적용해 종료를 계산
-    _check_start_not_holiday(db, task.holiday_work, body.start_datetime)
+    if task.schedule_apply != 'N':   # 비스케쥴링 작업은 휴일 제약 없음
+        _check_start_not_holiday(db, task.holiday_work, body.start_datetime)
     task.task_start_date = body.start_datetime
     task.start_fixed = 1
-    if task.holiday_work:
+    if task.schedule_apply == 'N':
+        # 비스케쥴링 작업: 종료예상 = 시작 + 예상시간 (휴가 제외 경과시간)
+        task.task_end_date_estimated = elapsed_work_end(
+            body.start_datetime, task.work_hours_estimated or 0, hol, uid)
+    elif task.holiday_work:
         # 휴일작업은 종료일시를 직접 입력 — 자동 재계산 없이 근무일 포함만 검증
         if has_workday_between(
                 cal, task.task_start_date, task.task_end_date_estimated):

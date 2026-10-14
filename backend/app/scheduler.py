@@ -213,6 +213,39 @@ def workday_cal(cal: dict, d: date) -> dict:
     return c
 
 
+def elapsed_work_end(start: datetime, hours: float, hol: dict = None,
+                     userid=None) -> datetime:
+    """비스케쥴링 작업 종료예상: 근무구간·공휴일 무관하게 경과시간 기준으로
+    hours 만큼 진행한 시각. 작업자 휴가는 제외한다 —
+    종일(A)은 하루 전체, 일부 휴가는 그 시간만큼 하루 용량에서 차감."""
+    if not start or (hours or 0) <= 0:
+        return start
+    remaining = float(hours)
+    cur = start
+    uid = userid or ""
+    hol = hol or {}
+    for _ in range(366 * 5):
+        d = cur.date()
+        day0 = datetime.combine(d, time(0, 0))
+        day_end = day0 + timedelta(days=1)
+        h = hol.get((uid, d.strftime("%Y%m%d")))
+        cap = 24.0
+        if h:
+            cat, hrs = h[0], h[1] or 0
+            cap = 0.0 if cat == "A" or hrs >= 24 else 24.0 - hrs
+        used = (cur - day0).total_seconds() / 3600.0
+        avail = max(0.0, cap - used)
+        if avail <= 0:
+            cur = day_end
+            continue
+        cur = cur + timedelta(hours=min(remaining, avail))
+        remaining -= min(remaining, avail)
+        if remaining <= 1e-9:
+            return cur.replace(microsecond=0)
+        cur = day_end
+    raise RuntimeError("작업 가능한 시각을 찾을 수 없습니다 (휴가 설정 확인)")
+
+
 def next_work_start(dt: datetime, cal: dict, hol: dict = None, userid=None,
                     uhours: dict = None, busy: list = None) -> datetime:
     """dt 이후(포함) 가장 빠른 근무 시작 시각을 반환."""
@@ -419,6 +452,18 @@ def recalculate(db: Session, only_userid: str = None) -> tuple:
             task.task_end_date_estimated = end
             busy.append((start, end))
             updated += 1
+
+    # 단순업무중(O) 비스케쥴링 작업: 종료예상 = 시작일시 + 예상시간(휴가 제외)
+    o_q = (db.query(Task)
+           .filter(Task.task_stat == "O", Task.schedule_apply == "N",
+                   Task.task_start_date.isnot(None)))
+    if only_userid:
+        o_q = o_q.filter(Task.work_userid == only_userid)
+    for t in o_q.all():
+        t.task_end_date_estimated = elapsed_work_end(
+            t.task_start_date, t.work_hours_estimated or 0, hol,
+            t.work_userid)
+        updated += 1
 
     db.commit()
     return updated, 0

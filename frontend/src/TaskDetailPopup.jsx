@@ -113,6 +113,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const endEst = tf.task_end_date_estimated ?? task.task_end_date_estimated
   const startFixed = tf.start_fixed ?? task.start_fixed
   const schedApply = tf.schedule_apply ?? task.schedule_apply ?? 'Y'
+  // 비스케쥴링(단순업무중) 작업은 시작일시를 O 상태에서도 변경 가능
+  const canEditPeriod = canEditFields ||
+    (canEdit && schedApply === 'N' && task.task_stat === 'O')
+  // 예상시간은 작업중(P)·단순업무중(O, 비스케쥴링)에서도 변경 가능
+  const canEditHours = canEditFields ||
+    (canEdit && (task.task_stat === 'P' ||
+      (schedApply === 'N' && task.task_stat === 'O')))
   const estHours = tf.work_hours_estimated ?? task.work_hours_estimated
   const prio = tf.priority ?? task.priority
   const fileRef = useRef(null)
@@ -378,7 +385,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 {estHours}h
                 {workDays != null && ` (총 ${workDays}일)`}
                 {dayHours != null && ` / 하루 ${dayHours}시간`}
-                {canEditFields &&
+                {canEditHours &&
                   <button className="link"
                     onClick={() => setHoursEdit(estHours)}>수정</button>}
               </>) : (<>
@@ -420,7 +427,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 {fmtDT(startDate) || '-'}
                 {!!startFixed &&
                   <span className="badge" title="시작일시가 고정되어 재계산에도 유지됩니다">고정</span>}
-                {canEditFields &&
+                {canEditPeriod &&
                   <button className="link" onClick={() =>
                     setStartEdit(startDate ? startDate.slice(0, 16) : '')}>수정</button>}
                 {canEditFields && !!startFixed &&
@@ -433,7 +440,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <button className="link" onClick={() => setStartEdit(null)}>취소</button>
               </>)}</p>
               <p><b>종료(예상)</b> {fmtDT(endEst) || '-'}
-                {canEdit && schedApply !== 'N' &&
+                {canEdit &&
                   <button onClick={doRecalc} disabled={recalcBusy}
                     style={{ marginLeft: 12 }}
                     title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}

@@ -308,7 +308,7 @@ async def startup():
 def _start_auto_transition():
     """예정 시작일시가 지난 대기중 작업을 60초 주기로 자동 작업중 전이."""
     import asyncio
-    from .statusflow import auto_start_due_tasks
+    from .statusflow import auto_start_due_tasks, auto_finish_due_tasks
 
     async def loop():
         while True:
@@ -316,6 +316,7 @@ def _start_auto_transition():
             db = SessionLocal()
             try:
                 auto_start_due_tasks(db)
+                auto_finish_due_tasks(db)   # 종료예상 경과 작업은 자동 작업완료
             except Exception:
                 db.rollback()
             finally:

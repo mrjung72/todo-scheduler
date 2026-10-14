@@ -30,7 +30,7 @@
   - 모든 상태 변경을 task_chg_log 에 기록.
 """
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 from .models import TaskChgLog, Task
 from .scheduler import (
     get_calendar_map, get_holiday_map, get_user_hours_map, workday_cal,
-    work_hours_between,
+    work_hours_between, elapsed_work_end,
 )
 
 ALLOWED_STAT = {
@@ -90,6 +90,10 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
             raise HTTPException(
                 400, "스케쥴적용 작업은 단순업무중으로 변경할 수 없습니다. "
                      "대기중으로 변경하세요")
+        if prev == "C" and new_stat == "O" and not task.task_start_date:
+            raise HTTPException(
+                400, "검토중 상태에서 작업시작일시를 입력한 후에 "
+                     "단순업무중으로 변경할 수 있습니다")
         if prev == "C" and new_stat == "W" and task.schedule_apply == "N":
             raise HTTPException(
                 400, "스케쥴미적용 작업은 대기중으로 변경할 수 없습니다. "
@@ -120,7 +124,13 @@ def apply_task_stat_change(db: Session, task: Task, new_stat: str,
         task.task_end_date_estimated = None
         task.start_fixed = 0
     if new_stat == "O":
-        task.task_start_date = now     # 단순업무중 진입 = 즉시 작업 시작
+        # 단순업무중 진입 — 검토중에서 입력한 시작일시를 사용하고,
+        # 종료예상일시는 시작 + 예상작업시간(단순 가산)으로 잡는다
+        if not task.task_start_date:
+            task.task_start_date = now
+        task.task_end_date_estimated = elapsed_work_end(
+            task.task_start_date, task.work_hours_estimated or 0,
+            get_holiday_map(db), task.work_userid)
     if new_stat == "F":
         if not task.task_start_date:
             task.task_start_date = now
@@ -165,3 +175,24 @@ def auto_start_due_tasks(db: Session) -> int:
     if due:
         db.commit()
     return len(due)
+
+
+def auto_finish_due_tasks(db: Session) -> int:
+    """종료예상일시가 지난 작업중(P)·단순업무중(O) 작업을 작업완료(F)로 자동 전이.
+    전이된 작업 수를 반환한다."""
+    now = datetime.now().replace(microsecond=0)
+    n = 0
+    for task in db.query(Task).filter(Task.task_stat.in_(["P", "O"])).all():
+        end = task.task_end_date_estimated
+        if end is None and task.task_stat == "O" and task.task_start_date:
+            # 비스케쥴링 작업: 종료예상 미설정 시 시작 + 예상시간(휴가 제외)
+            end = elapsed_work_end(task.task_start_date,
+                                   task.work_hours_estimated or 0,
+                                   get_holiday_map(db), task.work_userid)
+        if end and end <= now:
+            apply_task_stat_change(db, task, "F",
+                                   remark="종료예상 경과로 자동 완료")
+            n += 1
+    if n:
+        db.commit()
+    return n

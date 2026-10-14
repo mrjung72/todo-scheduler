@@ -16,9 +16,9 @@ from ..schemas import WorkLogCreate, WorkLogUpdate, WorkLogOut
 from ..security import get_current_user, check_owner_or_admin, require_staff
 from ..scheduler import (
     get_calendar_map, get_holiday_map, get_user_hours_map, workday_cal,
-    daily_breakdown, has_workday_between,
+    daily_breakdown, has_workday_between, elapsed_work_end,
 )
-from ..statusflow import auto_start_due_tasks
+from ..statusflow import auto_start_due_tasks, auto_finish_due_tasks
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
@@ -66,6 +66,7 @@ def _busy_for(task, all_tasks) -> list:
 def calendar_events(db: Session = Depends(get_db)):
     """FullCalendar용 이벤트: 작업 + 담당자/사이트 정보 (대기중/작업중만)."""
     auto_start_due_tasks(db)   # 예정시작 지난 대기 작업은 자동으로 작업중 전이
+    auto_finish_due_tasks(db)  # 종료예상 경과한 작업중·단순업무중은 자동 완료
     WorkUser = aliased(User)
     ReqUser = aliased(User)
     rows = (
@@ -93,8 +94,9 @@ def calendar_events(db: Session = Depends(get_db)):
             continue
         # 단순업무중(O)은 스케줄링과 무관 — 종료예상이 없으면 시작+예상시간으로 표시
         end_est = task.task_end_date_estimated or \
-            (task.task_start_date +
-             timedelta(hours=task.work_hours_estimated or 0)
+            (elapsed_work_end(task.task_start_date,
+                              task.work_hours_estimated or 0, hol,
+                              task.work_userid)
              if task.task_stat == "O" else None)
         if not end_est:
             continue
