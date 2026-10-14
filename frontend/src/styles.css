@@ -541,6 +541,21 @@ td.req-col input { width: 120px; }
 .home-stat.st-O { background: #cffafe; color: #0e7490; }
 .home-card .kb-meta .kb-req { font-size: 11px; }
 .home-req-date { font-size: 12px; color: #475569; margin-left: 4px; flex-shrink: 0; }
+
+/* 칸반 처리 프로세스 도식 팝업 */
+.flow-btn { margin-left: auto; }
+.flow-popup { max-width: 620px; }
+.flow-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.flow-cap { flex: 0 0 96px; font-size: 12px; font-weight: 600; color: #475569; }
+.flow-line { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.flow-line .home-stat { font-size: 12px; padding: 3px 8px; border-radius: 10px; }
+.flow-line i { font-style: normal; color: #94a3b8; font-weight: 700; }
+.flow-note {
+  display: flex; flex-direction: column; gap: 5px;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;
+  font-size: 12px; color: #475569;
+}
+.flow-note .home-stat { font-size: 11px; padding: 1px 6px; border-radius: 8px; margin-right: 4px; }
 .home-empty { text-align: center; color: #9ca3af; padding: 40px 0; }
 
 /* 게시판 */

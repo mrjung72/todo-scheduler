@@ -28,6 +28,7 @@ export default function Kanban() {
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
   const [selId, setSelId] = useState(null) // 선택한 카드 (배경 강조, 드래그 후에도 유지)
+  const [flowOpen, setFlowOpen] = useState(false) // 작업 처리 프로세스 팝업
 
   // 카드 이동 권한: 관리자(0) 전부, 개발자(1)는 본인 작업만
   const canMove = t => me && ([0, 1].includes(me.user_grade) ||
@@ -126,6 +127,8 @@ export default function Kanban() {
           saveFilter('kanban', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button className="flow-btn" title="작업 처리 프로세스 보기"
+          onClick={() => setFlowOpen(true)}>처리 프로세스</button>
         {err && <span className="err">{err}</span>}
       </div>
 
@@ -187,6 +190,44 @@ export default function Kanban() {
         ))}
       </div>
       {sel && <TaskDetailPopup task={sel} onClose={() => setSel(null)} onChanged={load} />}
+      {flowOpen && (
+        <div className="popup" onClick={() => setFlowOpen(false)}>
+          <div className="popup-body flow-popup" onClick={e => e.stopPropagation()}>
+            <h3 className="popup-title">작업 처리 프로세스</h3>
+            <div className="flow-row">
+              <span className="flow-cap">스케쥴링 작업</span>
+              <div className="flow-line">
+                <span className="home-stat st-R">작업요청</span><i>→</i>
+                <span className="home-stat st-C">검토중</span><i>→</i>
+                <span className="home-stat st-W">대기중</span><i>→</i>
+                <span className="home-stat st-P">작업중</span><i>→</i>
+                <span className="home-stat st-F">작업완료</span><i>→</i>
+                <span className="home-stat st-Z">최종완료</span>
+              </div>
+            </div>
+            <div className="flow-row">
+              <span className="flow-cap">비스케쥴링 작업</span>
+              <div className="flow-line">
+                <span className="home-stat st-R">작업요청</span><i>→</i>
+                <span className="home-stat st-C">검토중</span><i>→</i>
+                <span className="home-stat st-O">단순업무중</span><i>→</i>
+                <span className="home-stat st-F">작업완료</span><i>→</i>
+                <span className="home-stat st-Z">최종완료</span>
+              </div>
+            </div>
+            <div className="flow-note">
+              <span><span className="home-stat st-H">작업중단</span> 작업중 일시 중단 — 작업중으로 복귀 가능</span>
+              <span><span className="home-stat st-X">작업반려</span> 검토중·대기중·작업중·단순업무중에서 반려 가능</span>
+              <span>검토중까지는 <b>스케쥴적용 여부</b>로 처리 경로(스케쥴링/비스케쥴링)를 전환할 수 있으며,
+                변경 시 상태변경이력이 초기화됩니다.</span>
+              <span>최종완료된 작업은 더 이상 상태를 변경할 수 없습니다.</span>
+            </div>
+            <div className="popup-btns">
+              <button onClick={() => setFlowOpen(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
