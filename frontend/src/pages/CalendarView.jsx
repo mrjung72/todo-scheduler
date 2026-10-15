@@ -4,7 +4,8 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import api, { taskColor, DAY_STAT_LABEL, STAT_LABEL, TASK_TYPE_LABEL,
-  dutyOfGrade, isDevWorker, resolveUserid, loadFilter, saveFilter } from '../api'
+  dutyOfGrade, isDevWorker, resolveUserid, loadFilter, saveFilter,
+  stickerTip } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import ReqUserInput from '../ReqUserInput'
 
@@ -399,6 +400,10 @@ export default function CalendarView() {
               {csr && <span className="csr">{csr}</span>}
               {req && <span className="ev-req">{req}</span>}
               <span className="ev-title">{arg.event.title}</span>
+              {!!arg.event.extendedProps.stickers?.length &&
+                <span className="ev-stickers"
+                  title={stickerTip(arg.event.extendedProps.stickers)}>
+                  {arg.event.extendedProps.stickers.map(s => s.emoji).join(' ')}</span>}
               {w && <span className="ev-worker">{w}</span>}
               {stat && <span className="ev-stat">{stat}</span>}
             </div>

@@ -6,8 +6,9 @@ from pydantic import BaseModel
 
 from ..database import get_db
 from ..models import (Task, User, Site, TaskChgLog, WorkScheduleLog,
-                      TaskAttachFile)
-from ..schemas import TaskCreate, TaskUpdate, TaskOut, TaskDetail, TaskChgLogOut
+                      TaskAttachFile, TaskSticker)
+from ..schemas import (TaskCreate, TaskUpdate, TaskOut, TaskDetail,
+                       TaskChgLogOut, StickerIn, StickerOut)
 from ..scheduler import (
     recalculate, get_calendar_map, get_holiday_map, get_user_hours_map,
     add_work_hours, workday_cal, daily_breakdown, has_workday_between,
@@ -112,7 +113,8 @@ def _revert_ok(task: Task, prev_stat, last_chg, now) -> bool:
 
 
 def _to_detail(row, cal: dict = None, prev_stat: str = None,
-               can_revert: bool = False, stat_chg=None) -> TaskDetail:
+               can_revert: bool = False, stat_chg=None,
+               stickers=None) -> TaskDetail:
     (task, req_name, req_dept, req_title, itos_name,
      work_name, work_dept, work_title, work_hours_day, site_name) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
@@ -130,6 +132,7 @@ def _to_detail(row, cal: dict = None, prev_stat: str = None,
     data["prev_stat"] = prev_stat
     data["can_revert"] = can_revert
     data["stat_chg_date"] = stat_chg
+    data["stickers"] = stickers
     return TaskDetail(**data)
 
 
@@ -217,11 +220,20 @@ def list_tasks(
                 last_map[tid] = cd
             elif st != cur_map[tid] and tid not in prev_map:
                 prev_map[tid] = st     # 현재와 다른 가장 최근 상태
+    # 스티커 (이모지+메모) 일괄 조회 (등록 순)
+    sticker_map = {}
+    if tids:
+        for tid, emo, memo in (db.query(TaskSticker.taskid, TaskSticker.emoji,
+                                       TaskSticker.memo)
+                               .filter(TaskSticker.taskid.in_(tids))
+                               .order_by(TaskSticker.stickerid).all()):
+            sticker_map.setdefault(tid, []).append({"emoji": emo, "memo": memo})
     now = datetime.now().replace(microsecond=0)
     return [_to_detail(r, cal, prev_map.get(r[0].taskid),
                        _revert_ok(r[0], prev_map.get(r[0].taskid),
                                   last_map.get(r[0].taskid), now),
-                       last_map.get(r[0].taskid))
+                       last_map.get(r[0].taskid),
+                       sticker_map.get(r[0].taskid))
             for r in rows]
 
 
@@ -538,4 +550,50 @@ def reset_task_his(taskid: int, db: Session = Depends(get_db),
                       work_hours=0, remark="이력 초기화",
                       work_userid=me.userid,
                       create_date=datetime.now().replace(microsecond=0)))
+    db.commit()
+
+
+@router.get("/{taskid}/stickers", response_model=list[StickerOut])
+def list_stickers(taskid: int, db: Session = Depends(get_db)):
+    """작업 스티커 목록 (등록 순)."""
+    rows = (db.query(TaskSticker, User.user_name)
+            .outerjoin(User, User.userid == TaskSticker.userid)
+            .filter(TaskSticker.taskid == taskid)
+            .order_by(TaskSticker.stickerid).all())
+    return [{**{c.name: getattr(s, c.name) for c in TaskSticker.__table__.columns},
+             "user_name": name} for s, name in rows]
+
+
+@router.post("/{taskid}/stickers", response_model=StickerOut, status_code=201)
+def add_sticker(taskid: int, body: StickerIn,
+                db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
+    """스티커 추가 — 작업 편집권한자만."""
+    obj = db.get(Task, taskid)
+    if not obj:
+        raise HTTPException(404, "작업을 찾을 수 없습니다")
+    check_task_access(me, obj.work_userid, obj.siteid)
+    s = TaskSticker(taskid=taskid, emoji=body.emoji.strip(),
+                    memo=(body.memo or '').strip() or None,
+                    userid=me.userid,
+                    create_date=datetime.now().replace(microsecond=0))
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return {**{c.name: getattr(s, c.name) for c in TaskSticker.__table__.columns},
+            "user_name": me.user_name}
+
+
+@router.delete("/{taskid}/stickers/{stickerid}", status_code=204)
+def del_sticker(taskid: int, stickerid: int,
+                db: Session = Depends(get_db),
+                me: User = Depends(get_current_user)):
+    """스티커 삭제 — 작업 편집권한자만."""
+    s = db.get(TaskSticker, stickerid)
+    if not s or s.taskid != taskid:
+        raise HTTPException(404, "스티커를 찾을 수 없습니다")
+    obj = db.get(Task, taskid)
+    check_task_access(me, obj.work_userid if obj else None,
+                      obj.siteid if obj else None)
+    db.delete(s)
     db.commit()

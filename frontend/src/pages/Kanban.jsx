@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, isDevWorker,
-  resolveUserid, loadFilter, saveFilter } from '../api'
+  resolveUserid, loadFilter, saveFilter, stickerTip } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import ReqUserInput from '../ReqUserInput'
 
@@ -261,6 +261,9 @@ export default function Kanban() {
                         <span>{t.req_user_name || t.req_userid || '-'}</span>
                         {t.req_date &&
                           <span>{(t.req_date || '').slice(0, 19).replace('T', ' ')}</span>}
+                        {!!t.stickers?.length &&
+                          <span className="kb-stickers" title={stickerTip(t.stickers)}>
+                            {t.stickers.map(s => s.emoji).join(' ')}</span>}
                       </div>
                       <button className="kb-detail" title="작업 상세"
                         onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>

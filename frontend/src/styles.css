@@ -266,6 +266,7 @@ table.grid td.clickable:hover { background: #eff6ff; }
   flex: 1; min-width: 0;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
+.kb-stickers { flex-shrink: 0; margin-left: 6px; font-size: 14px; }
 .kb-site { color: #2563eb; margin-right: 5px; }
 .kb-type {
   font-size: 10px; font-weight: 600; color: #7c3aed;
@@ -399,6 +400,44 @@ pre.log-detail.hljs {
   font-size: 17px; font-weight: 700; margin-top: 5px;
   display: flex; align-items: center; gap: 6px;
 }
+.popup-title .pt-stickers { font-size: 19px; flex-shrink: 0; }
+
+/* 스티커 탭 — 이모지 선택 목록과 붙은 스티커 */
+.stk-picker {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;
+}
+.stk-add { margin-bottom: 10px; }
+.stk-memo-in {
+  width: 100%; box-sizing: border-box;
+  font-size: 12px; padding: 5px 8px;
+  border: 1px solid #e2e8f0; border-radius: 5px;
+}
+.stk-btn {
+  font-size: 20px; line-height: 1; padding: 5px 7px; cursor: pointer;
+  border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;
+}
+.stk-btn:hover { background: #e2e8f0; transform: scale(1.12); }
+.stk-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.stk-item {
+  position: relative; line-height: 1;
+  display: inline-flex; flex-direction: column; align-items: center;
+  padding: 14px 14px 8px 8px;
+  border: 1px solid #cbd5e1; border-radius: 8px; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.stk-item > i { font-style: normal; font-size: 26px; }
+.stk-item .stk-memo {
+  font-style: normal; font-size: 11px; color: #475569;
+  max-width: 120px; margin-top: 4px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.stk-del {
+  position: absolute; top: 3px; right: 3px;
+  width: 16px; height: 16px; border-radius: 50%; border: none;
+  font-size: 9px; line-height: 1; cursor: pointer;
+  background: #ef4444; color: #fff; opacity: .35;
+}
+.stk-item:hover .stk-del, .stk-del:hover { opacity: 1; }
 /* 복사 버튼 (작업상세 타이틀 등) — 배경은 작업색 보색을 인라인으로 적용 */
 .copy-btn {
   border: none; background: rgba(255,255,255,.25); border-radius: 3px;

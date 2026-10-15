@@ -113,6 +113,17 @@ class TaskChgLog(Base):
     create_date = Column(DateTime, default=datetime.now)
 
 
+class TaskSticker(Base):
+    """작업 스티커 — 이모지 마커 (작업 편집권한자만 등록/삭제)."""
+    __tablename__ = "task_stickers"
+    stickerid = Column(Integer, primary_key=True, autoincrement=True)
+    taskid = Column(Integer, ForeignKey("tasks.taskid"))
+    emoji = Column(Text, nullable=False)
+    memo = Column(Text)                               # 스티커 메모 (선택)
+    userid = Column(Text, ForeignKey("users.userid"))   # 등록자
+    create_date = Column(DateTime, default=datetime.now)
+
+
 class TaskAttachFile(Base):
     __tablename__ = "task_attach_files"
     fileid = Column(Integer, primary_key=True, autoincrement=True)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor,
-  loadFilter, saveFilter } from '../api'
+  loadFilter, saveFilter, stickerTip } from '../api'
 
 /* 모바일 스타일 메인 화면: 작업중(P) 먼저, 그 아래 대기중(W)을 우선순위순으로 표시 */
 export default function Home() {
@@ -62,6 +62,9 @@ export default function Home() {
               </div>
               <div className="kb-title">
                 <span className="kb-name" title={t.task_name}>{t.task_name}</span>
+                {!!t.stickers?.length &&
+                  <span className="kb-stickers" title={stickerTip(t.stickers)}>
+                    {t.stickers.map(s => s.emoji).join(' ')}</span>}
                 <span className="kb-req">{t.work_user_name || t.work_userid || '-'}</span>
                 <span className="home-req-date">{t.work_hours_estimated}h
                   {(t.work_hours_estimated &&

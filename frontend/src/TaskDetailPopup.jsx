@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtDTS, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
-  taskColor, taskColorComp, uploadWithProgress, downloadFile as dlFile } from './api'
+  taskColor, taskColorComp, uploadWithProgress, downloadFile as dlFile,
+  STICKER_EMOJIS, stickerTip } from './api'
 import ProgressBar from './ProgressBar'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
@@ -85,7 +86,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     task.work_userid === me.userid ||
     (me.user_grade === 4 && me.default_siteid && task.siteid === me.default_siteid))
   const canAttach = me && [0, 1].includes(me.user_grade)
-  const [btab, setBtab] = useState('req')    // 하단 블록 탭: req(요청내용+첨부) | his(작업이력) | chg(상태변경이력)
+  const [btab, setBtab] = useState('req')    // 하단 블록 탭: req(요청내용+첨부) | his(작업이력) | chg(상태변경이력) | stk(스티커)
+  const [stickers, setStickers] = useState(null)   // 스티커 목록 (탭 진입 시 로딩)
+  const [stkMemo, setStkMemo] = useState('')        // 스티커 메모 입력값
   const [daily, setDaily] = useState(null)
   const [his, setHis] = useState(null)
   const [logs, setLogs] = useState(null)
@@ -300,9 +303,30 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const selTab = tab => {
     setBtab(tab)
     if (tab === 'his' && !logs) loadLogs()
+    if (tab === 'stk' && !stickers) loadStickers()
     if (tab === 'chg' && !his)
       api.get(`/tasks/${task.taskid}/his`)
         .then(r => setHis(r.data)).catch(console.error)
+  }
+
+  // 스티커 탭 — 목록 조회 / 추가 / 삭제 (변경 시 카드 아이콘 갱신을 위해 onChanged 호출)
+  const loadStickers = () =>
+    api.get(`/tasks/${task.taskid}/stickers`)
+      .then(r => setStickers(r.data)).catch(console.error)
+  const addSticker = async emoji => {
+    try {
+      const memo = stkMemo.trim()
+      await api.post(`/tasks/${task.taskid}/stickers`,
+        { emoji, memo: memo || undefined })
+      setStkMemo('')
+      loadStickers(); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '스티커 등록에 실패했습니다') }
+  }
+  const delSticker = async stickerid => {
+    try {
+      await api.delete(`/tasks/${task.taskid}/stickers/${stickerid}`)
+      loadStickers(); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '스티커 삭제에 실패했습니다') }
   }
 
   // 상태변경이력 초기화 (스태프) — 현재 상태의 기준 이력 1건만 남김
@@ -359,6 +383,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 onClick={e => { e.stopPropagation(); revert() }}>↩ 되돌림</button>}
           </div>
           <div className="pt-row2">{task.task_name}
+            {!!(stickers || task.stickers)?.length &&
+              <span className="pt-stickers"
+                title={stickerTip(stickers || task.stickers)}>
+                {(stickers || task.stickers).map(s => s.emoji).join(' ')}</span>}
             <CopyBtn text={task.task_name || ''} title="작업명 복사"
               bg={taskColorComp(task.taskid)} /></div>
         </h3>
@@ -480,6 +508,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             onClick={() => selTab('his')}>작업이력</button>
           <button className={`btab${btab === 'chg' ? ' active' : ''}`}
             onClick={() => selTab('chg')}>상태변경이력</button>
+          <button className={`btab${btab === 'stk' ? ' active' : ''}`}
+            onClick={() => selTab('stk')}>스티커</button>
           {btab === 'req' && canEdit && reqEdit === null &&
             <button className="link req-edit-btn"
               onClick={() => setReqEdit(reqText)}>수정</button>}
@@ -563,6 +593,39 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        ) : btab === 'stk' ? (
+          <div className="popup-info req-info" ref={tabRef}
+            style={{ minHeight: minH || undefined }}>
+            {canEdit && (
+              <div className="stk-add">
+                <div className="stk-picker">
+                  {STICKER_EMOJIS.map(e => (
+                    <button type="button" key={e} className="stk-btn"
+                      title="스티커 추가" onClick={() => addSticker(e)}>{e}</button>
+                  ))}
+                </div>
+                <input className="stk-memo-in" maxLength={50}
+                  placeholder="스티커 메모 (선택) — 입력 후 이모지를 클릭하면 함께 붙습니다"
+                  value={stkMemo}
+                  onChange={e => setStkMemo(e.target.value)} />
+              </div>
+            )}
+            <div className="stk-list">
+              {(stickers || []).map(s => (
+                <span key={s.stickerid} className="stk-item"
+                  title={`${s.user_name || s.userid || '-'} · ${fmtDTS(s.create_date)}`}>
+                  <i>{s.emoji}</i>
+                  {s.memo && <em className="stk-memo">{s.memo}</em>}
+                  {canEdit &&
+                    <button type="button" className="stk-del" title="스티커 삭제"
+                      onClick={() => delSticker(s.stickerid)}>✕</button>}
+                </span>
+              ))}
+              {stickers && !stickers.length &&
+                <div className="empty">붙은 스티커가 없습니다</div>}
+              {!stickers && <div className="empty">불러오는 중…</div>}
             </div>
           </div>
         ) : (

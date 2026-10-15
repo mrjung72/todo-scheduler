@@ -216,3 +216,13 @@ export function taskColor(taskid) {
 export function taskColorComp(taskid) {
   return `hsl(${(taskHue(taskid) + 180) % 360}, 75%, 42%)`
 }
+
+// 작업 스티커 이모지 프리셋 — 상세 팝업 스티커 탭의 선택 목록
+export const STICKER_EMOJIS = [
+  '⭐', '🔥', '💥', '🚨', '⚠️', '🐛', '✅', '📌', '💡', '❗',
+  '❓', '⏳', '🔍', '🛠️', '🚀', '📞', '🤝', '💤', '♻️', '🧪',
+]
+
+// 스티커 툴팁: "이모지 메모"를 줄바꿈으로 나열
+export const stickerTip = stickers =>
+  (stickers || []).map(s => (s.memo ? `${s.emoji} ${s.memo}` : s.emoji)).join('\n')

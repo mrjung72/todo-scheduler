@@ -3,7 +3,7 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
   GRADE_LABEL, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
-  loadFilter, saveFilter, downloadFile, resolveUserid } from '../api'
+  loadFilter, saveFilter, downloadFile, resolveUserid, stickerTip } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
@@ -990,7 +990,10 @@ function TasksTab() {
                 </>) : (<>
                   <button type="button" className="link" title={t.task_name}
                     onClick={() => setSelTask(t)}>
-                    {t.task_name?.length > 25 ? t.task_name.slice(0, 25) + '…' : t.task_name}</button>
+                    {t.task_name?.length > 25 ? t.task_name.slice(0, 25) + '…' : t.task_name}
+                    {!!t.stickers?.length &&
+                      <span title={stickerTip(t.stickers)}>
+                        {' ' + t.stickers.map(s => s.emoji).join(' ')}</span>}</button>
                   {can(t) && (!!t.holiday_work || ['R', 'C', 'W'].includes(t.task_stat)) &&
                     <button type="button" title="작업명 수정"
                       onClick={() => setNameEdit({ taskid: t.taskid, value: t.task_name })}>수정</button>}

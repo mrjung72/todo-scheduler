@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -225,3 +225,26 @@ class TaskDetail(TaskOut):
     prev_stat: Optional[str] = None   # 직전 상태 (되돌리기용)
     can_revert: Optional[bool] = False   # 직전 상태로 되돌리기 가능 여부
     stat_chg_date: Optional[datetime] = None   # 현재 상태로 변경된 일시
+    stickers: Optional[List["StickerMini"]] = None   # 붙은 스티커 (이모지+메모)
+
+
+# ---------- task_stickers ----------
+class StickerMini(BaseModel):
+    emoji: str
+    memo: Optional[str] = None
+
+
+class StickerIn(BaseModel):
+    emoji: str = Field(min_length=1, max_length=10)
+    memo: Optional[str] = Field(default=None, max_length=50)
+
+
+class StickerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    stickerid: int
+    taskid: int
+    emoji: str
+    memo: Optional[str] = None
+    userid: Optional[str] = None
+    user_name: Optional[str] = None   # 등록자 이름 (조인)
+    create_date: Optional[datetime] = None

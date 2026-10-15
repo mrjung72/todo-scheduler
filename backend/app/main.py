@@ -184,6 +184,14 @@ def migrate(db):
     if "schedule_apply" not in cols:
         db.execute(text(
             "ALTER TABLE tasks ADD COLUMN schedule_apply TEXT DEFAULT 'Y'"))
+    # task_stickers.memo 추가
+    if "task_stickers" in {r[0] for r in db.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table'"))}:
+        cols = {r[1] for r in db.execute(
+            text("PRAGMA table_info(task_stickers)"))}
+        if "memo" not in cols:
+            db.execute(text(
+                "ALTER TABLE task_stickers ADD COLUMN memo TEXT"))
     # task_chg_log.work_userid 추가 (기존 이력은 작업의 현재 작업자로 백필)
     if "task_chg_log" in {r[0] for r in db.execute(
             text("SELECT name FROM sqlite_master WHERE type='table'"))}:

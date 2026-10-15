@@ -11,7 +11,7 @@ from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, aliased
 
 from ..database import get_db
-from ..models import WorkScheduleLog, TaskChgLog, Task, User, Site
+from ..models import WorkScheduleLog, TaskChgLog, Task, User, Site, TaskSticker
 from ..schemas import WorkLogCreate, WorkLogUpdate, WorkLogOut
 from ..security import get_current_user, check_owner_or_admin, require_staff
 from ..scheduler import (
@@ -88,6 +88,14 @@ def calendar_events(db: Session = Depends(get_db)):
     hol = get_holiday_map(db)
     uhours = get_user_hours_map(db)
     all_tasks = [r[0] for r in rows]
+    # 스티커 (이모지+메모) 일괄 조회 — 이벤트 바의 아이콘·툴팁용
+    sticker_map = {}
+    if all_tasks:
+        for tid, emo, memo in (db.query(
+                TaskSticker.taskid, TaskSticker.emoji, TaskSticker.memo)
+                .filter(TaskSticker.taskid.in_([t.taskid for t in all_tasks]))
+                .order_by(TaskSticker.stickerid).all()):
+            sticker_map.setdefault(tid, []).append({"emoji": emo, "memo": memo})
     events = []
     for (task, work_user_name, work_user_dept, work_user_title, work_hours_day,
          site_name, req_userid, req_user_name,
@@ -130,6 +138,7 @@ def calendar_events(db: Session = Depends(get_db)):
                 "start_fixed": task.start_fixed,
                 "holiday_work": task.holiday_work,
                 "schedule_apply": task.schedule_apply or "Y",
+                "stickers": sticker_map.get(task.taskid),
                 # 휴일작업인데 기간에 근무일 포함 시 경고 플래그
                 "weekday_included": bool(task.holiday_work) and
                     has_workday_between(cal, task.task_start_date,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor, isDevWorker,
-  resolveUserid, loadFilter, saveFilter } from '../api'
+  resolveUserid, loadFilter, saveFilter, stickerTip } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
@@ -147,7 +147,10 @@ export default function TaskList() {
                 {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
                 {!!t.weekday_included &&
                   <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
-                <button className="link" onClick={() => setSel(t)}>{t.task_name}</button></td>
+                <button className="link" onClick={() => setSel(t)}>{t.task_name}</button>
+                {!!t.stickers?.length &&
+                  <span className="kb-stickers" title={stickerTip(t.stickers)}>
+                    {t.stickers.map(s => s.emoji).join(' ')}</span>}</td>
               <td className="r fit">{t.work_hours_estimated}</td>
               <td className="c">{t.req_userid
                 ? <button className="link" onClick={() => setUserSel(t.req_userid)}>{t.req_user_name || t.req_userid}</button>
