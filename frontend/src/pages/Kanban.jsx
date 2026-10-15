@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT, taskColor, isDevWorker,
-  resolveUserid, loadFilter, saveFilter, stickerTip } from '../api'
+  resolveUserid, loadFilter, saveFilter, clearFilter, stickerTip } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import ReqUserInput from '../ReqUserInput'
 
@@ -177,6 +177,12 @@ export default function Kanban() {
             worker: workerFilter, rdir: reqDir, rperiod: reqPeriod })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('kanban')
+          setSiteFilter(me?.default_siteid ?? ''); setQ('')
+          setTypeFilter(''); setReqFilter(''); setWorkerFilter('')
+          setReqDir(''); setReqPeriod('')
+        }}>검색조건 초기화</button>
         <span className="kb-total">총 {tasks.length}건</span>
         <button className="flow-btn" title="작업 처리 프로세스 보기"
           onClick={() => setFlowOpen(true)}>처리 프로세스</button>

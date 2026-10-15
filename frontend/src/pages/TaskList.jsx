@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor, isDevWorker,
-  resolveUserid, loadFilter, saveFilter, stickerTip } from '../api'
+  resolveUserid, loadFilter, saveFilter, clearFilter, stickerTip } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
 
-const PAGE_SIZE = 20
+const PAGE_SIZES = [10, 20, 50, 100]
 
 export default function TaskList() {
+  const me = JSON.parse(localStorage.getItem('user') || 'null')
   const [tasks, setTasks] = useState([])
   const [sites, setSites] = useState([])
   const [users, setUsers] = useState([])
@@ -24,6 +25,7 @@ export default function TaskList() {
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
   const [userSel, setUserSel] = useState(null)   // 사용자 정보 팝업 대상 userid
   const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(savedF.size || 20)
 
   const load = useCallback(async () => {
     const params = {}
@@ -88,9 +90,9 @@ export default function TaskList() {
     URL.revokeObjectURL(a.href)
   }
 
-  const pages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
+  const pages = Math.max(1, Math.ceil(tasks.length / pageSize))
   const cur = Math.min(page, pages - 1)
-  const paged = tasks.slice(cur * PAGE_SIZE, (cur + 1) * PAGE_SIZE)
+  const paged = tasks.slice(cur * pageSize, (cur + 1) * pageSize)
 
   return (
     <div>
@@ -121,12 +123,28 @@ export default function TaskList() {
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={() => {
-          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, req: reqFilter, worker: workerFilter })
+          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, req: reqFilter, worker: workerFilter, size: pageSize })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('tasks')
+          setSiteFilter(me?.default_siteid ?? ''); setQ('')
+          setStatFilter(''); setTypeFilter(''); setReqFilter('')
+          setWorkerFilter(''); setPage(0)
+        }}>검색조건 초기화</button>
         <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>
       </div>
 
+      <div className="pager">
+        <span className="pager-count">총 {tasks.length}건</span>
+        <select className="pager-size" value={pageSize} title="페이지당 건수"
+          onChange={e => { setPageSize(+e.target.value); setPage(0) }}>
+          {PAGE_SIZES.map(n => <option key={n} value={n}>{n}건씩</option>)}
+        </select>
+        <button disabled={cur <= 0} onClick={() => setPage(cur - 1)}>이전</button>
+        <span>{cur + 1} / {pages} 페이지</span>
+        <button disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>다음</button>
+      </div>
       <table className="grid">
         <thead>
           <tr>
@@ -174,12 +192,6 @@ export default function TaskList() {
           )}
         </tbody>
       </table>
-      <div className="pager">
-        <span className="pager-count">총 {tasks.length}건</span>
-        <button disabled={cur <= 0} onClick={() => setPage(cur - 1)}>이전</button>
-        <span>{cur + 1} / {pages} 페이지</span>
-        <button disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>다음</button>
-      </div>
       {sel && <TaskDetailPopup task={sel} onClose={() => setSel(null)} onChanged={load} />}
       {userSel && <UserInfoPopup userid={userSel} users={users} sites={sites}
         onClose={() => setUserSel(null)} />}

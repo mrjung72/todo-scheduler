@@ -109,6 +109,7 @@ export const loadFilter = key => {
 }
 export const saveFilter = (key, obj) =>
   localStorage.setItem(`filter:${key}`, JSON.stringify(obj))
+export const clearFilter = key => localStorage.removeItem(`filter:${key}`)
 
 // 작업유형
 export const TASK_TYPE_LABEL = {

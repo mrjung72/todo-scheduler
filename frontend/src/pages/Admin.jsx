@@ -3,7 +3,8 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
   GRADE_LABEL, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
-  loadFilter, saveFilter, downloadFile, resolveUserid, stickerTip } from '../api'
+  loadFilter, saveFilter, clearFilter, downloadFile, resolveUserid,
+  stickerTip } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
@@ -153,13 +154,17 @@ function SearchUserCell({ value, users, listId, onSave, disabled }) {
 }
 
 /* ---------------- 페이징 공통 ---------------- */
-const PAGE_SIZE = 20
+const PAGE_SIZES = [10, 20, 50, 100]
 
-function Pager({ total, page, setPage }) {
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+function Pager({ total, page, setPage, size, setSize }) {
+  const pages = Math.max(1, Math.ceil(total / size))
   return (
     <div className="pager">
       <span className="pager-count">총 {total}건</span>
+      <select className="pager-size" value={size} title="페이지당 건수"
+        onChange={e => { setSize(+e.target.value); setPage(0) }}>
+        {PAGE_SIZES.map(n => <option key={n} value={n}>{n}건씩</option>)}
+      </select>
       <button disabled={page <= 0} onClick={() => setPage(page - 1)}>이전</button>
       <span>{page + 1} / {pages} 페이지</span>
       <button disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>다음</button>
@@ -170,12 +175,15 @@ function Pager({ total, page, setPage }) {
 // list를 페이지 단위로 잘라 paged 목록과 pager 요소를 반환 (deps 변경 시 1페이지로)
 function usePager(list, deps) {
   const [page, setPage] = useState(0)
+  const [size, setSize] = useState(20)
   useEffect(() => setPage(0), deps)
-  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+  const pages = Math.max(1, Math.ceil(list.length / size))
   const cur = Math.min(page, pages - 1)
-  const paged = list.slice(cur * PAGE_SIZE, (cur + 1) * PAGE_SIZE)
-  return { paged, pager: <Pager total={list.length} page={cur} setPage={setPage} />,
-           page: cur, setPage }
+  const paged = list.slice(cur * size, (cur + 1) * size)
+  return { paged,
+           pager: <Pager total={list.length} page={cur} setPage={setPage}
+                         size={size} setSize={setSize} />,
+           page: cur, setPage, size }
 }
 
 /* ---------------- 엑셀 다운/업로드 공통 ---------------- */
@@ -430,6 +438,10 @@ function UsersTab() {
           saveFilter('admin-users', { site: siteF, stat: statF, duty: dutyF, grade: gradeF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-users')
+          setSiteF(''); setStatF(''); setDutyF(''); setGradeF(''); setQ('')
+        }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
         <ExcelButtons name="사용자" cols={cols} rows={shown}
           onUpload={staff ? upload : null} onDone={load} />
@@ -468,6 +480,7 @@ function UsersTab() {
         <button type="submit">추가</button>
       </form>
       )}
+      {pager}
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>이름</th><th>부서</th><th>직급</th><th>연락처</th>
@@ -543,7 +556,6 @@ function UsersTab() {
           })}
         </tbody>
       </table>
-      {pager}
     </div>
   )
 }
@@ -615,6 +627,7 @@ function SitesTab() {
         </select>
         <button type="submit">추가</button>
       </form>}
+      {pager}
       <table className="grid">
         <thead><tr>
           <th>사이트ID</th><th>사이트명</th><th>설명</th><th>IT담당자</th><th>상태</th><th></th>
@@ -634,7 +647,6 @@ function SitesTab() {
           ))}
         </tbody>
       </table>
-      {pager}
     </div>
   )
 }
@@ -791,7 +803,7 @@ function TasksTab() {
     (!reqUid || t.req_userid === reqUid) &&
     (!workF || t.work_userid === workF))
     .filter(t => staff || viewer || t.work_userid === myId())  // 조회전용·일반개발자 본인 작업만
-  const { paged, pager, setPage } = usePager(filtered, [q, siteF, statF, typeF, reqF, workF])
+  const { paged, pager, setPage, size } = usePager(filtered, [q, siteF, statF, typeF, reqF, workF])
 
   // 방금 추가한 작업이 보이는 페이지로 이동 + 행 강조
   // (새 작업은 항상 작업요청(R) — 상태 필터는 R로 두고 나머지 조건만 해제)
@@ -807,7 +819,7 @@ function TasksTab() {
       return   // 목록 갱신 후 이펙트가 다시 실행됨
     }
     newHandled.current = true
-    setPage(Math.floor(idx / PAGE_SIZE))
+    setPage(Math.floor(idx / size))
     setTimeout(() =>
       document.querySelector(`tr[data-taskid="${newId}"]`)
         ?.scrollIntoView({ block: 'center' }), 50)
@@ -903,6 +915,11 @@ function TasksTab() {
           saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, req: reqF, work: workF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-tasks')
+          setSiteF(mySite() || ''); setStatF('R'); setTypeF('')
+          setReqF(''); setWorkF(''); setQ('')
+        }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
         <ExcelButtons name="작업" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
@@ -956,6 +973,7 @@ function TasksTab() {
         <button type="submit">작업추가</button>
         <span className="hint">상세내용은 작업 등록 후 상세화면에서 입력해 주세요.</span>
       </form>}
+      {pager}
       <table className="grid">
         <thead><tr>
           <th>ID</th><th>사이트</th><th>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
@@ -1051,7 +1069,6 @@ function TasksTab() {
           ))}
         </tbody>
       </table>
-      {pager}
       <p className="hint">
         우선순위·예상시간·작업자 수정 후 [재적용]을 누르면 대기중(W) 작업의
         시작/종료일시가 작업자별 우선순위 순으로 재계산됩니다.
@@ -1153,6 +1170,7 @@ function CalendarTab() {
         <button className="primary" onClick={generate}>해당 연도 달력 생성</button>
         </>}
       </div>
+      {pager}
       <table className="grid">
         <thead><tr><th>일자ID</th><th>일자</th><th>요일</th><th>상태</th><th>설명</th></tr></thead>
         <tbody>
@@ -1173,7 +1191,6 @@ function CalendarTab() {
           })}
         </tbody>
       </table>
-      {pager}
     </div>
   )
 }
@@ -1256,6 +1273,10 @@ function HolidaysTab() {
           saveFilter('admin-holidays', { year, user: filterUser })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-holidays')
+          setYear(today.getFullYear()); setFilterUser('')
+        }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
         <span className="hint">
           종일(A)은 해당일 근무 제외, 일부-오후(P)/일부-오전(M)은 휴가시간만큼 근무시간 차감.
@@ -1287,6 +1308,7 @@ function HolidaysTab() {
           onChange={e => setForm({ ...form, holiday_remark: e.target.value })} />
         <button type="submit">추가</button>
       </form>}
+      {pager}
       <table className="grid">
         <thead><tr>
           <th>일자</th><th>작업자</th><th>구분</th><th>휴가시간</th><th>설명</th><th></th>
@@ -1309,7 +1331,6 @@ function HolidaysTab() {
           {rows.length === 0 && <tr><td colSpan="6" className="empty">등록된 휴가가 없습니다</td></tr>}
         </tbody>
       </table>
-      {pager}
     </div>
   )
 }
@@ -1452,6 +1473,10 @@ function SchedulesTab() {
           saveFilter('admin-schedules', { site: siteF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-schedules')
+          setSiteF(''); setQ('')
+        }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
         <ExcelButtons name="작업이력" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
@@ -1473,6 +1498,7 @@ function SchedulesTab() {
           onChange={e => setForm({ ...form, work_remark: e.target.value })} />
         <button type="submit">추가</button>
       </form>}
+      {pager}
       <table className="grid">
         <thead><tr>
           <th>작업ID</th><th>작업명</th><th>작업스케쥴ID</th><th>작업자</th><th>작업내용</th><th>등록일시</th><th></th>
@@ -1505,7 +1531,6 @@ function SchedulesTab() {
           {filtered.length === 0 && <tr><td colSpan="7" className="empty">작업이력이 없습니다</td></tr>}
         </tbody>
       </table>
-      {pager}
       <p className="hint">
         작업자가 실제 작업한 내용을 수동으로 기록하는 이력입니다.
         작업의 일정·상태는 [작업스케쥴] 탭에서 관리합니다.
@@ -1662,11 +1687,16 @@ function SchedHisTab() {
           saveFilter('admin-schedhis', { site: siteF, stat: statF, task: taskF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-schedhis')
+          setSiteF(''); setStatF(''); setTaskF(''); setQ('')
+        }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
         <ExcelButtons name="작업상태변경이력" cols={cols} rows={filtered} />
         {staff && rows.length > 0 &&
           <button className="danger" onClick={delAll}>전체삭제</button>}
       </div>
+      {pager}
       <table className="grid">
         <thead><tr>
           <th>작업ID</th><th>이력ID</th><th>작업</th><th>변경자</th>
@@ -1696,7 +1726,6 @@ function SchedHisTab() {
             <tr><td colSpan={staff ? 9 : 8} className="empty">이력이 없습니다</td></tr>}
         </tbody>
       </table>
-      {pager}
       <p className="hint">
         작업상태 변경 시마다 자동 기록됩니다. 작업기간은 작업중(P) 구간이
         종료(중단/완료/반려)될 때 해당 P 이력행에 기록되고
@@ -1812,6 +1841,10 @@ function AttachFilesTab() {
           saveFilter('admin-attach', { site: siteF, stat: statF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-attach')
+          setSiteF(''); setStatF(''); setQ('')
+        }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
         <ExcelButtons name="첨부파일" cols={cols} rows={filtered}
           onUpload={staff ? uploadCsv : null} onDone={load} />
@@ -1838,6 +1871,7 @@ function AttachFilesTab() {
         <input type="file" ref={fileRef} required />
         <button type="submit">업로드</button>
       </form>}
+      {pager}
       <table className="grid">
         <thead><tr>
           <th>작업ID</th><th>작업명</th><th>작업자</th><th className="r">작업스케쥴ID</th>
@@ -1869,7 +1903,6 @@ function AttachFilesTab() {
             <tr><td colSpan="9" className="empty">첨부파일이 없습니다</td></tr>}
         </tbody>
       </table>
-      {pager}
       <p className="hint">
         [업로드]는 파일을 서버 uploads/ 폴더에 저장합니다.
         외부 경로만 등록하려면 엑셀 업로드(CSV)를 사용하세요.
@@ -1960,9 +1993,14 @@ function BoardsTab() {
           saveFilter('admin-boards', { pub: pubF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-boards')
+          setPubF(''); setQ('')
+        }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
         <ExcelButtons name="게시판" cols={cols} rows={filtered} />
       </div>
+      {pager}
       <table className="grid">
         <thead><tr>
           <th style={{ width: 55 }}>번호</th><th>제목</th>
@@ -2006,7 +2044,6 @@ function BoardsTab() {
             <tr><td colSpan="10" className="empty">게시글이 없습니다</td></tr>}
         </tbody>
       </table>
-      {pager}
       <p className="hint">
         스태프(관리자·수석)는 비공개글도 열람·수정·삭제할 수 있습니다.
         [해제]는 비공개글의 열람 비밀번호를 지웁니다.

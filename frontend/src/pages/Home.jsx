@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api, { fmtDT, STAT_LABEL, TASK_TYPE_LABEL, taskColor,
-  loadFilter, saveFilter, stickerTip } from '../api'
+  loadFilter, saveFilter, clearFilter, stickerTip } from '../api'
 
 /* 모바일 스타일 메인 화면: 작업중(P) 먼저, 그 아래 대기중(W)을 우선순위순으로 표시 */
 export default function Home() {
@@ -44,6 +44,10 @@ export default function Home() {
           saveFilter('home', { site: siteFilter, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('home')
+          setSiteFilter(''); setQ('')
+        }}>검색조건 초기화</button>
       </div>
       <div className="home-list">
         {tasks.map(t => {
