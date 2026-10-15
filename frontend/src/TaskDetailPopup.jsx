@@ -444,6 +444,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                   <button onClick={doRecalc} disabled={recalcBusy}
                     style={{ marginLeft: 12 }}
                     title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}
+                {['P', 'O'].includes(task.task_stat) && endEst &&
+                  new Date(endEst) < new Date() &&
+                  <span className="pt-overdue" title="종료예상일시 경과">💣 기한 초과</span>}
               </p>
               <p><b>종료(실제)</b> {fmtDT(task.task_end_date) || '-'}</p>
             </div>

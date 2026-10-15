@@ -18,7 +18,7 @@ from ..scheduler import (
     get_calendar_map, get_holiday_map, get_user_hours_map, workday_cal,
     daily_breakdown, has_workday_between, elapsed_work_end,
 )
-from ..statusflow import auto_start_due_tasks, auto_finish_due_tasks
+from ..statusflow import auto_start_due_tasks
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
@@ -69,7 +69,6 @@ def _busy_for(task, all_tasks) -> list:
 def calendar_events(db: Session = Depends(get_db)):
     """FullCalendar용 이벤트: 작업 + 담당자/사이트 정보 (대기중/작업중만)."""
     auto_start_due_tasks(db)   # 예정시작 지난 대기 작업은 자동으로 작업중 전이
-    auto_finish_due_tasks(db)  # 종료예상 경과한 작업중·단순업무중은 자동 완료
     WorkUser = aliased(User)
     ReqUser = aliased(User)
     rows = (

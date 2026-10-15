@@ -13,8 +13,7 @@ from ..scheduler import (
     add_work_hours, workday_cal, daily_breakdown, has_workday_between,
     is_working_day, FREE_DAY_STAT, WORK_HOURS_PER_DAY, elapsed_work_end,
 )
-from ..statusflow import (apply_task_stat_change, auto_start_due_tasks,
-                          auto_finish_due_tasks)
+from ..statusflow import apply_task_stat_change, auto_start_due_tasks
 from ..security import get_current_user, check_task_access, require_staff
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -147,7 +146,6 @@ def list_tasks(
     db: Session = Depends(get_db),
 ):
     auto_start_due_tasks(db)   # 예정시작 지난 대기 작업은 자동으로 작업중 전이
-    auto_finish_due_tasks(db)  # 종료예상 경과한 작업중·단순업무중은 자동 완료
     query = _detail_query(db)
 
     if siteid:

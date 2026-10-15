@@ -199,6 +199,9 @@ export default function Kanban() {
                         <span className="kb-no">#{t.taskid}</span>
                         {t.priority === 0 &&
                           <span className="kb-prio urgent" title="우선순위">긴급</span>}
+                        {['P', 'O'].includes(t.task_stat) && t.task_end_date_estimated &&
+                          new Date(t.task_end_date_estimated) < new Date() &&
+                          <span className="kb-overdue" title="종료예상일시 경과">💣</span>}
                         {t.site_name && <span className="kb-site">{t.site_name}</span>}
                         {t.task_type &&
                           <span className="kb-type">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>}
