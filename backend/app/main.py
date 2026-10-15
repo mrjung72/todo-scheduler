@@ -9,7 +9,8 @@ from . import __version__
 from .database import Base, engine, SessionLocal
 from .models import User, Site, Task, CalendarDefine, WorkScheduleLog
 from .routers import (users, sites, tasks, calendar, schedules,
-                      user_holidays, auth, attach_files, boards)
+                      user_holidays, auth, attach_files, boards,
+                      task_categories)
 from .security import hash_password, parse_token
 
 app = FastAPI(title="TODO Scheduler API", version=__version__)
@@ -31,6 +32,7 @@ app.include_router(schedules.router)
 app.include_router(user_holidays.router)
 app.include_router(attach_files.router)
 app.include_router(boards.router)
+app.include_router(task_categories.router)
 
 # --- API 인증 가드: /api/* 는 로그인 토큰 필요 (login/health/config 제외) ---
 from fastapi.responses import JSONResponse
@@ -184,6 +186,9 @@ def migrate(db):
     if "schedule_apply" not in cols:
         db.execute(text(
             "ALTER TABLE tasks ADD COLUMN schedule_apply TEXT DEFAULT 'Y'"))
+    if "task_category_cd" not in cols:
+        db.execute(text(
+            "ALTER TABLE tasks ADD COLUMN task_category_cd TEXT"))
     # task_stickers.memo 추가
     if "task_stickers" in {r[0] for r in db.execute(
             text("SELECT name FROM sqlite_master WHERE type='table'"))}:

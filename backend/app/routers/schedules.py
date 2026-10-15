@@ -11,7 +11,8 @@ from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, aliased
 
 from ..database import get_db
-from ..models import WorkScheduleLog, TaskChgLog, Task, User, Site, TaskSticker
+from ..models import (WorkScheduleLog, TaskChgLog, Task, User, Site,
+                      TaskSticker, TaskCategory)
 from ..schemas import WorkLogCreate, WorkLogUpdate, WorkLogOut
 from ..security import get_current_user, check_owner_or_admin, require_staff
 from ..scheduler import (
@@ -96,6 +97,9 @@ def calendar_events(db: Session = Depends(get_db)):
                 .filter(TaskSticker.taskid.in_([t.taskid for t in all_tasks]))
                 .order_by(TaskSticker.stickerid).all()):
             sticker_map.setdefault(tid, []).append({"emoji": emo, "memo": memo})
+    # 업무유형명 일괄 조회 — 이벤트 필터·표시용
+    cat_map = {c.task_category_cd: c.task_category_nm
+               for c in db.query(TaskCategory).all()}
     events = []
     for (task, work_user_name, work_user_dept, work_user_title, work_hours_day,
          site_name, req_userid, req_user_name,
@@ -128,6 +132,8 @@ def calendar_events(db: Session = Depends(get_db)):
                 "work_hours_day": work_hours_day,
                 "task_stat": task.task_stat,
                 "task_type": task.task_type,
+                "task_category_cd": task.task_category_cd,
+                "task_category_nm": cat_map.get(task.task_category_cd),
                 "work_hours_estimated": task.work_hours_estimated,
                 "req_userid": req_userid,
                 "req_user_name": req_user_name,

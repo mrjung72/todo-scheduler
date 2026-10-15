@@ -22,6 +22,8 @@ export default function Kanban() {
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [catFilter, setCatFilter] = useState(savedF.cat || '')
+  const [cats, setCats] = useState([])   // 업무유형 목록 (사이트별)
   const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   // 요청일시 기간 필터: 구분(최근/지난) + 기간
@@ -45,6 +47,7 @@ export default function Kanban() {
     if (q) params.q = q
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
+    if (catFilter) params.task_category = catFilter
     const reqUid = resolveUserid(reqFilter, users)
     if (reqUid) params.req_userid = reqUid
     if (workerFilter) params.work_userid = workerFilter
@@ -60,12 +63,13 @@ export default function Kanban() {
     }
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, siteFilter, typeFilter, reqFilter, workerFilter, reqDir, reqPeriod, users])
+  }, [q, siteFilter, typeFilter, catFilter, reqFilter, workerFilter, reqDir, reqPeriod, users])
 
   useEffect(() => { load().catch(console.error) }, [load])
   useEffect(() => {
     api.get('/sites').then(r => setSites(r.data))
     api.get('/users').then(r => setUsers(r.data))
+    api.get('/task-categories').then(r => setCats(r.data))
   }, [])
   // 에러 메시지는 3초 후 자동 제거
   useEffect(() => {
@@ -138,6 +142,12 @@ export default function Kanban() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+          <option value="">업무유형(전체)</option>
+          {cats.filter(c => !siteFilter || c.siteid === siteFilter).map(c =>
+            <option key={c.task_category_cd} value={c.task_category_cd}>
+              {c.task_category_nm}({c.task_category_cd})</option>)}
+        </select>
         <ReqUserInput users={users} value={reqFilter} onChange={setReqFilter} />
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
@@ -173,14 +183,14 @@ export default function Kanban() {
           </>)}
         </select>
         <button onClick={() => {
-          saveFilter('kanban', { site: siteFilter, q, type: typeFilter, req: reqFilter,
+          saveFilter('kanban', { site: siteFilter, q, type: typeFilter, cat: catFilter, req: reqFilter,
             worker: workerFilter, rdir: reqDir, rperiod: reqPeriod })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button onClick={() => {
           clearFilter('kanban')
           setSiteFilter(me?.default_siteid ?? ''); setQ('')
-          setTypeFilter(''); setReqFilter(''); setWorkerFilter('')
+          setTypeFilter(''); setCatFilter(''); setReqFilter(''); setWorkerFilter('')
           setReqDir(''); setReqPeriod('')
         }}>검색조건 초기화</button>
         <span className="kb-total">총 {tasks.length}건</span>

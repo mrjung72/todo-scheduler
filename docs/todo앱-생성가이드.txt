@@ -442,4 +442,21 @@ v1.1.5
 제거해줘
 또 작업스케쥴 목록에서 타이틀 옆의 수정버튼은 편집 아이콘으로 교체해줘
 
+v1.1.6
+사이트별 작업 업무유형을 정의하는 테이블을 추가할꺼야
+작업유형코드/작업유형명은 직접 입력할 수 있게 해주고
+사이트는 현재 등록된 사이트중에 선택할 수 있게 해줘
+
+-- 업무유형정의
+CREATE TABLE task_category (
+    task_category_cd TEXT PRIMARY KEY,   -- 작업유형코드
+    task_category_nm TEXT NOT NULL,       -- 작업유형명
+    siteid TEXT NOT NULL,          -- 사이트ID 
+	use_stat TEXT,                -- 상태(Y/N)
+	create_date datetime           -- 등록일자
+);
+
+그리고, tasks 테이블에 task_category_cd 컬럼 추가해주고
+작업스케쥴 목록에 컬럼 추가해주고 수정할 수 있게 해줘
+칸반/달력/작업목록/작업스케쥴 검색항목에도 추가해줘
 

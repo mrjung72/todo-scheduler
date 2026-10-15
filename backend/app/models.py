@@ -57,6 +57,8 @@ class Task(Base):
     task_stat = Column(Text, default="R")
     # SQ-단순문의, FI-기능개선, BF-오류수정, DE-데이터추출, DM-데이터변경
     task_type = Column(Text)
+    # 사이트별 업무유형 (task_category 테이블 참조)
+    task_category_cd = Column(Text, ForeignKey("task_category.task_category_cd"))
     task_csrid = Column(Text)
     task_req_remark = Column(Text)
     req_userid = Column(Text, ForeignKey("users.userid"))
@@ -71,6 +73,16 @@ class Task(Base):
     # N=스케줄 미적용 단순업무 (C→O→F 경로, 스케줄링과 무관)
     schedule_apply = Column(Text, default="Y")
     req_date = Column(DateTime)                 # 요청일자
+    create_date = Column(DateTime, default=datetime.now)
+
+
+class TaskCategory(Base):
+    """사이트별 작업 업무유형 정의."""
+    __tablename__ = "task_category"
+    task_category_cd = Column(Text, primary_key=True)      # 작업유형코드
+    task_category_nm = Column(Text, nullable=False)        # 작업유형명
+    siteid = Column(Text, ForeignKey("sites.siteid"), nullable=False)
+    use_stat = Column(Text, default="Y")                   # 상태 Y/N
     create_date = Column(DateTime, default=datetime.now)
 
 

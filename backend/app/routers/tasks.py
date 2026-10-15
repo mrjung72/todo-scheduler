@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from ..database import get_db
 from ..models import (Task, User, Site, TaskChgLog, WorkScheduleLog,
-                      TaskAttachFile, TaskSticker)
+                      TaskAttachFile, TaskSticker, TaskCategory)
 from ..schemas import (TaskCreate, TaskUpdate, TaskOut, TaskDetail,
                        TaskChgLogOut, StickerIn, StickerOut)
 from ..scheduler import (
@@ -31,6 +31,17 @@ def _norm_user_fks(data: dict):
     for k in _USER_FK_COLS:
         if data.get(k) == "":
             data[k] = None
+
+
+def _check_task_category(db, task_category_cd, siteid):
+    """업무유형 코드가 존재하고 작업 사이트와 일치하는지 검증."""
+    if not task_category_cd:
+        return
+    cat = db.get(TaskCategory, task_category_cd)
+    if not cat:
+        raise HTTPException(404, "업무유형을 찾을 수 없습니다")
+    if siteid and cat.siteid != siteid:
+        raise HTTPException(400, "해당 사이트의 업무유형이 아닙니다")
 
 
 def _check_start_not_holiday(db, holiday_work, start):
@@ -59,12 +70,15 @@ def _detail_query(db: Session):
             WorkUser.job_title.label("work_user_title"),
             WorkUser.work_hours_day.label("work_hours_day"),
             Site.site_name.label("site_name"),
+            TaskCategory.task_category_nm.label("task_category_nm"),
         )
         .select_from(Task)
         .outerjoin(ReqUser, ReqUser.userid == Task.req_userid)
         .outerjoin(ItosUser, ItosUser.userid == Task.itos_userid)
         .outerjoin(WorkUser, WorkUser.userid == Task.work_userid)
         .outerjoin(Site, Site.siteid == Task.siteid)
+        .outerjoin(TaskCategory,
+                   TaskCategory.task_category_cd == Task.task_category_cd)
     )
 
 
@@ -116,14 +130,15 @@ def _to_detail(row, cal: dict = None, prev_stat: str = None,
                can_revert: bool = False, stat_chg=None,
                stickers=None) -> TaskDetail:
     (task, req_name, req_dept, req_title, itos_name,
-     work_name, work_dept, work_title, work_hours_day, site_name) = row
+     work_name, work_dept, work_title, work_hours_day, site_name,
+     cat_nm) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
     data.update(
         req_user_name=req_name, req_user_dept=req_dept, req_user_title=req_title,
         itos_user_name=itos_name,
         work_user_name=work_name, work_user_dept=work_dept,
         work_user_title=work_title, work_hours_day=work_hours_day,
-        site_name=site_name,
+        site_name=site_name, task_category_nm=cat_nm,
     )
     # 휴일작업인데 기간에 근무일이 포함되면 경고 플래그
     if task.holiday_work and cal is not None:
@@ -143,6 +158,7 @@ def list_tasks(
     task_stat: str = Query(None),
     siteid: str = Query(None),
     task_type: str = Query(None),
+    task_category: str = Query(None),
     req_userid: str = Query(None),
     work_userid: str = Query(None),
     req_from: datetime = Query(None, description="요청일시 이후"),
@@ -170,6 +186,9 @@ def list_tasks(
     if task_type:
         types = [s for s in str(task_type).split(',') if s]
         query = query.filter(Task.task_type.in_(types))
+
+    if task_category:
+        query = query.filter(Task.task_category_cd == task_category)
 
     if task_stat:
         stats = [s for s in str(task_stat).split(',') if s]
@@ -281,6 +300,8 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db),
     if data.get("task_csrid") and db.query(Task).filter(
             Task.task_csrid == data["task_csrid"]).first():
         raise HTTPException(409, f"이미 등록된 CSR번호입니다 ({data['task_csrid']})")
+    _check_task_category(db, data.get("task_category_cd"),
+                         data.get("siteid"))
     task = Task(**data)
     db.add(task)
     db.flush()  # taskid 확보
@@ -336,8 +357,17 @@ def update_task(taskid: int, body: TaskUpdate, db: Session = Depends(get_db),
     if sched_chg and eff_stat not in ("R", "C"):
         raise HTTPException(
             400, "스케쥴적용 여부는 작업요청·검토중 상태에서만 변경할 수 있습니다")
+    # 업무유형은 작업 사이트(변경 예정 사이트 포함)의 유형이어야 함
+    if "task_category_cd" in data:
+        _check_task_category(db, data["task_category_cd"],
+                             data.get("siteid") or obj.siteid)
     for k, v in data.items():
         setattr(obj, k, v)
+    # 사이트가 바뀌면 기존 업무유형이 다른 사이트 소속일 수 있으므로 해제
+    if "siteid" in data and obj.task_category_cd:
+        cat = db.get(TaskCategory, obj.task_category_cd)
+        if cat and cat.siteid != obj.siteid:
+            obj.task_category_cd = None
     # 스케쥴적용 여부 변경 시 상태변경이력 초기화 — 이전 경로로 되돌릴 수 없게 한다
     if sched_chg:
         db.query(TaskChgLog).filter(TaskChgLog.taskid == taskid).delete()

@@ -68,6 +68,7 @@ class TaskBase(BaseModel):
     work_hours_real: Optional[float] = 0
     task_stat: Optional[str] = "R"
     task_type: Optional[str] = None
+    task_category_cd: Optional[str] = None   # 사이트별 업무유형 코드
     task_csrid: Optional[str] = None
     task_req_remark: Optional[str] = None
     req_userid: Optional[str] = None
@@ -94,6 +95,7 @@ class TaskUpdate(BaseModel):
     work_hours_real: Optional[float] = None
     task_stat: Optional[str] = None
     task_type: Optional[str] = None
+    task_category_cd: Optional[str] = None
     task_csrid: Optional[str] = None
     task_req_remark: Optional[str] = None
     req_userid: Optional[str] = None
@@ -221,11 +223,32 @@ class TaskDetail(TaskOut):
     work_user_dept: Optional[str] = None
     work_user_title: Optional[str] = None
     work_hours_day: Optional[float] = None   # 작업자의 하루 개발시간 (None=기본 근무구간)
+    task_category_nm: Optional[str] = None   # 업무유형명 (task_category 조인)
     weekday_included: Optional[bool] = False   # 휴일작업 기간에 근무일 포함 여부(경고)
     prev_stat: Optional[str] = None   # 직전 상태 (되돌리기용)
     can_revert: Optional[bool] = False   # 직전 상태로 되돌리기 가능 여부
     stat_chg_date: Optional[datetime] = None   # 현재 상태로 변경된 일시
     stickers: Optional[List["StickerMini"]] = None   # 붙은 스티커 (이모지+메모)
+
+
+# ---------- task_category ----------
+class TaskCategoryIn(BaseModel):
+    task_category_cd: str = Field(min_length=1, max_length=20)
+    task_category_nm: str = Field(min_length=1, max_length=100)
+    siteid: str
+    use_stat: Optional[str] = "Y"
+
+
+class TaskCategoryUpdate(BaseModel):
+    task_category_nm: Optional[str] = Field(default=None, max_length=100)
+    siteid: Optional[str] = None
+    use_stat: Optional[str] = None
+
+
+class TaskCategoryOut(TaskCategoryIn):
+    model_config = ConfigDict(from_attributes=True)
+    site_name: Optional[str] = None
+    create_date: Optional[datetime] = None
 
 
 # ---------- task_stickers ----------

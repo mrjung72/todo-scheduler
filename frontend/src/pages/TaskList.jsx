@@ -19,6 +19,8 @@ export default function TaskList() {
   const [q, setQ] = useState(savedF.q || '')
   const [statFilter, setStatFilter] = useState(savedF.stat || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [catFilter, setCatFilter] = useState(savedF.cat || '')
+  const [cats, setCats] = useState([])   // 업무유형 목록 (사이트별)
   const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [cfg, setCfg] = useState(null)
@@ -33,19 +35,21 @@ export default function TaskList() {
     if (statFilter) params.task_stat = statFilter
     if (siteFilter) params.siteid = siteFilter
     if (typeFilter) params.task_type = typeFilter
+    if (catFilter) params.task_category = catFilter
     const reqUid = resolveUserid(reqFilter, users)
     if (reqUid) params.req_userid = reqUid
     if (workerFilter) params.work_userid = workerFilter
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, statFilter, siteFilter, typeFilter, reqFilter, workerFilter, users])
+  }, [q, statFilter, siteFilter, typeFilter, catFilter, reqFilter, workerFilter, users])
 
   useEffect(() => { load().catch(console.error) }, [load])
-  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, reqFilter, workerFilter])   // 검색조건 변경 시 1페이지로
+  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, catFilter, reqFilter, workerFilter])   // 검색조건 변경 시 1페이지로
   useEffect(() => {
     api.get('/config').then(r => setCfg(r.data))
     api.get('/sites').then(r => setSites(r.data))
     api.get('/users').then(r => setUsers(r.data))
+    api.get('/task-categories').then(r => setCats(r.data))
   }, [])
 
   // 현재 조회 결과를 CSV(BOM 포함, 엑셀에서 바로 열림)로 다운로드
@@ -110,6 +114,12 @@ export default function TaskList() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+          <option value="">업무유형(전체)</option>
+          {cats.filter(c => !siteFilter || c.siteid === siteFilter).map(c =>
+            <option key={c.task_category_cd} value={c.task_category_cd}>
+              {c.task_category_nm}({c.task_category_cd})</option>)}
+        </select>
         <ReqUserInput users={users} value={reqFilter} onChange={setReqFilter} />
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
@@ -123,13 +133,13 @@ export default function TaskList() {
           onKeyDown={e => e.key === 'Enter' && load()}
         />
         <button onClick={() => {
-          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, req: reqFilter, worker: workerFilter, size: pageSize })
+          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, cat: catFilter, req: reqFilter, worker: workerFilter, size: pageSize })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button onClick={() => {
           clearFilter('tasks')
           setSiteFilter(me?.default_siteid ?? ''); setQ('')
-          setStatFilter(''); setTypeFilter(''); setReqFilter('')
+          setStatFilter(''); setTypeFilter(''); setCatFilter(''); setReqFilter('')
           setWorkerFilter(''); setPage(0)
         }}>검색조건 초기화</button>
         <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>

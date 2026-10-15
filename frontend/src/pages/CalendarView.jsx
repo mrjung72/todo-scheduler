@@ -138,6 +138,8 @@ export default function CalendarView() {
     savedF.site ?? me?.default_siteid ?? '')
   const [q, setQ] = useState(savedF.q || '')
   const [typeFilter, setTypeFilter] = useState(savedF.type || '')
+  const [catFilter, setCatFilter] = useState(savedF.cat || '')
+  const [cats, setCats] = useState([])   // 업무유형 목록 (사이트별)
   const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
   const [showHol, setShowHol] = useState(savedF.holiday !== false)  // 작업자휴가 표시 여부
@@ -191,6 +193,7 @@ export default function CalendarView() {
     load()
     api.get('/users').then(r => setUsers(r.data))
     api.get('/sites').then(r => setSites(r.data))
+    api.get('/task-categories').then(r => setCats(r.data))
   }, [load])
 
   const onDateClick = (info) => {
@@ -307,6 +310,7 @@ export default function CalendarView() {
     if (schedF === 'N' && p.schedule_apply !== 'N') return false
     if (siteFilter && p.siteid !== siteFilter) return false
     if (typeFilter && p.task_type !== typeFilter) return false
+    if (catFilter && p.task_category_cd !== catFilter) return false
     if (reqUid && p.req_userid !== reqUid) return false
     if (workerFilter && p.work_userid !== workerFilter) return false
     if (kw && ![e.title, p.task_csrid, p.work_user_name, p.work_userid, p.site_name]
@@ -334,6 +338,12 @@ export default function CalendarView() {
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+          <option value="">업무유형(전체)</option>
+          {cats.filter(c => !siteFilter || c.siteid === siteFilter).map(c =>
+            <option key={c.task_category_cd} value={c.task_category_cd}>
+              {c.task_category_nm}({c.task_category_cd})</option>)}
+        </select>
         <ReqUserInput users={users} value={reqFilter} onChange={setReqFilter} />
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}>
           <option value="">작업자(전체)</option>
@@ -346,13 +356,13 @@ export default function CalendarView() {
           onChange={e => setQ(e.target.value)}
         />
         <button onClick={() => {
-          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, req: reqFilter, worker: workerFilter, holiday: showHol, sched: schedF })
+          saveFilter('calendar', { site: siteFilter, q, type: typeFilter, cat: catFilter, req: reqFilter, worker: workerFilter, holiday: showHol, sched: schedF })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button onClick={() => {
           clearFilter('calendar')
           setSiteFilter(me?.default_siteid ?? ''); setQ('')
-          setTypeFilter(''); setReqFilter(''); setWorkerFilter('')
+          setTypeFilter(''); setCatFilter(''); setReqFilter(''); setWorkerFilter('')
           setShowHol(true); setSchedF('Y')
         }}>검색조건 초기화</button>
         <label className="hint-inline" style={{ cursor: 'pointer' }}>

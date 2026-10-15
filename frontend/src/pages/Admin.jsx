@@ -39,6 +39,7 @@ function useDrag() {
 // 관리자(0)/개발자(1) 모두 전체 탭 접근 가능 (admin 계정 보호는 별도 처리)
 const TABS = [
   { key: 'sites', label: '사이트' },
+  { key: 'categories', label: '업무유형' },
   { key: 'tasks', label: '작업스케쥴' },
   { key: 'schedules', label: '작업이력' },
   { key: 'schedhis', label: '작업상태변경이력' },
@@ -68,10 +69,11 @@ const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_gra
 // 비스태프 등급별 관리자 탭 접근
 // 3-개발매니저: 전체 조회 / 4-일반개발자: 기존과 동일 / 5-IT담당자: 지정 탭 조회
 const TAB_ACCESS = {
-  3: ['sites', 'tasks', 'schedules', 'schedhis', 'files', 'users', 'calendar',
-      'holidays', 'boards'],
-  4: ['tasks', 'schedules', 'schedhis', 'files', 'users', 'holidays'],
-  5: ['sites', 'tasks', 'users', 'calendar', 'holidays'],
+  3: ['sites', 'categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
+      'calendar', 'holidays', 'boards'],
+  4: ['categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
+      'holidays'],
+  5: ['sites', 'categories', 'tasks', 'users', 'calendar', 'holidays'],
 }
 
 export default function Admin() {
@@ -94,6 +96,7 @@ export default function Admin() {
       </div>
       {tab === 'users' && <UsersTab />}
       {tab === 'sites' && <SitesTab />}
+      {tab === 'categories' && <CategoriesTab />}
       {tab === 'tasks' && <TasksTab />}
       {tab === 'calendar' && <CalendarTab />}
       {tab === 'holidays' && <HolidaysTab />}
@@ -654,6 +657,129 @@ function SitesTab() {
   )
 }
 
+/* ---------------- 업무유형 ---------------- */
+function CategoriesTab() {
+  const staff = isStaff()
+  const empty = { task_category_cd: '', task_category_nm: '', siteid: '',
+    use_stat: 'Y' }
+  const [rows, setRows] = useState([])
+  const [sites, setSites] = useState([])
+  const [form, setForm] = useState(empty)
+  const [savedF] = useState(() => loadFilter('admin-categories'))
+  const [siteF, setSiteF] = useState(savedF.site || '')
+  const [statF, setStatF] = useState(savedF.stat || '')
+  const [q, setQ] = useState(savedF.q || '')
+  const load = useCallback(() =>
+    api.get('/task-categories').then(r => setRows(r.data)), [])
+  useEffect(() => {
+    load()
+    api.get('/sites').then(r => setSites(r.data))
+  }, [load])
+
+  const save = (cd, patch) => api.put(`/task-categories/${cd}`, patch)
+    .then(load).catch(e => alert(errMsg(e)))
+  const add = async e => {
+    e.preventDefault()
+    try {
+      await api.post('/task-categories', form)
+      setForm(empty); load()
+    } catch (e) { alert(errMsg(e)) }
+  }
+  const del = cd => window.confirm(`업무유형 ${cd} 삭제?`) &&
+    api.delete(`/task-categories/${cd}`).then(load).catch(e => alert(errMsg(e)))
+
+  const filtered = rows.filter(c =>
+    (!siteF || c.siteid === siteF) &&
+    (!statF || (c.use_stat || 'Y') === statF) &&
+    (!q.trim() || [c.task_category_cd, c.task_category_nm, c.site_name]
+      .some(v => (v ?? '').toString().toLowerCase()
+        .includes(q.trim().toLowerCase()))))
+  const { paged, pager } = usePager(filtered, [siteF, statF, q])
+  const sopt = [{ value: '', label: '-' },
+    ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
+  const cols = [
+    { label: '업무유형코드', field: 'task_category_cd' },
+    { label: '업무유형명', field: 'task_category_nm' },
+    { label: '사이트ID', field: 'siteid' },
+    { label: '사이트(참조)', field: '_site_name', get: c => c.site_name || '' },
+    { label: '상태', field: 'use_stat' },
+    { label: '등록일시', field: 'create_date', get: c => fmtDT(c.create_date) },
+  ]
+
+  return (
+    <div>
+      <div className="toolbar">
+        <select value={siteF} onChange={e => setSiteF(e.target.value)}>
+          <option value="">사이트(전체)</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <select value={statF} onChange={e => setStatF(e.target.value)}>
+          <option value="">상태(전체)</option>
+          <option value="Y">Y</option>
+          <option value="N">N</option>
+        </select>
+        <input placeholder="검색 (코드/유형명/사이트)" value={q}
+          onChange={e => setQ(e.target.value)} />
+        <button onClick={() => {
+          saveFilter('admin-categories', { site: siteF, stat: statF, q })
+          alert('현재 검색조건을 저장했습니다')
+        }}>검색조건 저장</button>
+        <button onClick={() => {
+          clearFilter('admin-categories')
+          setSiteF(''); setStatF(''); setQ('')
+        }}>검색조건 초기화</button>
+        <RefreshBtn onClick={load} />
+        <ExcelButtons name="업무유형" cols={cols} rows={filtered} />
+      </div>
+      {staff && <form className="newtask" onSubmit={add}>
+        <input required placeholder="업무유형코드" maxLength={20}
+          value={form.task_category_cd}
+          onChange={e => setForm({ ...form, task_category_cd: e.target.value })} />
+        <input required placeholder="업무유형명" maxLength={100}
+          value={form.task_category_nm}
+          onChange={e => setForm({ ...form, task_category_nm: e.target.value })} />
+        <select required value={form.siteid}
+          onChange={e => setForm({ ...form, siteid: e.target.value })}>
+          <option value="">사이트</option>
+          {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
+        </select>
+        <select value={form.use_stat}
+          onChange={e => setForm({ ...form, use_stat: e.target.value })}>
+          <option value="Y">Y</option>
+          <option value="N">N</option>
+        </select>
+        <button type="submit">추가</button>
+      </form>}
+      {pager}
+      <table className="grid">
+        <thead><tr>
+          <th>업무유형코드</th><th>업무유형명</th><th>사이트</th><th>상태</th>
+          <th>등록일시</th><th></th>
+        </tr></thead>
+        <tbody>
+          {paged.map(c => (
+            <tr key={c.task_category_cd}>
+              <td>{c.task_category_cd}</td>
+              <td><EditableCell value={c.task_category_nm} disabled={!staff}
+                onSave={v => save(c.task_category_cd, { task_category_nm: v })} /></td>
+              <td className="c"><EditableCell value={c.siteid} disabled={!staff}
+                onSave={v => save(c.task_category_cd, { siteid: v })}
+                options={sopt} /></td>
+              <td className="c"><EditableCell value={c.use_stat || 'Y'}
+                disabled={!staff}
+                onSave={v => save(c.task_category_cd, { use_stat: v })}
+                options={[{ value: 'Y', label: 'Y' }, { value: 'N', label: 'N' }]} /></td>
+              <td className="c">{fmtDT(c.create_date) || '-'}</td>
+              <td>{staff &&
+                <button className="danger" onClick={() => del(c.task_category_cd)}>삭제</button>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 /* ---------------- 작업스케쥴 ---------------- */
 function TasksTab() {
   const empty = { task_name: '', siteid: '', urgent: false, work_hours_estimated: 4,
@@ -671,6 +797,8 @@ function TasksTab() {
   const [reqF, setReqF] = useState(savedF.req || '')
   const [workF, setWorkF] = useState(savedF.work || '')
   const [typeF, setTypeF] = useState(savedF.type || '')
+  const [catF, setCatF] = useState(savedF.cat || '')
+  const [cats, setCats] = useState([])   // 업무유형 목록 (사이트별)
   const [selTask, setSelTask] = useState(null)
   const [startForm, setStartForm] = useState(null)  // {taskid, start, fixed} 시작일시 팝업
   const [userSel, setUserSel] = useState(null)      // 사용자 정보 팝업 대상 userid
@@ -694,6 +822,7 @@ function TasksTab() {
     load()
     api.get('/users').then(r => setUsers(r.data))
     api.get('/sites').then(r => { setSites(r.data); resetForm(r.data) })
+    api.get('/task-categories').then(r => setCats(r.data))
   }, [load])
 
   const save = (id, patch) => api.put(`/tasks/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
@@ -778,6 +907,17 @@ function TasksTab() {
   const statOpt = Object.entries(STAT_LABEL).map(([k, l]) => ({ value: k, label: l }))
   const typeOpt = [{ value: '', label: '-' },
     ...Object.entries(TASK_TYPE_LABEL).map(([k, l]) => ({ value: k, label: `${l}(${k})` }))]
+  // 업무유형 옵션 — 작업의 사이트에 속한 유형만 (현재값이 다른 사이트 소속이면 함께 표시)
+  const catOpt = t => {
+    const opts = [{ value: '', label: '-' },
+      ...cats.filter(c => c.siteid === t.siteid)
+        .map(c => ({ value: c.task_category_cd,
+                     label: `${c.task_category_nm}(${c.task_category_cd})` }))]
+    if (t.task_category_cd && !opts.some(o => o.value === t.task_category_cd))
+      opts.push({ value: t.task_category_cd,
+        label: t.task_category_nm || t.task_category_cd })
+    return opts
+  }
   const uopt = grades => [{ value: '', label: '-' },
     ...users.filter(u => !grades || grades.includes(u.user_grade))
       .map(u => ({ value: u.userid, label: u.user_name }))]
@@ -799,14 +939,16 @@ function TasksTab() {
       t.req_userid, t.req_user_name, t.itos_userid, t.itos_user_name,
       t.work_userid, t.work_user_name, STAT_LABEL[t.task_stat],
       TASK_TYPE_LABEL[t.task_type], t.task_type,
+      t.task_category_nm, t.task_category_cd,
     ].some(v => (v ?? '').toString().toLowerCase().includes(kw))
   })).filter(t =>
     (!siteF || t.siteid === siteF) && (!statF || t.task_stat === statF) &&
     (!typeF || t.task_type === typeF) &&
+    (!catF || t.task_category_cd === catF) &&
     (!reqUid || t.req_userid === reqUid) &&
     (!workF || t.work_userid === workF))
     .filter(t => staff || viewer || t.work_userid === myId())  // 조회전용·일반개발자 본인 작업만
-  const { paged, pager, setPage, size } = usePager(filtered, [q, siteF, statF, typeF, reqF, workF])
+  const { paged, pager, setPage, size } = usePager(filtered, [q, siteF, statF, typeF, catF, reqF, workF])
 
   // 방금 추가한 작업이 보이는 페이지로 이동 + 행 강조
   // (새 작업은 항상 작업요청(R) — 상태 필터는 R로 두고 나머지 조건만 해제)
@@ -816,8 +958,8 @@ function TasksTab() {
     if (newHandled.current) return
     const idx = filtered.findIndex(t => t.taskid === newId)
     if (idx < 0) {
-      if (siteF || (statF && statF !== 'R') || typeF || reqF || workF || q) {
-        setSiteF(''); setStatF('R'); setTypeF(''); setReqF(''); setWorkF(''); setQ('')
+      if (siteF || (statF && statF !== 'R') || typeF || catF || reqF || workF || q) {
+        setSiteF(''); setStatF('R'); setTypeF(''); setCatF(''); setReqF(''); setWorkF(''); setQ('')
       }
       return   // 목록 갱신 후 이펙트가 다시 실행됨
     }
@@ -841,6 +983,10 @@ function TasksTab() {
     { label: '사이트ID', field: 'siteid' },
     { label: '사이트(참조)', field: '_site_name', get: t => t.site_name || '' },
     { label: '유형', field: 'task_type', get: t => TASK_TYPE_LABEL[t.task_type] ?? t.task_type },
+    { label: '업무유형', field: 'task_category_cd',
+      get: t => t.task_category_nm
+        ? `${t.task_category_nm}(${t.task_category_cd})`
+        : (t.task_category_cd || '') },
     { label: '작업명', field: 'task_name' },
     { label: '우선순위', field: 'priority' },
     { label: '예상 작업시간(H)', field: 'work_hours_estimated' },
@@ -906,6 +1052,12 @@ function TasksTab() {
           <option value="">유형(전체)</option>
           {typeOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select value={catF} onChange={e => setCatF(e.target.value)}>
+          <option value="">업무유형(전체)</option>
+          {cats.filter(c => !siteF || c.siteid === siteF).map(c =>
+            <option key={c.task_category_cd} value={c.task_category_cd}>
+              {c.task_category_nm}({c.task_category_cd})</option>)}
+        </select>
         <ReqUserInput users={users} value={reqF} onChange={setReqF} />
         <select value={workF} onChange={e => setWorkF(e.target.value)}>
           <option value="">작업자(전체)</option>
@@ -915,12 +1067,12 @@ function TasksTab() {
         <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
-          saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, req: reqF, work: workF, q })
+          saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, cat: catF, req: reqF, work: workF, q })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button onClick={() => {
           clearFilter('admin-tasks')
-          setSiteF(mySite() || ''); setStatF('R'); setTypeF('')
+          setSiteF(mySite() || ''); setStatF('R'); setTypeF(''); setCatF('')
           setReqF(''); setWorkF(''); setQ('')
         }}>검색조건 초기화</button>
         <RefreshBtn onClick={load} />
@@ -979,7 +1131,7 @@ function TasksTab() {
       {pager}
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>사이트</th><th>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
+          <th>ID</th><th>사이트</th><th>유형</th><th className="fit">업무<br/>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
           <th>상태</th><th className="fit">스케쥴<br/>적용</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
           <th>요청일시</th><th>시작일시</th><th>종료일시</th><th></th>
         </tr></thead>
@@ -992,6 +1144,9 @@ function TasksTab() {
               <td className="c type-col"><EditableCell value={t.task_type} disabled={!can(t) || !['R', 'C', 'W'].includes(t.task_stat)}
                 onSave={v => save(t.taskid, { task_type: v || null })}
                 options={typeOpt} /></td>
+              <td className="c"><EditableCell value={t.task_category_cd} disabled={!can(t)}
+                onSave={v => save(t.taskid, { task_category_cd: v || null })}
+                options={catOpt(t)} /></td>
               <td>{t.priority === 0 && <span className="badge urgent-badge" title="우선순위">긴급</span>}
                 {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
                 {nameEdit?.taskid === t.taskid ? (<>
