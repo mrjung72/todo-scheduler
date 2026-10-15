@@ -80,6 +80,13 @@ function useDrag() {
   return { pos, onDown }
 }
 
+// datetime-local 입력용 현재 로컬시각 (YYYY-MM-DDTHH:MM)
+const nowLocal = () => {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
+
 export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const canEdit = me && ([0, 1].includes(me.user_grade) ||
@@ -170,14 +177,19 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
 
   const saveLog = async () => {
     try {
+      const wd = logForm.work_date
+        ? (logForm.work_date.length === 16
+          ? logForm.work_date + ':00' : logForm.work_date) : null
       if (logView?.workschid) {
         await api.put(`/schedules/${logView.workschid}`, {
-          work_remark: logForm.work_remark })
-        setLogView(v => ({ ...v, work_remark: logForm.work_remark }))
+          work_remark: logForm.work_remark, work_date: wd })
+        setLogView(v => ({ ...v, work_remark: logForm.work_remark,
+          work_date: wd }))
       } else {
         await api.post('/schedules', {
           taskid: task.taskid,
           work_remark: logForm.work_remark,
+          work_date: wd,
           work_userid: me.userid })
         setLogView(null)
       }
@@ -550,7 +562,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           {btab === 'his' &&
             <button className="link req-edit-btn"
               onClick={() => { setLogView({ work_remark: '' })
-                setLogForm({ work_remark: '' }) }}>등록</button>}
+                setLogForm({ work_remark: '', work_date: nowLocal() }) }}>등록</button>}
           {btab === 'chg' && isStaff &&
             <button className="danger req-edit-btn"
               style={{ padding: '1px 8px' }}
@@ -607,11 +619,12 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
                 <thead><tr>
-                  <th>등록일시</th><th>작업자</th><th>작업내용</th>
+                  <th>작업일시</th><th>등록일시</th><th>작업자</th><th>작업내용</th>
                 </tr></thead>
                 <tbody>
                   {(logs || []).map(l => (
                     <tr key={l.workschid}>
+                      <td className="c">{fmtDT(l.work_date) || fmtDT(l.create_date)}</td>
                       <td className="c">{fmtDT(l.create_date)}</td>
                       <td>{l.work_user_name || l.work_userid || '-'}</td>
                       <td>
@@ -623,7 +636,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     </tr>
                   ))}
                   {(!logs || !logs.length) && (
-                    <tr><td colSpan="3" className="empty">작업이력이 없습니다</td></tr>
+                    <tr><td colSpan="4" className="empty">작업이력이 없습니다</td></tr>
                   )}
                 </tbody>
               </table>
@@ -703,8 +716,16 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               style={{ transform: `translate(${logPos.x}px, ${logPos.y}px)` }}>
               <b className="blk-title" onMouseDown={logOnDown}
                 style={{ marginTop: 0, cursor: 'move', userSelect: 'none' }}>작업내용</b>
+              {!logForm &&
+                <div className="log-meta">작업일시 {fmtDT(logView.work_date) || '-'}
+                  {' · '}등록일시 {fmtDT(logView.create_date) || '-'}</div>}
               {logForm ? (
                 <>
+                  <div className="log-meta" style={{ marginBottom: 6 }}>
+                    <b>작업일시</b>{' '}
+                    <input type="datetime-local" value={logForm.work_date || ''}
+                      onChange={e => setLogForm({ ...logForm, work_date: e.target.value })} />
+                  </div>
                   <textarea className="req-edit" rows="8" value={logForm.work_remark}
                     placeholder="작업 내용을 입력하세요"
                     onChange={e => setLogForm({ ...logForm, work_remark: e.target.value })} />
@@ -756,7 +777,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                   <div className="popup-btns">
                     {(isStaff || logView.work_userid === me?.userid) &&
                       <button onClick={() => setLogForm({
-                        work_remark: logView.work_remark || '' })}>수정</button>}
+                        work_remark: logView.work_remark || '',
+                        work_date: (logView.work_date || '').slice(0, 16) })}>수정</button>}
                     <button onClick={() => setLogView(null)}>닫기</button>
                   </div>
                 </>

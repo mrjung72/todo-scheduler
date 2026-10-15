@@ -1131,8 +1131,8 @@ function TasksTab() {
       {pager}
       <table className="grid">
         <thead><tr>
-          <th>ID</th><th>사이트</th><th>유형</th><th className="fit">업무<br/>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
-          <th>상태</th><th className="fit">스케쥴<br/>적용</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
+          <th>ID</th><th>사이트</th><th>작업유형</th><th className="fit">업무<br/>유형</th><th>작업명</th><th className="fit">우선<br/>순위</th><th className="fit">작업시간(H)<br/>예상/실제</th>
+          <th>작업상태</th><th className="fit">스케쥴<br/>적용</th><th>CSR 번호</th><th>현업 담당자</th><th>IT업무 담당자</th><th>작업자</th>
           <th>요청일시</th><th>시작일시</th><th>종료일시</th><th></th>
         </tr></thead>
         <tbody>
@@ -1513,7 +1513,7 @@ function SchedulesTab() {
   const viewer = isViewer()
   const can = s => staff || (!viewer && s.work_userid === myId())
   const empty = { taskid: '', work_userid: staff ? '' : (myId() || ''),
-    work_remark: '' }
+    work_remark: '', work_date: '' }
   const [form, setForm] = useState(empty)
 
   const load = useCallback(() => {
@@ -1571,7 +1571,10 @@ function SchedulesTab() {
   const add = async e => {
     e.preventDefault()
     try {
-      await api.post('/schedules', { ...form, taskid: +form.taskid })
+      await api.post('/schedules', { ...form, taskid: +form.taskid,
+        work_date: form.work_date
+          ? (form.work_date.length === 16 ? form.work_date + ':00' : form.work_date)
+          : null })
       setForm(empty); load()
     } catch (e) { alert(errMsg(e)) }
   }
@@ -1605,6 +1608,7 @@ function SchedulesTab() {
     { label: '작업자ID', field: 'work_userid' },
     { label: '작업자(참조)', field: '_work_name', get: s => userName(s.work_userid) || '' },
     { label: '작업내용', field: 'work_remark' },
+    { label: '작업일시', field: 'work_date', get: s => fmtDT(s.work_date) },
     { label: '등록일시', field: 'create_date', get: s => fmtDT(s.create_date) },
   ]
   const upload = async o => {
@@ -1612,6 +1616,7 @@ function SchedulesTab() {
       taskid: +o.taskid || null,
       work_userid: o.work_userid || null,
       work_remark: o.work_remark || null,
+      work_date: dtOf(o.work_date),
     }
     const id = +o.workschid
     return (Number.isInteger(id) && id > 0 && rows.some(s => s.workschid === id))
@@ -1655,12 +1660,15 @@ function SchedulesTab() {
         )}
         <input placeholder="작업내용" value={form.work_remark}
           onChange={e => setForm({ ...form, work_remark: e.target.value })} />
+        <input type="datetime-local" title="작업일시 (미입력 시 등록시각)"
+          value={form.work_date}
+          onChange={e => setForm({ ...form, work_date: e.target.value })} />
         <button type="submit">추가</button>
       </form>}
       {pager}
       <table className="grid">
         <thead><tr>
-          <th>작업ID</th><th>작업명</th><th>작업스케쥴ID</th><th>작업자</th><th>작업내용</th><th>등록일시</th><th></th>
+          <th>작업ID</th><th>작업명</th><th>작업스케쥴ID</th><th>작업자</th><th>작업내용</th><th>작업일시</th><th>등록일시</th><th></th>
         </tr></thead>
         <tbody>
           {paged.map(s => {
@@ -1679,6 +1687,13 @@ function SchedulesTab() {
                     {s.work_remark || '-'}
                   </button>
                 </td>
+                <td className="c">{can(s)
+                  ? <EditableCell type="datetime-local"
+                      value={(s.work_date || '').slice(0, 16)}
+                      onSave={v => saveSched(s.workschid, {
+                        work_date: v
+                          ? (v.length === 16 ? v + ':00' : v) : null })} />
+                  : fmtDT(s.work_date)}</td>
                 <td className="c">{fmtDT(s.create_date)}</td>
                 <td>
                   {can(s) &&
@@ -1687,7 +1702,7 @@ function SchedulesTab() {
               </tr>
             )
           })}
-          {filtered.length === 0 && <tr><td colSpan="7" className="empty">작업이력이 없습니다</td></tr>}
+          {filtered.length === 0 && <tr><td colSpan="8" className="empty">작업이력이 없습니다</td></tr>}
         </tbody>
       </table>
       <p className="hint">
@@ -1708,6 +1723,8 @@ function SchedulesTab() {
             style={{ transform: `translate(${remarkPos.x}px, ${remarkPos.y}px)` }}>
             <b className="blk-title" onMouseDown={remarkOnDown}
               style={{ marginTop: 0, cursor: 'move', userSelect: 'none' }}>작업내용</b>
+            <div className="log-meta">작업일시 {fmtDT(selRemark.work_date) || '-'}
+              {' · '}등록일시 {fmtDT(selRemark.create_date) || '-'}</div>
             {remarkEdit !== null ? (
               <>
                 <textarea className="req-edit" rows="8" value={remarkEdit}

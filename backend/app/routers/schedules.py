@@ -4,7 +4,7 @@
 - 이벤트: tasks 의 task_start_date/task_end_date_estimated 기준 (대기중/작업중만)
 - 변경이력: 상태 전이 시 statusflow에서 자동 기록된 로그 조회/삭제
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, and_
@@ -219,6 +219,8 @@ def create_work_log(body: WorkLogCreate, db: Session = Depends(get_db),
         raise HTTPException(404, "작업을 찾을 수 없습니다")
     if me.user_grade not in (0, 1):
         data["work_userid"] = me.userid  # 비스태프는 자기 이력만 등록 가능
+    if not data.get("work_date"):
+        data["work_date"] = datetime.now().replace(microsecond=0)  # 작업일시 기본=등록시각
     obj = WorkScheduleLog(**data)
     db.add(obj)
     db.commit()

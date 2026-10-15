@@ -170,6 +170,7 @@ class WorkLogBase(BaseModel):
     taskid: Optional[int] = None
     work_remark: Optional[str] = None
     work_userid: Optional[str] = None
+    work_date: Optional[datetime] = None   # 작업일시 (미지정 시 등록시각)
 
 
 class WorkLogCreate(WorkLogBase):
@@ -180,6 +181,7 @@ class WorkLogUpdate(BaseModel):
     taskid: Optional[int] = None
     work_remark: Optional[str] = None
     work_userid: Optional[str] = None
+    work_date: Optional[datetime] = None
 
 
 class WorkLogOut(WorkLogBase):

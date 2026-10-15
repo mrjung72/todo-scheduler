@@ -23,6 +23,9 @@ export default function TaskList() {
   const [cats, setCats] = useState([])   // 업무유형 목록 (사이트별)
   const [reqFilter, setReqFilter] = useState(savedF.req || '')
   const [workerFilter, setWorkerFilter] = useState(savedF.worker || '')
+  // 요청일시 기간 필터: 구분(최근/지난) + 기간
+  const [reqDir, setReqDir] = useState(savedF.rdir || '')
+  const [reqPeriod, setReqPeriod] = useState(savedF.rperiod || '')
   const [cfg, setCfg] = useState(null)
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
   const [userSel, setUserSel] = useState(null)   // 사용자 정보 팝업 대상 userid
@@ -39,12 +42,22 @@ export default function TaskList() {
     const reqUid = resolveUserid(reqFilter, users)
     if (reqUid) params.req_userid = reqUid
     if (workerFilter) params.work_userid = workerFilter
+    // 요청일시 기간: 최근=기준시각 이후 / 지난=기준시각 이전
+    if (reqDir && reqPeriod) {
+      const base = new Date()
+      const v = parseInt(reqPeriod, 10)
+      if (reqPeriod.endsWith('m')) base.setMonth(base.getMonth() - v)
+      else base.setDate(base.getDate() - v)
+      const iso = base.toISOString().slice(0, 19).replace('T', ' ')
+      if (reqDir === 'recent') params.req_from = iso
+      else params.req_to = iso
+    }
     const { data } = await api.get('/tasks', { params })
     setTasks(data)
-  }, [q, statFilter, siteFilter, typeFilter, catFilter, reqFilter, workerFilter, users])
+  }, [q, statFilter, siteFilter, typeFilter, catFilter, reqFilter, workerFilter, reqDir, reqPeriod, users])
 
   useEffect(() => { load().catch(console.error) }, [load])
-  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, catFilter, reqFilter, workerFilter])   // 검색조건 변경 시 1페이지로
+  useEffect(() => setPage(0), [q, statFilter, siteFilter, typeFilter, catFilter, reqFilter, workerFilter, reqDir, reqPeriod])   // 검색조건 변경 시 1페이지로
   useEffect(() => {
     api.get('/config').then(r => setCfg(r.data))
     api.get('/sites').then(r => setSites(r.data))
@@ -55,20 +68,22 @@ export default function TaskList() {
   // 현재 조회 결과를 CSV(BOM 포함, 엑셀에서 바로 열림)로 다운로드
   const downloadCsv = () => {
     const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`
-    const header = ['ID', '사이트', '우선순위', 'CSR번호', '유형', '작업명', '예상 작업시간(Hour)',
-      '현업담당자', 'IT담당자', '작업자', '시작일시', '종료일시(예상)', '상태']
+    const header = ['ID', '사이트', '우선순위', 'CSR번호', '작업유형', '업무유형', '작업명', '예상 작업시간(Hour)',
+      '현업담당자', 'IT담당자', '작업자', '요청일시', '시작일시', '종료일시(예상)', '작업상태']
     const lines = tasks.map(t => [
       t.taskid, t.site_name || t.siteid || '', t.priority, t.task_csrid || '',
-      TASK_TYPE_LABEL[t.task_type] || '', t.task_name, t.work_hours_estimated,
+      TASK_TYPE_LABEL[t.task_type] || '',
+      t.task_category_nm || t.task_category_cd || '', t.task_name, t.work_hours_estimated,
       t.req_user_name || t.req_userid || '',
       t.itos_user_name || t.itos_userid || '',
       t.work_user_name || t.work_userid || '',
+      fmtDT(t.req_date),
       fmtDT(t.task_start_date), fmtDT(t.task_end_date_estimated),
       STAT_LABEL[t.task_stat] || t.task_stat,
     ].map(esc).join(','))
-    const fields = ['taskid', 'site_name', 'priority', 'task_csrid', 'task_type', 'task_name',
+    const fields = ['taskid', 'site_name', 'priority', 'task_csrid', 'task_type', 'task_category_nm', 'task_name',
       'work_hours_estimated', 'req_userid', 'itos_userid', 'work_userid',
-      'task_start_date', 'task_end_date_estimated', 'task_stat']
+      'req_date', 'task_start_date', 'task_end_date_estimated', 'task_stat']
     const csv = '\uFEFF' + [header.map(esc).join(','),
       fields.map(esc).join(','),   // 테이블 컬럼명 라인
       ...lines].join('\r\n')
@@ -132,15 +147,37 @@ export default function TaskList() {
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
         />
+        <select value={reqDir} title="요청일시 구분"
+          onChange={e => { setReqDir(e.target.value); setReqPeriod('') }}>
+          <option value="">요청일시(전체)</option>
+          <option value="recent">최근</option>
+          <option value="past">지난</option>
+        </select>
+        <select value={reqPeriod} title="요청일시 기간" disabled={!reqDir}
+          onChange={e => setReqPeriod(e.target.value)}>
+          <option value="">기간(선택)</option>
+          {reqDir === 'recent' && (<>
+            <option value="1">1일</option>
+            <option value="3">3일</option>
+            <option value="7">1주일</option>
+            <option value="1m">1달</option>
+            <option value="3m">3달</option>
+          </>)}
+          {reqDir === 'past' && (<>
+            <option value="7">1주일</option>
+            <option value="1m">1달</option>
+            <option value="3m">3달</option>
+          </>)}
+        </select>
         <button onClick={() => {
-          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, cat: catFilter, req: reqFilter, worker: workerFilter, size: pageSize })
+          saveFilter('tasks', { site: siteFilter, q, stat: statFilter, type: typeFilter, cat: catFilter, req: reqFilter, worker: workerFilter, rdir: reqDir, rperiod: reqPeriod, size: pageSize })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button onClick={() => {
           clearFilter('tasks')
           setSiteFilter(me?.default_siteid ?? ''); setQ('')
           setStatFilter(''); setTypeFilter(''); setCatFilter(''); setReqFilter('')
-          setWorkerFilter(''); setPage(0)
+          setWorkerFilter(''); setReqDir(''); setReqPeriod(''); setPage(0)
         }}>검색조건 초기화</button>
         <button className="excel" onClick={downloadCsv} disabled={!tasks.length}>엑셀 다운로드</button>
       </div>
@@ -158,9 +195,9 @@ export default function TaskList() {
       <table className="grid">
         <thead>
           <tr>
-            <th className="fit">ID</th><th>사이트</th><th className="fit">우선<br/>순위</th><th className="csr-col">CSR번호</th><th className="fit">유형</th><th>작업명</th><th className="fit">예상 작업<br/>시간(Hour)</th>
+            <th className="fit">ID</th><th>사이트</th><th className="fit">우선<br/>순위</th><th className="csr-col">CSR번호</th><th className="fit">작업유형</th><th className="fit">업무유형</th><th>작업명</th><th className="fit">예상 작업<br/>시간(Hour)</th>
             <th>현업담당자</th><th>IT담당자</th><th>작업자</th>
-            <th>시작일시</th><th>종료일시(예상)</th><th>상태</th>
+            <th>요청일시</th><th>시작일시</th><th>종료일시(예상)</th><th>작업상태</th>
           </tr>
         </thead>
         <tbody>
@@ -171,6 +208,7 @@ export default function TaskList() {
               <td className="r fit">{t.priority}</td>
               <td className="csr-col">{t.task_csrid || '-'}</td>
               <td className="c fit">{TASK_TYPE_LABEL[t.task_type] || '-'}</td>
+              <td className="c fit">{t.task_category_nm || '-'}</td>
               <td>{t.priority === 0 && <span className="badge urgent-badge" title="우선순위">긴급</span>}
                 {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
                 {!!t.weekday_included &&
@@ -190,6 +228,7 @@ export default function TaskList() {
               <td className="c">{t.work_userid
                 ? <button className="link" onClick={() => setUserSel(t.work_userid)}>{t.work_user_name || t.work_userid}</button>
                 : '-'}</td>
+              <td className="c">{fmtDT(t.req_date)}</td>
               <td className="c">
                 {fmtDT(t.task_start_date)}
                 {t.start_fixed ? <span className="badge">고정</span> : null}
@@ -199,7 +238,7 @@ export default function TaskList() {
             </tr>
           ))}
           {tasks.length === 0 && (
-            <tr><td colSpan="13" className="empty">작업이 없습니다</td></tr>
+            <tr><td colSpan="15" className="empty">작업이 없습니다</td></tr>
           )}
         </tbody>
       </table>

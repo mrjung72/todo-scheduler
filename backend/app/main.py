@@ -197,6 +197,17 @@ def migrate(db):
         if "memo" not in cols:
             db.execute(text(
                 "ALTER TABLE task_stickers ADD COLUMN memo TEXT"))
+    # work_schedule_log.work_date 추가 (기존 이력은 등록일시로 백필)
+    if "work_schedule_log" in {r[0] for r in db.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table'"))}:
+        cols = {r[1] for r in db.execute(
+            text("PRAGMA table_info(work_schedule_log)"))}
+        if "work_date" not in cols:
+            db.execute(text(
+                "ALTER TABLE work_schedule_log ADD COLUMN work_date DATETIME"))
+            db.execute(text(
+                "UPDATE work_schedule_log SET work_date = create_date "
+                "WHERE work_date IS NULL"))
     # task_chg_log.work_userid 추가 (기존 이력은 작업의 현재 작업자로 백필)
     if "task_chg_log" in {r[0] for r in db.execute(
             text("SELECT name FROM sqlite_master WHERE type='table'"))}:

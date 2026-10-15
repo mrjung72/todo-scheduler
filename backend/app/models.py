@@ -110,6 +110,7 @@ class WorkScheduleLog(Base):
     taskid = Column(Integer, ForeignKey("tasks.taskid"))
     work_remark = Column(Text)             # 작업내용
     work_userid = Column(Text)             # 작업자ID
+    work_date = Column(DateTime, default=datetime.now)   # 작업일시 (수정 가능)
     create_date = Column(DateTime, default=datetime.now)
 
 

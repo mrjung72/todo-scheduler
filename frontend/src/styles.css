@@ -526,6 +526,8 @@ pre.log-detail.hljs {
 }
 /* 팝업 블록 바깥 타이틀 */
 .blk-title { display: block; font-size: 14px; margin: 10px 0 4px; color: #334155; }
+.log-meta { font-size: 12px; color: #64748b; margin: 0 0 6px; }
+.log-meta input[type="datetime-local"] { font-size: 12px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; }
 /* 작업 상세 팝업 하단 탭 (작업요청내용/작업이력) */
 .btab-bar { display: flex; gap: 4px; margin-top: 10px; }
 .btab-bar .btab {
