@@ -196,8 +196,9 @@ table.grid td.clickable:hover { background: #eff6ff; }
   border-bottom: 2px solid;
 }
 .kb-head .kb-sf {
-  font-size: 11px; font-weight: 400; padding: 2px 3px;
-  margin-left: auto; color: #475569;
+  font-size: 13px; font-weight: 400; padding: 4px 6px;
+  margin-left: auto; color: #334155;
+  border: 1px solid #cbd5e1; border-radius: 5px; background: #fff;
 }
 .kb-head .kb-sf + .kb-sf { margin-left: 0; }
 .kb-area.st-R .kb-head { color: #475569; border-color: #cbd5e1; background: #f8fafc; }

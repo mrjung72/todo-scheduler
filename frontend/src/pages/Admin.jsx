@@ -447,14 +447,16 @@ function UsersTab() {
           onUpload={staff ? upload : null} onDone={load} />
       </div>
       {staff && (
-      <form className="newtask" onSubmit={add}>
+      <form className="newtask" onSubmit={add} autoComplete="off">
         <input required placeholder="사용자ID" value={form.userid}
+          autoComplete="off"
           onChange={e => setForm({ ...form, userid: e.target.value })} />
         <input required placeholder="사용자명" value={form.user_name}
           onChange={e => setForm({ ...form, user_name: e.target.value })} />
         <input placeholder="부서" value={form.dept_name}
           onChange={e => setForm({ ...form, dept_name: e.target.value })} />
         <input placeholder="직급" value={form.job_title}
+          autoComplete="off" name="user-job-title"
           onChange={e => setForm({ ...form, job_title: e.target.value })} />
         <select value={form.user_grade}
           onChange={e => setForm({ ...form, user_grade: +e.target.value })}>
@@ -463,6 +465,7 @@ function UsersTab() {
             .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <input type="password" placeholder="비밀번호(기본 1234)" value={form.password}
+          autoComplete="new-password"
           onChange={e => setForm({ ...form, password: e.target.value })} />
         <select value={form.default_siteid}
           onChange={e => setForm({ ...form, default_siteid: e.target.value })}>
@@ -1013,8 +1016,9 @@ function TasksTab() {
                       <span title={stickerTip(t.stickers)}>
                         {' ' + t.stickers.map(s => s.emoji).join(' ')}</span>}</button>
                   {can(t) && (!!t.holiday_work || ['R', 'C', 'W'].includes(t.task_stat)) &&
-                    <button type="button" title="작업명 수정"
-                      onClick={() => setNameEdit({ taskid: t.taskid, value: t.task_name })}>수정</button>}
+                    <button type="button" className="link" title="작업명 수정"
+                      style={{ padding: '0 2px' }}
+                      onClick={() => setNameEdit({ taskid: t.taskid, value: t.task_name })}>✏️</button>}
                 </>)}</td>
               <td className="r fit">{t.priority}</td>
               <td className="r fit">{t.work_hours_estimated}
