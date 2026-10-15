@@ -106,11 +106,11 @@ export default function TaskList() {
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
         <select value={statFilter} onChange={e => setStatFilter(e.target.value)}>
-          <option value="">상태(전체)</option>
+          <option value="">작업상태(전체)</option>
           {Object.entries(STAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-          <option value="">유형(전체)</option>
+          <option value="">작업유형(전체)</option>
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
@@ -127,7 +127,7 @@ export default function TaskList() {
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input
-          placeholder="검색어 (작업명/CSR/담당자명 또는 ID)"
+          placeholder="검색어 (작업명/작업내용/CSR/담당자명 또는 ID)"
           value={q}
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
@@ -175,7 +175,8 @@ export default function TaskList() {
                 {!!t.holiday_work && <span className="badge hol-badge">휴일</span>}
                 {!!t.weekday_included &&
                   <span className="badge warn-badge" title="휴일작업 기간에 평일이 포함되어 있습니다">평일</span>}
-                <button className="link" onClick={() => setSel(t)}>{t.task_name}</button>
+                <button className="link" title={t.task_name} onClick={() => setSel(t)}>
+                  {t.task_name?.length > 30 ? t.task_name.slice(0, 30) + '…' : t.task_name}</button>
                 {!!t.stickers?.length &&
                   <span className="kb-stickers" title={stickerTip(t.stickers)}>
                     {t.stickers.map(s => s.emoji).join(' ')}</span>}</td>

@@ -138,7 +138,7 @@ export default function Kanban() {
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-          <option value="">유형(전체)</option>
+          <option value="">작업유형(전체)</option>
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
@@ -155,7 +155,7 @@ export default function Kanban() {
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input
-          placeholder="검색어 (작업명/CSR/담당자명 또는 ID)"
+          placeholder="검색어 (작업명/작업내용/CSR/담당자명 또는 ID)"
           value={q}
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}

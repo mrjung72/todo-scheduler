@@ -313,7 +313,8 @@ export default function CalendarView() {
     if (catFilter && p.task_category_cd !== catFilter) return false
     if (reqUid && p.req_userid !== reqUid) return false
     if (workerFilter && p.work_userid !== workerFilter) return false
-    if (kw && ![e.title, p.task_csrid, p.work_user_name, p.work_userid, p.site_name]
+    if (kw && ![e.title, p.task_csrid, p.task_req_remark,
+      p.work_user_name, p.work_userid, p.site_name]
       .some(v => (v ?? '').toString().toLowerCase().includes(kw))) return false
     return true
   })
@@ -334,7 +335,7 @@ export default function CalendarView() {
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-          <option value="">유형(전체)</option>
+          <option value="">작업유형(전체)</option>
           {Object.entries(TASK_TYPE_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}({k})</option>)}
         </select>
@@ -351,7 +352,7 @@ export default function CalendarView() {
             .map(u => <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
         <input
-          placeholder="검색어 (작업명/CSR/작업자/사이트)"
+          placeholder="검색어 (작업명/작업내용/CSR/작업자/사이트)"
           value={q}
           onChange={e => setQ(e.target.value)}
         />

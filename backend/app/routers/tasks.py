@@ -215,6 +215,7 @@ def list_tasks(
                 or_(
                     Task.task_name.like(like),
                     Task.task_csrid.like(like),
+                    Task.task_req_remark.like(like),
                     Task.req_userid.like(like),
                     ReqUser.user_name.like(like),
                     Task.itos_userid.like(like),

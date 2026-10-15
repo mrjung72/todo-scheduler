@@ -108,6 +108,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [prioEdit, setPrioEdit] = useState(null)     // 우선순위 수정 입력값
   const [reqDateEdit, setReqDateEdit] = useState(null) // 요청일시 수정 입력값
   const [schedEdit, setSchedEdit] = useState(null)     // 스케쥴적용(Y/N) 수정 입력값
+  const [catEdit, setCatEdit] = useState(null)         // 업무유형 수정 입력값
+  const [cats, setCats] = useState([])                 // 업무유형 목록 (작업 사이트 기준)
   const [recalcBusy, setRecalcBusy] = useState(false)
   // 수정 제한 항목은 작업요청·검토중·대기중(또는 휴일작업)에서만 변경 가능
   const canEditFields = canEdit &&
@@ -125,6 +127,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
       (schedApply === 'N' && task.task_stat === 'O')))
   const estHours = tf.work_hours_estimated ?? task.work_hours_estimated
   const prio = tf.priority ?? task.priority
+  // 업무유형 — 팝업 내 수정 반영값 우선, 유형명은 목록에서 조회
+  const catCd = tf.task_category_cd ?? task.task_category_cd
+  const catNm = cats.find(c => c.task_category_cd === catCd)?.task_category_nm
+    || (catCd === task.task_category_cd ? task.task_category_nm : null)
   const fileRef = useRef(null)
   const tabRef = useRef(null)               // 탭 콘텐츠 — 탭 전환 시 높이 유지용
   const [minH, setMinH] = useState(0)       // 지금까지 표시된 최대 높이
@@ -137,6 +143,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     setBtab('req'); setHis(null); setLogs(null)
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => setDaily([]))
+    api.get('/task-categories', { params: { siteid: task.siteid || undefined } })
+      .then(r => setCats(r.data)).catch(() => setCats([]))
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
     // 작업자의 하루시간은 항상 users 조회로 최신값 반영
     // (목록 로딩 후 변경되었거나 필드가 없는 경로로 열린 경우 대비)
@@ -251,6 +259,16 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         schedule_apply: schedEdit })
       setTf(t => ({ ...t, schedule_apply: data.schedule_apply }))
       setSchedEdit(null); onChanged?.()
+    } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
+  // 업무유형 수정 (상태 무관 — 메타 정보)
+  const saveCat = async () => {
+    try {
+      const { data } = await api.put(`/tasks/${task.taskid}`, {
+        task_category_cd: catEdit || null })
+      setTf(t => ({ ...t, task_category_cd: data.task_category_cd }))
+      setCatEdit(null); onChanged?.()
     } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
   }
 
@@ -437,6 +455,22 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 </select>
                 <button className="link" onClick={saveSched}>저장</button>
                 <button className="link" onClick={() => setSchedEdit(null)}>취소</button>
+              </>)}</p>
+              <p><b>업무유형</b> {catEdit === null ? (<>
+                {catCd ? (catNm ? `${catNm}(${catCd})` : catCd) : '-'}
+                {canEdit &&
+                  <button className="link"
+                    onClick={() => setCatEdit(catCd || '')}>수정</button>}
+              </>) : (<>
+                <select value={catEdit}
+                  onChange={e => setCatEdit(e.target.value)}>
+                  <option value="">-</option>
+                  {cats.map(c =>
+                    <option key={c.task_category_cd} value={c.task_category_cd}>
+                      {c.task_category_nm}({c.task_category_cd})</option>)}
+                </select>
+                <button className="link" onClick={saveCat}>저장</button>
+                <button className="link" onClick={() => setCatEdit(null)}>취소</button>
               </>)}</p>
               <p><b>요청일자</b> {reqDateEdit === null ? (<>
                 {fmtDT(tf.req_date ?? task.req_date) || '-'}

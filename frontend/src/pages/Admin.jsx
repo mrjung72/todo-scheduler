@@ -1045,11 +1045,11 @@ function TasksTab() {
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
         <select value={statF} onChange={e => setStatF(e.target.value)}>
-          <option value="">상태(전체)</option>
+          <option value="">작업상태(전체)</option>
           {statOpt.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <select value={typeF} onChange={e => setTypeF(e.target.value)}>
-          <option value="">유형(전체)</option>
+          <option value="">작업유형(전체)</option>
           {typeOpt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <select value={catF} onChange={e => setCatF(e.target.value)}>
@@ -1064,7 +1064,7 @@ function TasksTab() {
           {users.filter(isDevWorker).map(u =>
             <option key={u.userid} value={u.userid}>{u.user_name}</option>)}
         </select>
-        <input placeholder="검색 (작업명/사이트/담당자/작업자/상태/CSR)" value={q}
+        <input placeholder="검색 (작업명/작업내용/사이트/담당자/작업자/상태/CSR)" value={q}
           onChange={e => setQ(e.target.value)} />
         <button onClick={() => {
           saveFilter('admin-tasks', { site: siteF, stat: statF, type: typeF, cat: catF, req: reqF, work: workF, q })
@@ -1831,7 +1831,7 @@ function SchedHisTab() {
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
         <select value={statF} onChange={e => setStatF(e.target.value)}>
-          <option value="">상태(전체)</option>
+          <option value="">작업상태(전체)</option>
           {Object.entries(STAT_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}</option>)}
         </select>
@@ -1990,7 +1990,7 @@ function AttachFilesTab() {
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
         <select value={statF} onChange={e => setStatF(e.target.value)}>
-          <option value="">상태(전체)</option>
+          <option value="">작업상태(전체)</option>
           {Object.entries(STAT_LABEL).map(([k, v]) =>
             <option key={k} value={k}>{v}</option>)}
         </select>
