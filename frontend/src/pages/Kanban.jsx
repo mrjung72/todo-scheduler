@@ -27,6 +27,8 @@ export default function Kanban() {
   // 요청일시 기간 필터: 구분(최근/지난) + 기간
   const [reqDir, setReqDir] = useState(savedF.rdir || '')
   const [reqPeriod, setReqPeriod] = useState(savedF.rperiod || '')
+  // 상태영역별 상태변경일자 필터: { [stat]: { dir, period } }
+  const [statF, setStatF] = useState({})
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)   // 상세 팝업 대상 작업
@@ -112,6 +114,18 @@ export default function Kanban() {
   const byStat = {}
   for (const t of tasks) (byStat[t.task_stat] ??= []).push(t)
 
+  // 상태변경일자 필터 판정: 최근=기준시각 이후 / 지난=기준시각 이전
+  const matchStatF = (t, f) => {
+    if (!f?.dir || !f?.period) return true
+    if (!t.stat_chg_date) return false
+    const b = new Date()
+    const v = parseInt(f.period, 10)
+    if (f.period.endsWith('m')) b.setMonth(b.getMonth() - v)
+    else b.setDate(b.getDate() - v)
+    const d = new Date(t.stat_chg_date)
+    return f.dir === 'recent' ? d >= b : d <= b
+  }
+
   return (
     <div className="kanban-wrap">
       <div className="toolbar">
@@ -172,7 +186,10 @@ export default function Kanban() {
       <div className="kanban">
         {LAYOUT.map((stats, i) => (
           <div className="kb-col" key={i}>
-            {stats.map(st => (
+            {stats.map(st => {
+              const f = statF[st] || {}
+              const items = (byStat[st] || []).filter(t => matchStatF(t, f))
+              return (
               <section
                 className={`kb-area st-${st}` + (dropTarget === st ? ' drop-over' : '')}
                 key={st}
@@ -184,10 +201,37 @@ export default function Kanban() {
               >
                 <h4 className="kb-head">
                   {STAT_LABEL[st] || st}
-                  <span className="kb-count">{byStat[st]?.length || 0}</span>
+                  <span className="kb-count">{items.length}</span>
+                  <select className="kb-sf" value={f.dir || ''}
+                    title={`${STAT_LABEL[st] || st} 변경일 구분`}
+                    onChange={e => setStatF(p => ({
+                      ...p, [st]: { dir: e.target.value, period: '' } }))}>
+                    <option value="">전체</option>
+                    <option value="recent">최근</option>
+                    <option value="past">지난</option>
+                  </select>
+                  <select className="kb-sf" value={f.period || ''}
+                    title={`${STAT_LABEL[st] || st} 변경일 기간`}
+                    disabled={!f.dir}
+                    onChange={e => setStatF(p => ({
+                      ...p, [st]: { ...p[st], period: e.target.value } }))}>
+                    <option value="">기간</option>
+                    {f.dir === 'recent' && (<>
+                      <option value="1">1일</option>
+                      <option value="3">3일</option>
+                      <option value="7">1주일</option>
+                      <option value="1m">1달</option>
+                      <option value="3m">3달</option>
+                    </>)}
+                    {f.dir === 'past' && (<>
+                      <option value="7">1주일</option>
+                      <option value="1m">1달</option>
+                      <option value="3m">3달</option>
+                    </>)}
+                  </select>
                 </h4>
                 <div className="kb-cards">
-                  {(byStat[st] || []).map(t => (
+                  {items.map(t => (
                     <div className={'kb-card' + (t.taskid === selId ? ' sel' : '')}
                       key={t.taskid}
                       draggable={canMove(t)}
@@ -222,10 +266,11 @@ export default function Kanban() {
                         onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>
                     </div>
                   ))}
-                  {!byStat[st]?.length && <div className="kb-empty">없음</div>}
+                  {!items.length && <div className="kb-empty">없음</div>}
                 </div>
               </section>
-            ))}
+              )
+            })}
           </div>
         ))}
       </div>

@@ -195,6 +195,11 @@ table.grid td.clickable:hover { background: #eff6ff; }
   display: flex; align-items: center; gap: 10px;
   border-bottom: 2px solid;
 }
+.kb-head .kb-sf {
+  font-size: 11px; font-weight: 400; padding: 2px 3px;
+  margin-left: auto; color: #475569;
+}
+.kb-head .kb-sf + .kb-sf { margin-left: 0; }
 .kb-area.st-R .kb-head { color: #475569; border-color: #cbd5e1; background: #f8fafc; }
 .kb-area.st-C .kb-head { color: #6d28d9; border-color: #ddd6fe; background: #f5f3ff; }
 .kb-area.st-W .kb-head { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }

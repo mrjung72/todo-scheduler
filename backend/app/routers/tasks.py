@@ -112,7 +112,7 @@ def _revert_ok(task: Task, prev_stat, last_chg, now) -> bool:
 
 
 def _to_detail(row, cal: dict = None, prev_stat: str = None,
-               can_revert: bool = False) -> TaskDetail:
+               can_revert: bool = False, stat_chg=None) -> TaskDetail:
     (task, req_name, req_dept, req_title, itos_name,
      work_name, work_dept, work_title, work_hours_day, site_name) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
@@ -129,6 +129,7 @@ def _to_detail(row, cal: dict = None, prev_stat: str = None,
             cal, task.task_start_date, task.task_end_date_estimated)
     data["prev_stat"] = prev_stat
     data["can_revert"] = can_revert
+    data["stat_chg_date"] = stat_chg
     return TaskDetail(**data)
 
 
@@ -219,7 +220,8 @@ def list_tasks(
     now = datetime.now().replace(microsecond=0)
     return [_to_detail(r, cal, prev_map.get(r[0].taskid),
                        _revert_ok(r[0], prev_map.get(r[0].taskid),
-                                  last_map.get(r[0].taskid), now))
+                                  last_map.get(r[0].taskid), now),
+                       last_map.get(r[0].taskid))
             for r in rows]
 
 

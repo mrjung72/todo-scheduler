@@ -224,3 +224,4 @@ class TaskDetail(TaskOut):
     weekday_included: Optional[bool] = False   # 휴일작업 기간에 근무일 포함 여부(경고)
     prev_stat: Optional[str] = None   # 직전 상태 (되돌리기용)
     can_revert: Optional[bool] = False   # 직전 상태로 되돌리기 가능 여부
+    stat_chg_date: Optional[datetime] = None   # 현재 상태로 변경된 일시

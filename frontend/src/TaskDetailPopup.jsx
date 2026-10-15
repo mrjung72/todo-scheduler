@@ -440,7 +440,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <button className="link" onClick={() => setStartEdit(null)}>취소</button>
               </>)}</p>
               <p><b>종료(예상)</b> {fmtDT(endEst) || '-'}
-                {canEdit &&
+                {canEdit && ['W', 'P', 'O'].includes(task.task_stat) &&
                   <button onClick={doRecalc} disabled={recalcBusy}
                     style={{ marginLeft: 12 }}
                     title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}
