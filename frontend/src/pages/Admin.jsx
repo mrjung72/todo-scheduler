@@ -52,6 +52,7 @@ const TABS = [
   { key: 'boards', label: '게시판' },
   { key: 'extract', label: '데이터 추출' },
   { key: 'template', label: '템플릿 변환' },
+  { key: 'convert', label: '포맷 변환' },
 ]
 
 const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') || 'null')?.user_grade)
@@ -74,11 +75,10 @@ const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_gra
 // 3-개발매니저: 전체 조회 / 4-일반개발자: 기존과 동일 / 5-IT담당자: 지정 탭 조회
 const TAB_ACCESS = {
   3: ['sites', 'categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
-      'calendar', 'holidays', 'boards', 'extract', 'template'],
+      'calendar', 'holidays', 'boards', 'extract', 'template', 'convert'],
   4: ['categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
-      'holidays', 'extract', 'template'],
-  5: ['sites', 'categories', 'tasks', 'users', 'calendar', 'holidays',
-      'extract', 'template'],
+      'holidays', 'extract', 'template', 'convert'],
+  5: ['sites', 'categories', 'tasks', 'users', 'calendar', 'holidays'],
 }
 
 export default function Admin() {
@@ -111,6 +111,7 @@ export default function Admin() {
       {tab === 'boards' && <BoardsTab />}
       {tab === 'extract' && <ExtractTab />}
       {tab === 'template' && <TemplateTab />}
+      {tab === 'convert' && <FormatTab />}
     </div>
   )
 }
@@ -2271,6 +2272,40 @@ function BoardsTab() {
   )
 }
 
+/* 좌우 분할 + 중앙 드래그 바 — 데이터 추출·템플릿·포맷 변환 탭 공용 */
+function SplitCols({ leftW, setLeftW, left, right }) {
+  const ref = useRef(null)
+  const onDown = e => {
+    e.preventDefault()
+    const bar = e.currentTarget
+    bar.classList.add('on')
+    const move = ev => {
+      const r = ref.current.getBoundingClientRect()
+      const pct = (ev.clientX - r.left) / r.width * 100
+      setLeftW(Math.min(75, Math.max(25, Math.round(pct))))
+    }
+    const up = () => {
+      bar.classList.remove('on')
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', up)
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+  }
+  return (
+    <div ref={ref} className="split-row">
+      <div className="split-pane"
+        style={{ flex: `0 0 calc(${leftW}% - 8px)` }}>{left}</div>
+      <div className="col-split" onMouseDown={onDown} title="드래그해서 너비 조절" />
+      <div className="split-pane" style={{ flex: 1 }}>{right}</div>
+    </div>
+  )
+}
+
 /* ---------- 데이터 추출 탭 ---------- */
 /* 정규식 패턴으로 소스 텍스트에서 매치를 추출하는 도구 (순수 클라이언트 처리).
    참고 구현 개선 반영: 직접 입력도 동작, 빈 매치 무한루프 가드,
@@ -2311,6 +2346,7 @@ function ExtractTab() {
   const [flags, setFlags] = useState({ ...EXTRACT_FLAG_DEF })
   const [showCount, setShowCount] = useState(true)
   const [lineNums, setLineNums] = useState(false)
+  const [leftW, setLeftW] = useState(60)
   const [copied, setCopied] = useState(false)
 
   const lineCount = input ? input.split(/\r?\n/).length : 0
@@ -2408,8 +2444,8 @@ function ExtractTab() {
       </div>
       {preset &&
         <p className="hint">💡 {EXTRACT_PRESETS[preset].description}</p>}
-      <div className="extract-grid">
-        <div>
+      <SplitCols leftW={leftW} setLeftW={setLeftW}
+        left={<div>
           <div className="ext-head">
             <b>소스 입력</b>
             <button className="link" onClick={() => setInput('')}>초기화</button>
@@ -2418,8 +2454,8 @@ function ExtractTab() {
             placeholder="정규식을 적용할 텍스트를 입력하세요"
             onChange={e => setInput(e.target.value)} />
           <p className="hint">총 {lineCount}행</p>
-        </div>
-        <div>
+        </div>}
+        right={<div>
           <div className="ext-head">
             <b>추출된 결과 ({finalResults.length}건)</b>
             <label style={{ fontWeight: 400, fontSize: 13, marginLeft: 'auto', marginRight: 8 }}>
@@ -2442,8 +2478,7 @@ function ExtractTab() {
             {flags.removeDuplicates && results.length > finalResults.length &&
               ` (전체 ${results.length}건 중 중복 ${results.length - finalResults.length}건 제거)`}
           </p>
-        </div>
-      </div>
+        </div>} />
     </div>
   )
 }
@@ -2505,6 +2540,7 @@ function TemplateTab() {
   const [lineNums, setLineNums] = useState(false)
   const [headerRow, setHeaderRow] = useState(true)
   const [skipEmpty, setSkipEmpty] = useState(true)
+  const [leftW, setLeftW] = useState(60)
   const [copied, setCopied] = useState(false)
 
   const realSep = sep === 'tab' ? '\t' : sep
@@ -2600,8 +2636,8 @@ function TemplateTab() {
         {optCb(headerRow, setHeaderRow, '첫 번째 행을 헤더로 사용')}
         {optCb(skipEmpty, setSkipEmpty, '빈 행 건너뛰기')}
       </div>
-      <div className="extract-grid">
-        <div>
+      <SplitCols leftW={leftW} setLeftW={setLeftW}
+        left={<div>
           <div className="ext-head">
             <b>템플릿</b>
             <span>
@@ -2652,9 +2688,8 @@ function TemplateTab() {
               <span style={{ color: '#b45309' }}>
                 {' '}• 컬럼 수 불일치 {badRows}행</span>}
           </p>
-        </div>
-
-        <div>
+        </div>}
+        right={<div>
           <div className="ext-head">
             <b>생성된 결과 ({results.length}건)</b>
             <span>
@@ -2677,8 +2712,7 @@ function TemplateTab() {
             : <textarea className="ext-ta" style={{ height: 392 }} readOnly
                 value={outText} />}
           <p className="hint">총 {results.length}개 결과 생성됨</p>
-        </div>
-      </div>
+        </div>} />
       <p className="hint" style={{ marginTop: 12 }}>
         💡 사용법 — 템플릿에 `${'{'}변수명{'}'}` 형태로 변수를 쓰고, CSV 첫 행에
         변수명(헤더)을 입력하면 각 데이터 행이 템플릿에 적용되어 반복 생성됩니다.
@@ -2686,4 +2720,392 @@ function TemplateTab() {
       </p>
     </div>
   )
+}
+
+/* ---------- 포맷 변환 탭 ---------- */
+/* html/xml/csv/json/txt 간 텍스트 포맷 변환 (순수 클라이언트).
+   입력을 JS 값으로 파싱 → 대상 포맷으로 직렬화하는 중간 모델 방식.
+   XML 속성은 @접두사, 텍스트 노드는 #text 키로 표현 */
+const FMT_NAMES = { json: 'JSON', xml: 'XML', html: 'HTML', csv: 'CSV', txt: 'TXT(줄)' }
+const FMT_SAMPLES = {
+  json: '[\n  { "name": "홍길동", "age": 30 },\n  { "name": "김철수", "age": 25 }\n]',
+  xml: '<users>\n  <user>\n    <name>홍길동</name>\n    <age>30</age>\n  </user>\n</users>',
+  html: '<table>\n  <tr><th>name</th><th>age</th></tr>\n' +
+    '  <tr><td>홍길동</td><td>30</td></tr>\n</table>',
+  csv: 'name,age\n홍길동,30\n김철수,25',
+  txt: '홍길동\n김철수\n이영희',
+}
+const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+// 입력 형식 자동 감지
+function detectFmt(text) {
+  const s = text.trim()
+  if (!s) return null
+  if (s.startsWith('{') || s.startsWith('[')) {
+    try { JSON.parse(s); return { fmt: 'json' } } catch {}
+  }
+  if (/^<[^>]+>/.test(s)) {
+    try {
+      const d = new DOMParser().parseFromString(s, 'text/xml')
+      if (!d.querySelector('parsererror')) return { fmt: 'xml' }
+    } catch {}
+    return { fmt: 'html' }
+  }
+  const lines = s.split(/\r?\n/).filter(l => l.trim() !== '')
+  for (const sp of [',', '\t', ';', '|']) {
+    if (lines.length > 1 && lines.every(l => l.includes(sp)))
+      return { fmt: 'csv', sep: sp }
+  }
+  return { fmt: 'txt' }
+}
+
+// XML 요소 → JS 값 (속성: @속성명, 텍스트: #text, 반복 요소: 배열)
+const xmlToVal = el => {
+  const kids = [...el.children]
+  const attrs = {}
+  for (const a of el.attributes) attrs['@' + a.name] = a.value
+  if (!kids.length) {
+    const t = el.textContent.trim()
+    return Object.keys(attrs).length ? { ...attrs, '#text': t } : t
+  }
+  const obj = { ...attrs }
+  for (const k of kids) {
+    const v = xmlToVal(k)
+    if (k.tagName in obj) {
+      if (!Array.isArray(obj[k.tagName])) obj[k.tagName] = [obj[k.tagName]]
+      obj[k.tagName].push(v)
+    } else obj[k.tagName] = v
+  }
+  return obj
+}
+// JS 값 → XML (태그명으로 못 쓰는 키는 item으로)
+const xmlName = k => /^[A-Za-z_][\w.-]*$/.test(k) ? k : 'item'
+const valToXml = (name, v, ind = '') => {
+  const n = xmlName(name)
+  // 배열은 컨테이너로 감싸고 각 항목은 <item>
+  if (Array.isArray(v))
+    return `${ind}<${n}>\n` +
+      v.map(x => valToXml('item', x, ind + '  ')).join('\n') +
+      `\n${ind}</${n}>`
+  if (isObj(v)) {
+    let attrs = '', text = ''
+    const kids = []
+    for (const [k, x] of Object.entries(v)) {
+      if (k.startsWith('@')) attrs += ` ${xmlName(k.slice(1))}="${escHtml(x)}"`
+      else if (k === '#text') text = String(x)
+      else kids.push([k, x])
+    }
+    if (!kids.length)
+      return `${ind}<${n}${attrs}>${escHtml(text)}</${n}>`
+    const inner = kids.map(([k, x]) => valToXml(k, x, ind + '  ')).join('\n')
+    const t = text !== '' ? `${ind}  ${escHtml(text)}\n` : ''
+    return `${ind}<${n}${attrs}>\n${t}${inner}\n${ind}</${n}>`
+  }
+  return `${ind}<${n}>${escHtml(v ?? '')}</${n}>`
+}
+const toXmlStr = val => {
+  if (isObj(val) && Object.keys(val).length === 1) {
+    const [k, v] = Object.entries(val)[0]
+    return valToXml(k, v)
+  }
+  if (Array.isArray(val))
+    return `<root>\n${val.map(x => valToXml('item', x, '  ')).join('\n')}\n</root>`
+  if (isObj(val))
+    return `<root>\n${Object.entries(val)
+      .map(([k, x]) => valToXml(k, x, '  ')).join('\n')}\n</root>`
+  return `<root>${escHtml(val ?? '')}</root>`
+}
+
+// 표 계열 출력용 정규화 — {users:[…]} 같은 1키 배열 래퍼는 풀고,
+// 중첩 객체는 a.b 점표기로 평탄화 (JSON 기호 {}[]"가 결과에 남지 않도록)
+const flattenObj = (o, p = '', out = {}) => {
+  for (const [k, v] of Object.entries(o)) {
+    const key = p ? `${p}.${k}` : k
+    if (isObj(v)) flattenObj(v, key, out)
+    else if (Array.isArray(v)) {
+      if (v.every(x => !isObj(x) && !Array.isArray(x)))
+        out[key] = v.join('; ')
+      else v.forEach((x, i) => {
+        if (isObj(x)) flattenObj(x, `${key}.${i}`, out)
+        else out[`${key}.${i}`] = x ?? ''
+      })
+    } else out[key] = v ?? ''
+  }
+  return out
+}
+const toRows = v => {
+  if (isObj(v) && Object.keys(v).length === 1 &&
+      Array.isArray(Object.values(v)[0]))
+    v = Object.values(v)[0]
+  if (Array.isArray(v)) return v.map(x => isObj(x) ? flattenObj(x) : x)
+  return isObj(v) ? [flattenObj(v)] : v
+}
+
+const toCsvStr = (v, s) => {
+  const q = c => {
+    c = String(c)
+    return /["\n\r]/.test(c) || c.includes(s) ? `"${c.replace(/"/g, '""')}"` : c
+  }
+  const cell = x => isObj(x) || Array.isArray(x) ? q(JSON.stringify(x)) : q(x ?? '')
+  v = toRows(v)
+  if (Array.isArray(v)) {
+    if (v.every(isObj)) {
+      const keys = [...new Set(v.flatMap(o => Object.keys(o)))]
+      return [keys.map(q).join(s),
+        ...v.map(o => keys.map(k => cell(o[k])).join(s))].join('\n')
+    }
+    return v.map(x => Array.isArray(x) ? x.map(cell).join(s) : cell(x)).join('\n')
+  }
+  return String(v)
+}
+const toHtmlStr = v => {
+  v = toRows(v)
+  if (Array.isArray(v) && v.length && v.every(isObj)) {
+    const keys = [...new Set(v.flatMap(o => Object.keys(o)))]
+    const th = keys.map(k => `<th>${escHtml(k)}</th>`).join('')
+    const trs = v.map(o => '  <tr>' +
+      keys.map(k => `<td>${escHtml(
+        typeof o[k] === 'object' && o[k] !== null ? JSON.stringify(o[k]) : (o[k] ?? ''))}</td>`)
+        .join('') + '</tr>').join('\n')
+    return `<table>\n<thead><tr>${th}</tr></thead>\n<tbody>\n${trs}\n</tbody>\n</table>`
+  }
+  if (Array.isArray(v) && v.length && v.every(x => Array.isArray(x))) {
+    const trs = v.map(r =>
+      '  <tr>' + r.map(c => `<td>${escHtml(c)}</td>`).join('') + '</tr>').join('\n')
+    return `<table>\n<tbody>\n${trs}\n</tbody>\n</table>`
+  }
+  if (Array.isArray(v))
+    return `<ul>\n${v.map(x =>
+      `  <li>${escHtml(isObj(x) || Array.isArray(x) ? JSON.stringify(x) : x)}</li>`)
+      .join('\n')}\n</ul>`
+  if (isObj(v))
+    return `<table>\n<tbody>\n${Object.entries(v).map(([k, x]) =>
+      `  <tr><th>${escHtml(k)}</th><td>${escHtml(
+        typeof x === 'object' && x !== null ? JSON.stringify(x) : x)}</td></tr>`)
+      .join('\n')}\n</tbody>\n</table>`
+  return `<p>${escHtml(v ?? '')}</p>`
+}
+const toTxtStr = v => {
+  v = toRows(v)
+  if (Array.isArray(v)) {
+    if (v.every(isObj)) {
+      const keys = [...new Set(v.flatMap(o => Object.keys(o)))]
+      return [keys.join('\t'),
+        ...v.map(o => keys.map(k => o[k] ?? '').join('\t'))].join('\n')
+    }
+    return v.map(x =>
+      Array.isArray(x) ? x.join('\t')
+        : isObj(x) ? JSON.stringify(x) : String(x)).join('\n')
+  }
+  return String(v ?? '')
+}
+
+function FormatTab() {
+  const [inFmt, setInFmt] = useState('auto')
+  const [outFmt, setOutFmt] = useState('json')
+  const [input, setInput] = useState('')
+  const [sep, setSep] = useState(',')
+  const [csvHead, setCsvHead] = useState(true)
+  const [lineNums, setLineNums] = useState(false)
+  const [unescNl, setUnescNl] = useState(false)   // 입력 전처리: 리터럴 \n → 실제 줄바꿈
+  const [eol, setEol] = useState('lf')            // 결과 줄바꿈 방식
+  const [leftW, setLeftW] = useState(60)          // 좌측(입력) 너비 %
+  const [copied, setCopied] = useState(false)
+  const realSep = sep === 'tab' ? '\t' : sep
+  // 리터럴 이스케이프(\n, \t) → 실제 문자로 전처리
+  const inputText = unescNl
+    ? input.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+    : input
+
+  // 입력 파싱 → JS 값 (자동 감지 시 감지된 포맷·구분자 사용)
+  const parsed = useMemo(() => {
+    const t = inputText.trim()
+    if (!t) return { val: null, fmt: null, err: '' }
+    const det = inFmt === 'auto' ? detectFmt(t) : { fmt: inFmt, sep: realSep }
+    try {
+      switch (det.fmt) {
+        case 'json': return { val: JSON.parse(t), fmt: 'json' }
+        case 'csv': {
+          const rows = parseTplCsv(t, det.sep || realSep)
+            .filter(r => r.some(c => c !== ''))
+          if (csvHead && rows.length > 1) {
+            const heads = rows[0]
+            return { fmt: 'csv', val: rows.slice(1).map(r =>
+              Object.fromEntries(heads.map((h, i) => [h || `col${i}`, r[i] ?? '']))) }
+          }
+          return { fmt: 'csv', val: rows }
+        }
+        case 'xml': {
+          const d = new DOMParser().parseFromString(t, 'text/xml')
+          if (d.querySelector('parsererror'))
+            throw new Error('XML 파싱 실패 — 태그 구조를 확인하세요')
+          const root = d.documentElement
+          return { fmt: 'xml', val: { [root.tagName]: xmlToVal(root) } }
+        }
+        case 'html': {
+          const d = new DOMParser().parseFromString(t, 'text/html')
+          const table = d.querySelector('table')
+          if (table) {
+            const trs = [...table.querySelectorAll('tr')]
+            const cells = tr => [...tr.cells].map(c => c.textContent.trim())
+            if (trs[0]?.querySelector('th')) {
+              const heads = cells(trs[0])
+              return { fmt: 'html', val: trs.slice(1).map(tr =>
+                Object.fromEntries(heads.map((h, i) =>
+                  [h || `col${i}`, cells(tr)[i] ?? '']))) }
+            }
+            return { fmt: 'html', val: trs.map(cells) }
+          }
+          const lis = [...d.querySelectorAll('li')]
+          if (lis.length)
+            return { fmt: 'html', val: lis.map(l => l.textContent.trim()) }
+          return { fmt: 'html',
+            val: (d.body?.textContent || '').split(/\r?\n/)
+              .map(l => l.trim()).filter(Boolean) }
+        }
+        default:
+          return { fmt: 'txt',
+            val: t.split(/\r?\n/).map(l => l.trim()).filter(Boolean) }
+      }
+    } catch (e) {
+      return { val: null, fmt: det.fmt, err: `입력 파싱 오류: ${e.message}` }
+    }
+  }, [inputText, inFmt, realSep, csvHead])
+
+  // JS 값 → 대상 포맷 직렬화
+  const rawOut = useMemo(() => {
+    if (parsed.err) return parsed.err
+    if (parsed.val === null) return ''
+    try {
+      switch (outFmt) {
+        case 'json': return JSON.stringify(parsed.val, null, 2)
+        case 'csv': return toCsvStr(parsed.val, realSep)
+        case 'xml': return toXmlStr(parsed.val)
+        case 'html': return toHtmlStr(parsed.val)
+        default: return toTxtStr(parsed.val)
+      }
+    } catch (e) { return `변환 오류: ${e.message}` }
+  }, [parsed, outFmt, realSep])
+  const outLf = lineNums && rawOut && !parsed.err
+    ? rawOut.split('\n').map((l, i) => `${i + 1}. ${l}`).join('\n')
+    : rawOut
+  const outText =
+    eol === 'crlf' ? outLf.split('\n').join('\r\n') : outLf
+  const inCount = parsed.val === null ? 0
+    : Array.isArray(parsed.val) ? parsed.val.length : 1
+  const outLines = outText ? outText.split('\n').length : 0
+
+  const copyOut = () => {
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1200) }
+    const fallback = () => {
+      const ta = document.createElement('textarea')
+      ta.value = outText; ta.style.cssText = 'position:fixed;opacity:0'
+      document.body.appendChild(ta); ta.select()
+      try { document.execCommand('copy'); done() } catch {}
+      ta.remove()
+    }
+    navigator.clipboard?.writeText
+      ? navigator.clipboard.writeText(outText).then(done).catch(fallback)
+      : fallback()
+  }
+  // 변환 결과를 입력으로 옮겨 연쇄 변환
+  const swap = () => {
+    if (!outText || parsed.err) return
+    setInput(outText)
+    setInFmt(outFmt)
+    setOutFmt(parsed.fmt || 'txt')
+  }
+
+  const fmtSel = (val, set, withAuto) => (
+    <select value={val} onChange={e => set(e.target.value)}>
+      {withAuto && <option value="auto">자동 감지</option>}
+      {Object.entries(FMT_NAMES).map(([k, n]) =>
+        <option key={k} value={k}>{n}</option>)}
+    </select>
+  )
+  const sepSel = (
+    <select value={sep} onChange={e => setSep(e.target.value)}
+      title="CSV 구분자">
+      <option value=",">쉼표(,)</option>
+      <option value=";">세미콜론(;)</option>
+      <option value="tab">탭</option>
+      <option value="|">파이프(|)</option>
+    </select>
+  )
+
+  return (
+    <div>
+      <div className="toolbar" style={{ gap: 14 }}>
+        <b>텍스트 포맷 변환</b>
+        {inFmtEff(input, inFmt) === 'csv' &&
+          <label style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
+            <input type="checkbox" checked={csvHead}
+              onChange={e => setCsvHead(e.target.checked)} /> 첫 행을 헤더로 사용
+          </label>}
+        <label style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
+          <input type="checkbox" checked={lineNums}
+            onChange={e => setLineNums(e.target.checked)} /> 라인번호 표시
+        </label>
+      </div>
+      <SplitCols leftW={leftW} setLeftW={setLeftW}
+        left={<div>
+          <div className="ext-head">
+            <b>입력{inFmt === 'auto' && parsed.fmt &&
+              ` (감지: ${FMT_NAMES[parsed.fmt]})`} ({inCount}건)</b>
+            <span>
+              {fmtSel(inFmt, setInFmt, true)}{' '}
+              {(inFmt === 'csv' || inFmt === 'auto') && sepSel}{' '}
+              <button className="link" onClick={() =>
+                setInput(FMT_SAMPLES[inFmt === 'auto' ? 'csv' : inFmt] || '')}>
+                샘플</button>{' '}
+              <button className="link" onClick={() => setInput('')}>초기화</button>
+            </span>
+          </div>
+          <textarea className="ext-ta" style={{ height: 400 }} value={input}
+            placeholder="변환할 텍스트를 입력하세요 (JSON/XML/HTML/CSV/TXT)"
+            onChange={e => setInput(e.target.value)} />
+          {parsed.err &&
+            <p className="hint" style={{ color: '#dc2626' }}>⚠ {parsed.err}</p>}
+          <p className="hint" style={{ marginTop: 0 }}>
+            <label style={{ fontWeight: 400 }}>
+              <input type="checkbox" checked={unescNl}
+                onChange={e => setUnescNl(e.target.checked)} /> 입력의 \n,\t
+              문자열을 실제 줄바꿈/탭으로 변환 후 파싱
+            </label>
+          </p>
+        </div>}
+        right={<div>
+          <div className="ext-head">
+            <b>변환 결과 ({outLines}행)</b>
+            <span>
+              <select value={eol}
+                onChange={e => setEol(e.target.value)} title="결과 줄바꿈 방식">
+                <option value="lf">LF(\n)</option>
+                <option value="crlf">CRLF(\r\n)</option>
+              </select>{' '}
+              {fmtSel(outFmt, setOutFmt, false)}{' '}
+              {outFmt === 'csv' && sepSel}{' '}
+              <button className="link" onClick={swap}
+                disabled={!outText || !!parsed.err} title="결과를 입력으로 이동">
+                ⇄ 입력으로</button>{' '}
+              <button className="link" onClick={copyOut} disabled={!outText}>
+                {copied ? '✓ 복사됨' : '복사'}</button>
+            </span>
+          </div>
+          <textarea className="ext-ta" style={{ height: 400 }} readOnly
+            value={outText} />
+        </div>} />
+      <p className="hint" style={{ marginTop: 12 }}>
+        💡 입력을 JS 값으로 파싱한 뒤 대상 포맷으로 변환합니다 — XML 속성은 `@속성명`,
+        텍스트 노드는 `#text`로 표현되고, HTML은 table→표 데이터·li→목록·그 외→텍스트로
+        추출됩니다. [⇄ 입력으로]로 결과를 다시 입력해 연쇄 변환할 수 있습니다.
+      </p>
+    </div>
+  )
+}
+
+// 입력 포맷 select가 'auto'일 때 감지 결과, 아니면 선택값
+function inFmtEff(input, inFmt) {
+  if (inFmt !== 'auto') return inFmt
+  return detectFmt(input)?.fmt || null
 }
