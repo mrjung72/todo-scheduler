@@ -29,6 +29,7 @@ export default function Kanban() {
   // 요청일시 기간 필터: 구분(최근/지난) + 기간
   const [reqDir, setReqDir] = useState(savedF.rdir || '')
   const [reqPeriod, setReqPeriod] = useState(savedF.rperiod || '')
+  const [stkOnly, setStkOnly] = useState(savedF.stk || false)   // 스티커 붙은 작업만
   // 상태영역별 상태변경일자 필터: { [stat]: { dir, period } }
   const [statF, setStatF] = useState({})
   const [dropTarget, setDropTarget] = useState(null)  // 드롭 대상 영역의 상태값
@@ -115,8 +116,9 @@ export default function Kanban() {
     }
   }
 
+  const visTasks = stkOnly ? tasks.filter(t => t.stickers?.length) : tasks
   const byStat = {}
-  for (const t of tasks) (byStat[t.task_stat] ??= []).push(t)
+  for (const t of visTasks) (byStat[t.task_stat] ??= []).push(t)
 
   // 상태변경일자 필터 판정: 최근=기준시각 이후 / 지난=기준시각 이전
   const matchStatF = (t, f) => {
@@ -182,18 +184,21 @@ export default function Kanban() {
             <option value="3m">3달</option>
           </>)}
         </select>
+        <label className="chk" title="스티커가 붙은 작업만 표시">
+          <input type="checkbox" checked={stkOnly}
+            onChange={e => setStkOnly(e.target.checked)} /> 스티커 작업만</label>
         <button onClick={() => {
           saveFilter('kanban', { site: siteFilter, q, type: typeFilter, cat: catFilter, req: reqFilter,
-            worker: workerFilter, rdir: reqDir, rperiod: reqPeriod })
+            worker: workerFilter, rdir: reqDir, rperiod: reqPeriod, stk: stkOnly })
           alert('현재 검색조건을 저장했습니다')
         }}>검색조건 저장</button>
         <button onClick={() => {
           clearFilter('kanban')
           setSiteFilter(me?.default_siteid ?? ''); setQ('')
           setTypeFilter(''); setCatFilter(''); setReqFilter(''); setWorkerFilter('')
-          setReqDir(''); setReqPeriod('')
+          setReqDir(''); setReqPeriod(''); setStkOnly(false)
         }}>검색조건 초기화</button>
-        <span className="kb-total">총 {tasks.length}건</span>
+        <span className="kb-total">총 {visTasks.length}건</span>
         <button className="flow-btn" title="작업 처리 프로세스 보기"
           onClick={() => setFlowOpen(true)}>처리 프로세스</button>
         {err && <span className="err">{err}</span>}

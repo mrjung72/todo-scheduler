@@ -678,3 +678,78 @@ td.req-col input { width: 120px; }
   position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; font-size: 10px; font-weight: 600; color: #111827;
 }
+
+/* 작업이력 작업일시 인라인 수정 입력 */
+input.log-dt {
+  font-size: 12px; padding: 1px 3px; border: 1px solid #cbd5e1;
+  border-radius: 4px; max-width: 190px;
+}
+
+/* 작업이력 편집기 툴바 (이미지·표·미리보기) */
+.log-ed-bar { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+.log-ed-bar button, .log-ed-bar .btn-file {
+  font-size: 12px; padding: 3px 10px; border: 1px solid #d1d5db;
+  border-radius: 4px; background: #fff; cursor: pointer;
+}
+.log-ed-bar button:hover, .log-ed-bar .btn-file:hover { background: #f3f4f6; }
+.log-ed-bar button.on { background: #dbeafe; border-color: #93c5fd; }
+.log-editor .req-edit { margin-top: 6px; }
+.md-preview { margin-top: 6px; min-height: 150px; }
+
+/* 마크다운 렌더링 (작업이력 내용) */
+.log-detail.md { white-space: normal; }
+.log-detail.md p { margin: 4px 0; }
+.log-detail.md h1, .log-detail.md h2, .log-detail.md h3,
+.log-detail.md h4, .log-detail.md h5, .log-detail.md h6 {
+  margin: 8px 0 4px; line-height: 1.3;
+}
+.log-detail.md ul, .log-detail.md ol { margin: 4px 0; padding-left: 22px; }
+.log-detail.md table {
+  border-collapse: collapse; margin: 6px 0; font-size: 12px;
+}
+.log-detail.md th, .log-detail.md td {
+  border: 1px solid #d1d5db; padding: 3px 8px;
+}
+.log-detail.md th { background: #f3f4f6; }
+.log-detail.md img { max-width: 100%; border-radius: 4px; }
+.log-detail.md code {
+  background: #f3f4f6; padding: 1px 4px; border-radius: 3px;
+  font-family: Consolas, 'Courier New', monospace; font-size: 12px;
+}
+.log-detail.md pre {
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  padding: 8px; overflow-x: auto;
+}
+.log-detail.md pre code { background: none; padding: 0; }
+.log-detail.md blockquote {
+  margin: 6px 0; padding: 2px 10px; border-left: 3px solid #d1d5db;
+  color: #64748b;
+}
+.toolbar label.chk {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+
+/* 작업이력 목록 작업일시 수정 아이콘 */
+.log-edit-ic { font-size: 11px; padding: 0 2px; }
+
+/* 편집창의 첨부파일 목록 (삭제 가능) */
+.log-ed-files {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin-top: 8px; font-size: 12px;
+}
+.log-ed-file {
+  position: relative; display: inline-flex; align-items: center;
+  padding: 4px 20px 4px 8px; border: 1px solid #cbd5e1;
+  border-radius: 6px; background: #f8fafc;
+}
+
+/* 조회창 첨부파일 삭제 버튼 */
+.att-del {
+  font-size: 9px; width: 16px; height: 16px; border-radius: 50%;
+  padding: 0; line-height: 1; background: #ef4444; color: #fff;
+  border: none; cursor: pointer; opacity: .5;
+}
+.att-del:hover { opacity: 1; }
+
+.att-del { margin-left: 5px; vertical-align: middle; }

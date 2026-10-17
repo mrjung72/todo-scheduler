@@ -4,11 +4,12 @@ import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
   GRADE_LABEL, USER_STAT_LABEL, DUTY_LABEL, isDevGrade, isDevWorker,
   loadFilter, saveFilter, clearFilter, downloadFile, resolveUserid,
-  stickerTip } from '../api'
+  stickerTip, hasMd, mdHtml } from '../api'
 import TaskDetailPopup from '../TaskDetailPopup'
 import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
 import RefreshBtn from '../RefreshBtn'
+import WorkLogEditor from '../WorkLogEditor'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -1544,6 +1545,13 @@ function SchedulesTab() {
       load()
     } catch (e) { alert(errMsg(e)) }
   }
+  // 팝업에서 작업일시 수정 (blur/Enter 저장, 비우면 등록일시로 표시)
+  const saveRemarkDate = v => {
+    if ((v || '') === (selRemark.work_date || '').slice(0, 16)) return
+    const wd = v ? (v.length === 16 ? v + ':00' : v) : null
+    setSelRemark(s => ({ ...s, work_date: wd }))
+    saveSched(selRemark.workschid, { work_date: wd })
+  }
   const downloadRemarkFile = f =>
     api.get(`/attach-files/${f.fileid}/download`, { responseType: 'blob' })
       .then(r => {
@@ -1570,8 +1578,14 @@ function SchedulesTab() {
 
   const add = async e => {
     e.preventDefault()
+    // 작업 선택은 검색 입력 — "#번호 작업명" 또는 번호만 입력
+    const m = (form.taskid || '').match(/#(\d+)/)
+    const tid = m ? +m[1] : +(form.taskid || '')
+    if (!tid || !taskOf(tid)) {
+      alert('작업 목록에서 작업을 선택해 주세요'); return
+    }
     try {
-      await api.post('/schedules', { ...form, taskid: +form.taskid,
+      await api.post('/schedules', { ...form, taskid: tid,
         work_date: form.work_date
           ? (form.work_date.length === 16 ? form.work_date + ':00' : form.work_date)
           : null })
@@ -1586,8 +1600,6 @@ function SchedulesTab() {
   const devOpt = users.filter(isDevWorker)
     .map(u => ({ value: u.userid, label: u.user_name }))
   const uopt = [{ value: '', label: '-' }, ...devOpt]
-  const topt = [{ value: '', label: '-' },
-    ...tasks.map(t => ({ value: t.taskid, label: `#${t.taskid} ${t.task_name}` }))]
 
   const userName = id => users.find(u => u.userid === id)?.user_name ?? ''
   const filtered = (!q.trim() ? rows : rows.filter(s => {
@@ -1646,11 +1658,13 @@ function SchedulesTab() {
           onUpload={staff ? upload : null} onDone={load} />
       </div>
       {!viewer && <form className="newtask" onSubmit={add}>
-        <select required value={form.taskid}
-          onChange={e => setForm({ ...form, taskid: e.target.value })}>
-          <option value="">작업 선택</option>
-          {topt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <input list="sched-task-dl" required value={form.taskid}
+          placeholder="작업 검색 (#번호·작업명)" style={{ width: 260 }}
+          onChange={e => setForm({ ...form, taskid: e.target.value })} />
+        <datalist id="sched-task-dl">
+          {tasks.map(t => <option key={t.taskid}
+            value={`#${t.taskid} ${t.task_name}`} />)}
+        </datalist>
         {staff && (
           <select value={form.work_userid}
             onChange={e => setForm({ ...form, work_userid: e.target.value })}>
@@ -1688,11 +1702,8 @@ function SchedulesTab() {
                   </button>
                 </td>
                 <td className="c">{can(s)
-                  ? <EditableCell type="datetime-local"
-                      value={(s.work_date || '').slice(0, 16)}
-                      onSave={v => saveSched(s.workschid, {
-                        work_date: v
-                          ? (v.length === 16 ? v + ':00' : v) : null })} />
+                  ? <button className="link" title="클릭하면 팝업에서 작업일시를 수정합니다"
+                      onClick={() => openRemark(s)}>{fmtDT(s.work_date)}</button>
                   : fmtDT(s.work_date)}</td>
                 <td className="c">{fmtDT(s.create_date)}</td>
                 <td>
@@ -1723,13 +1734,20 @@ function SchedulesTab() {
             style={{ transform: `translate(${remarkPos.x}px, ${remarkPos.y}px)` }}>
             <b className="blk-title" onMouseDown={remarkOnDown}
               style={{ marginTop: 0, cursor: 'move', userSelect: 'none' }}>작업내용</b>
-            <div className="log-meta">작업일시 {fmtDT(selRemark.work_date) || '-'}
+            <div className="log-meta">작업일시 {can(selRemark)
+              ? <input type="datetime-local" className="log-dt"
+                  title="작업일시 수정"
+                  key={`${selRemark.workschid}-${selRemark.work_date}`}
+                  defaultValue={(selRemark.work_date || '').slice(0, 16)}
+                  onBlur={e => saveRemarkDate(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
+              : (fmtDT(selRemark.work_date) || '-')}
               {' · '}등록일시 {fmtDT(selRemark.create_date) || '-'}</div>
             {remarkEdit !== null ? (
               <>
-                <textarea className="req-edit" rows="8" value={remarkEdit}
-                  placeholder="작업 내용을 입력하세요"
-                  onChange={e => setRemarkEdit(e.target.value)} />
+                <WorkLogEditor value={remarkEdit}
+                  onChange={setRemarkEdit} taskid={selRemark.taskid}
+                  workschid={selRemark.workschid} />
                 <div className="popup-btns">
                   <button className="primary" onClick={saveRemark}>저장</button>
                   <button onClick={() => setRemarkEdit(null)}>취소</button>
@@ -1738,11 +1756,15 @@ function SchedulesTab() {
             ) : (
               <>
                 {(() => {
-                  const html = highlightCode(selRemark.work_remark)
+                  const t = selRemark.work_remark
+                  if (hasMd(t))
+                    return <div className="log-detail md"
+                             dangerouslySetInnerHTML={mdHtml(t)} />
+                  const html = highlightCode(t)
                   return html
                     ? <pre className="log-detail hljs"
                         dangerouslySetInnerHTML={html} />
-                    : <div className="log-detail">{selRemark.work_remark || ''}</div>
+                    : <div className="log-detail">{t || ''}</div>
                 })()}
                 <div className="daily log-attach" style={{ borderTop: 'none', paddingTop: 0 }}>
                   <b>첨부파일</b>

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { marked } from 'marked'
 
 const api = axios.create({ baseURL: '/api' })
 
@@ -227,3 +228,76 @@ export const STICKER_EMOJIS = [
 // 스티커 툴팁: "이모지 메모"를 줄바꿈으로 나열
 export const stickerTip = stickers =>
   (stickers || []).map(s => (s.memo ? `${s.emoji} ${s.memo}` : s.emoji)).join('\n')
+
+// 마크다운 서식 감지 — 표·이미지·링크·제목·코드블록·목록·강조가 있으면
+// 마크다운으로 렌더링, 아니면 기존(소스 하이라이트/일반 텍스트) 경로
+export const hasMd = text => {
+  if (!text) return false
+  if (/!\[[^\]]*\]\(|\[[^\]\n]+\]\([^)\n]+\)|^#{1,6}\s|```|^\s*[-*+]\s+\[[ xX]\]/m
+      .test(text)) return true
+  if (/\|[\s:|-]*-{3,}[\s:|-]*\|/.test(text)) return true   // 표 구분행
+  if (/<table[\s>]|<img[\s>]/i.test(text)) return true    // 붙여넣은 HTML 표·이미지
+  return false
+}
+
+// marked 출력 기준 화이트리스트 — 허용 외 태그는 벗겨내고 내용만 남김
+const MD_TAGS = new Set([
+  'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P', 'BR', 'HR', 'UL', 'OL', 'LI',
+  'STRONG', 'EM', 'DEL', 'S', 'B', 'I', 'CODE', 'PRE', 'BLOCKQUOTE',
+  'A', 'IMG', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'INPUT',
+])
+const MD_ATTRS = {
+  A: ['href', 'title'], IMG: ['src', 'alt', 'title'],
+  TH: ['colspan', 'rowspan'], TD: ['colspan', 'rowspan'],
+}
+const okUrl = u => /^(\/|https?:|mailto:)/i.test((u || '').trim())
+
+const sanitizeHtml = html => {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const token = localStorage.getItem('token') || ''
+  const clean = node => {
+    const out = document.createDocumentFragment()
+    for (const ch of node.childNodes) {
+      if (ch.nodeType === 3) {
+        out.append(document.createTextNode(ch.nodeValue)); continue
+      }
+      if (ch.nodeType !== 1) continue
+      if (!MD_TAGS.has(ch.tagName)) { out.append(clean(ch)); continue }
+      const el = document.createElement(ch.tagName)
+      for (const a of MD_ATTRS[ch.tagName] || [])
+        if (ch.hasAttribute(a)) el.setAttribute(a, ch.getAttribute(a))
+      if ((ch.tagName === 'CODE' || ch.tagName === 'PRE') &&
+          /^language-[\w-]+$/.test(ch.getAttribute('class') || ''))
+        el.setAttribute('class', ch.getAttribute('class'))
+      if (ch.tagName === 'A') {
+        if (!okUrl(el.getAttribute('href'))) el.removeAttribute('href')
+        el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener')
+      }
+      if (ch.tagName === 'IMG') {
+        let src = el.getAttribute('src') || ''
+        if (!okUrl(src)) continue
+        // 첨부파일 이미지는 현재 세션 토큰을 붙여 인증 (다운로드 전용 쿼리 인증)
+        if (/^\/api\/attach-files\/\d+\/download/.test(src)
+            && !src.includes('token='))
+          src += `${src.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+        el.setAttribute('src', src)
+        el.setAttribute('loading', 'lazy')
+      }
+      if (ch.tagName === 'INPUT') {
+        if ((ch.getAttribute('type') || '') !== 'checkbox') continue
+        el.setAttribute('type', 'checkbox'); el.setAttribute('disabled', '')
+        if (ch.hasAttribute('checked')) el.setAttribute('checked', '')
+      }
+      el.append(clean(ch))
+      out.append(el)
+    }
+    return out
+  }
+  const div = document.createElement('div')
+  div.append(clean(doc.body))
+  return div.innerHTML
+}
+
+// 마크다운 텍스트 → 안전한 HTML (GFM 표·체크박스 지원, 줄바꿈 유지)
+export const mdHtml = text =>
+  ({ __html: sanitizeHtml(marked.parse(text || '', { breaks: true, gfm: true })) })

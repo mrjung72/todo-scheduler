@@ -3,8 +3,9 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtDTS, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
   taskColor, taskColorComp, uploadWithProgress, downloadFile as dlFile,
-  STICKER_EMOJIS, stickerTip } from './api'
+  STICKER_EMOJIS, stickerTip, hasMd, mdHtml } from './api'
 import ProgressBar from './ProgressBar'
+import WorkLogEditor from './WorkLogEditor'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -102,6 +103,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [logForm, setLogForm] = useState(null)   // {workschid?, work_remark} 작업이력 등록/수정
   const [logView, setLogView] = useState(null)   // 작업내용 상세 팝업
   const isStaff = me && [0, 1].includes(me.user_grade)
+  const canLogEdit = l => isStaff || l.work_userid === me?.userid
+  const [pendFiles, setPendFiles] = useState([]) // 신규 이력 작성 중 올린 첨부 (저장 후 이력에 연결)
   const [files, setFiles] = useState(null)
   const [upPct, setUpPct] = useState(null)           // 업로드 진행률
   const [cfg, setCfg] = useState(null)
@@ -185,17 +188,34 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
           work_remark: logForm.work_remark, work_date: wd })
         setLogView(v => ({ ...v, work_remark: logForm.work_remark,
           work_date: wd }))
+        setPendFiles([])
       } else {
-        await api.post('/schedules', {
+        const { data: created } = await api.post('/schedules', {
           taskid: task.taskid,
           work_remark: logForm.work_remark,
           work_date: wd,
           work_userid: me.userid })
+        // 작성 중 올린 첨부를 새 이력에 연결
+        for (const f of pendFiles.filter(f => !f.workschid))
+          api.put(`/attach-files/${f.fileid}`, { file_name: f.file_name,
+            taskid: task.taskid, workschid: created.workschid,
+            task_filepath: f.task_filepath }).catch(() => {})
+        setPendFiles([])
         setLogView(null)
       }
       setLogForm(null)
       loadLogs()
     } catch (e) { alert(e.response?.data?.detail || '저장에 실패했습니다') }
+  }
+
+  // 첨부파일 삭제 (작업내용 편집창의 첨부 목록)
+  const deleteFile = async f => {
+    if (!window.confirm(`'${f.file_name}' 첨부파일을 삭제할까요?`)) return
+    try {
+      await api.delete(`/attach-files/${f.fileid}`)
+      setPendFiles(p => p.filter(x => x.fileid !== f.fileid))
+      loadFiles()
+    } catch (e) { alert(e.response?.data?.detail || '삭제에 실패했습니다') }
   }
 
   const reloadDaily = () =>
@@ -561,7 +581,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               onClick={() => setReqEdit(reqText)}>수정</button>}
           {btab === 'his' &&
             <button className="link req-edit-btn"
-              onClick={() => { setLogView({ work_remark: '' })
+              onClick={() => { setPendFiles([]); setLogView({ work_remark: '' })
                 setLogForm({ work_remark: '', work_date: nowLocal() }) }}>등록</button>}
           {btab === 'chg' && isStaff &&
             <button className="danger req-edit-btn"
@@ -619,13 +639,22 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
                 <thead><tr>
-                  <th>작업일시</th><th>등록일시</th><th>작업자</th><th>작업내용</th>
+                  <th>작업일시</th><th>작업자</th><th>작업내용</th>
                 </tr></thead>
                 <tbody>
                   {(logs || []).map(l => (
                     <tr key={l.workschid}>
-                      <td className="c">{fmtDT(l.work_date) || fmtDT(l.create_date)}</td>
-                      <td className="c">{fmtDT(l.create_date)}</td>
+                      <td className="c">
+                        {fmtDT(l.work_date) || fmtDT(l.create_date)}
+                        {canLogEdit(l) &&
+                          <button className="link log-edit-ic"
+                            title="작업일시·작업내용 수정"
+                            onClick={() => { setPendFiles([]); setLogView(l)
+                              setLogForm({
+                                work_remark: l.work_remark || '',
+                                work_date: (l.work_date || '').slice(0, 16) }) }}>
+                            ✏️</button>}
+                      </td>
                       <td>{l.work_user_name || l.work_userid || '-'}</td>
                       <td>
                         <button className="link log-link"
@@ -636,7 +665,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     </tr>
                   ))}
                   {(!logs || !logs.length) && (
-                    <tr><td colSpan="4" className="empty">작업이력이 없습니다</td></tr>
+                    <tr><td colSpan="3" className="empty">작업이력이 없습니다</td></tr>
                   )}
                 </tbody>
               </table>
@@ -726,9 +755,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     <input type="datetime-local" value={logForm.work_date || ''}
                       onChange={e => setLogForm({ ...logForm, work_date: e.target.value })} />
                   </div>
-                  <textarea className="req-edit" rows="8" value={logForm.work_remark}
-                    placeholder="작업 내용을 입력하세요"
-                    onChange={e => setLogForm({ ...logForm, work_remark: e.target.value })} />
+                  <WorkLogEditor value={logForm.work_remark}
+                    onChange={v => setLogForm({ ...logForm, work_remark: v })}
+                    taskid={task.taskid} workschid={logView.workschid}
+                    onUploaded={f => setPendFiles(p => [...p, f])} />
                   <div className="popup-btns">
                     <button className="primary" onClick={saveLog}>
                       {logView.workschid ? '저장' : '등록'}</button>
@@ -739,11 +769,15 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               ) : (
                 <>
                   {(() => {
-                    const html = highlightCode(logView.work_remark)
+                    const t = logView.work_remark
+                    if (hasMd(t))
+                      return <div className="log-detail md"
+                               dangerouslySetInnerHTML={mdHtml(t)} />
+                    const html = highlightCode(t)
                     return html
                       ? <pre className="log-detail hljs"
                           dangerouslySetInnerHTML={html} />
-                      : <div className="log-detail">{logView.work_remark || ''}</div>
+                      : <div className="log-detail">{t || ''}</div>
                   })()}
                   <div className="daily log-attach" style={{ borderTop: 'none', paddingTop: 0 }}>
                     <b>첨부파일</b>
@@ -754,6 +788,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                             <td>
                               <button className="link"
                                 onClick={() => downloadFile(f)}>{f.file_name}</button>
+                              {(isStaff || logView.work_userid === me?.userid) &&
+                                <button className="danger att-del"
+                                  title="첨부파일 삭제"
+                                  onClick={() => deleteFile(f)}>✕</button>}
                             </td>
                             <td className="r">{fmtSize(f.file_size)}</td>
                             <td className="r">{fmtDT(f.create_date)}</td>
@@ -776,9 +814,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                   </div>
                   <div className="popup-btns">
                     {(isStaff || logView.work_userid === me?.userid) &&
-                      <button onClick={() => setLogForm({
+                      <button onClick={() => { setPendFiles([]); setLogForm({
                         work_remark: logView.work_remark || '',
-                        work_date: (logView.work_date || '').slice(0, 16) })}>수정</button>}
+                        work_date: (logView.work_date || '').slice(0, 16) }) }}>수정</button>}
                     <button onClick={() => setLogView(null)}>닫기</button>
                   </div>
                 </>
