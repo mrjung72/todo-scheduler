@@ -8,7 +8,7 @@
 - 서명용 **개인키**(license_private.pem)는 발급자만 보관하며,
   배포물에 포함되지 않습니다. 앱을 디컴파일해도 키를 위조할 수 없습니다.
 
-키 파일: backend/license.key (한 줄)
+키 파일: 개발판은 backend/license.key, 배포판은 app/license.key (한 줄)
 발급   : 별도 프로젝트 todo-license 의 make_license.py 에서 발급
          (개인키는 발급자 프로젝트에만 존재 — 이 앱에는 포함되지 않음)
 키쌍 재생성: todo-license 에서 --genkey 후 새 공개키를 PUBLIC_KEY_B64에 교체
@@ -41,8 +41,11 @@ FREE_MAX_DAYS = 366   # 무료 키 최대 유효기간 1년
 _PUB = Ed25519PublicKey.from_public_bytes(
     base64.urlsafe_b64decode(PUBLIC_KEY_B64))
 
-_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KEY_FILE = os.path.join(_BACKEND_DIR, "license.key")
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_BACKEND_DIR = os.path.dirname(_APP_DIR)
+# 개발판은 backend/license.key, 배포판은 app/license.key 에 둘 수 있음
+KEY_FILES = [os.path.join(_BACKEND_DIR, "license.key"),
+             os.path.join(_APP_DIR, "license.key")]
 
 
 def _b64d(s: str) -> bytes:
@@ -74,10 +77,14 @@ def status() -> dict:
     """현재 라이선스 상태. 매 호출마다 파일을 다시 읽어 재기동 없이 갱신됨.
 
     키는 배포판에 항상 포함 — 없음/만료/변조 → 읽기 전용."""
-    try:
-        key = open(KEY_FILE, encoding="utf-8").read().strip()
-    except OSError:
-        key = ""
+    key = ""
+    for path in KEY_FILES:
+        try:
+            key = open(path, encoding="utf-8").read().strip()
+        except OSError:
+            continue
+        if key:
+            break
     if not key:
         return {"installed": False, "valid": False, "expired": True,
                 "free_tier": False, "seats": 0,

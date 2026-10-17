@@ -16,6 +16,8 @@ xcopy /E /I /Q "%ROOT%frontend\dist" "%PKG%\static" >nul
 copy /Y "%ROOT%backend\requirements.txt" "%PKG%\" >nul
 copy /Y "%ROOT%backend\.env.example" "%PKG%\" >nul
 copy /Y "%ROOT%prod-run.bat" "%PKG%\run.bat" >nul
+rem license key -> app/license.key (배포판 검색 경로)
+copy /Y "%ROOT%backend\license.key" "%PKG%\app\license.key" >nul
 
 echo [3/5] download wheels (offline install)...
 "%ROOT%backend\.venv\Scripts\python.exe" -m pip download -q -r "%PKG%\requirements.txt" -d "%PKG%\wheels" --only-binary :all:
