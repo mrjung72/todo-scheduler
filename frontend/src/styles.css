@@ -388,11 +388,19 @@ pre.log-detail.hljs {
   color: #fff; padding: 8px 12px; border-radius: 6px;
   margin: -8px -8px 10px; font-size: 16px;
 }
-/* 작업 상세 팝업: 우하단 드래그로 크기 조절 가능 */
+/* 작업 상세 팝업: 우하단 드래그로 크기 조절 가능.
+   프레임은 flex 세로 배치 — 하단 탭 영역만 내용 높이로 조정되고
+   남는 공간은 탭과 [닫기] 버튼 사이에 둠 (버튼은 하단 고정) */
 .popup-body.task-popup {
   width: 900px; max-width: 95vw; max-height: 92vh;
   resize: both; overflow: auto;
+  display: flex; flex-direction: column;
 }
+.task-popup > * { flex-shrink: 0; }
+.task-popup > .req-info {
+  flex: 0 1 auto; min-height: 0; overflow-y: auto;
+}
+.task-popup > .popup-btns:last-child { margin-top: auto; }
 .popup-title .pt-row1 {
   display: flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 400;

@@ -142,8 +142,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const catNm = cats.find(c => c.task_category_cd === catCd)?.task_category_nm
     || (catCd === task.task_category_cd ? task.task_category_nm : null)
   const fileRef = useRef(null)
-  const tabRef = useRef(null)               // 탭 콘텐츠 — 탭 전환 시 높이 유지용
-  const [minH, setMinH] = useState(0)       // 지금까지 표시된 최대 높이
+  const bodyRef = useRef(null)              // 팝업 본문 — 프레임 높이 유지 측정용
+  const [minH, setMinH] = useState(0)       // 팝업이 표시된 최대 높이 (프레임은 줄이지 않음)
   const downOnOverlay = useRef(false)   // mousedown이 오버레이에서 시작됐는지
   const { pos, onDown } = useDrag()           // 메인 팝업 드래그
   const { pos: logPos, onDown: logOnDown } = useDrag()  // 작업내용 팝업 드래그
@@ -164,13 +164,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         if (u) setWorkHr(u.work_hours_day)
       }).catch(() => {})
     loadFiles()   // 첨부파일 목록
-    setMinH(0)    // 작업 전환 시 높이 기준 리셋
+    setMinH(0)    // 작업 전환 시 팝업 높이 기준 리셋
   }, [task.taskid])
 
-  // 탭 전환으로 내용이 줄어도 팝업 높이는 유지 (탭 콘텐츠의 최대 높이를 min-height로)
-  // — 팝업 전체가 아닌 탭 영역에 적용하므로 사용자가 창을 직접 줄이는 것은 가능
+  // 팝업 프레임 높이는 표시된 최대치를 유지 (내용이 짧은 탭으로 바꿔도 창 크기 불변)
+  // — 탭 영역은 자연 높이라 내용만큼만 차지하고 남는 공간은 탭 아래에 빈 영역으로 둠
   useEffect(() => {
-    const h = tabRef.current?.offsetHeight
+    const h = bodyRef.current?.offsetHeight
     if (h && h > minH) setMinH(h)
   })
 
@@ -407,7 +407,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         downOnOverlay.current = false
       }}>
       <div className="popup-body task-popup" onClick={e => e.stopPropagation()}
-        style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
+        ref={bodyRef}
+        style={{ transform: `translate(${pos.x}px, ${pos.y}px)`,
+          minHeight: minH || undefined }}>
         <h3 className="popup-title" onMouseDown={onDown}
           style={{ background: taskColor(task.taskid), cursor: 'move', userSelect: 'none' }}>
           <div className="pt-row1">
@@ -589,8 +591,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               onClick={resetHis}>초기화</button>}
         </div>
         {btab === 'req' ? (
-          <div className="popup-info req-info" ref={tabRef}
-            style={{ minHeight: minH || undefined }}>
+          <div className="popup-info req-info">
             {reqEdit !== null ? (
               <>
                 <WorkLogEditor value={reqEdit} rows={10}
@@ -642,8 +643,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             </div>
           </div>
         ) : btab === 'his' ? (
-          <div className="popup-info req-info" ref={tabRef}
-            style={{ minHeight: minH || undefined }}>
+          <div className="popup-info req-info">
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
                 <thead><tr>
@@ -680,8 +680,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             </div>
           </div>
         ) : btab === 'stk' ? (
-          <div className="popup-info req-info" ref={tabRef}
-            style={{ minHeight: minH || undefined }}>
+          <div className="popup-info req-info">
             {canEdit && (
               <div className="stk-add">
                 <div className="stk-picker">
@@ -713,8 +712,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             </div>
           </div>
         ) : (
-          <div className="popup-info req-info" ref={tabRef}
-            style={{ minHeight: minH || undefined }}>
+          <div className="popup-info req-info">
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
               <table>
                 <thead><tr>
