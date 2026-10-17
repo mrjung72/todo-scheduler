@@ -4,10 +4,28 @@ import api, { fmtDT, fmtSize, uploadWithProgress, downloadFile,
 import ProgressBar from '../ProgressBar'
 import WorkLogEditor from '../WorkLogEditor'
 
-/* 게시판 — 목록 / 작성·수정 / 상세(첨부·댓글) */
+// 팝업 드래그 이동 (관리자 게시판 팝업과 동일 방식)
+function useDrag() {
+  const [pos, setPos] = useState({ x: 0, y: 0 })
+  const onDown = e => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const base = { x: e.clientX - pos.x, y: e.clientY - pos.y }
+    const move = ev => setPos({ x: ev.clientX - base.x, y: ev.clientY - base.y })
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+  return { pos, onDown }
+}
+
+/* 게시판 — 목록 / 작성·수정 / 상세 팝업(첨부·댓글) */
 export default function Board() {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
-  const [view, setView] = useState('list')     // list | write | detail
+  const [view, setView] = useState('list')     // list | write (상세는 팝업)
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(null)         // 상세 대상
@@ -32,7 +50,6 @@ export default function Board() {
       setSel(data)
       setPw(passwd)
       setLock(null)
-      setView('detail')
     } catch (e) {
       const d = e.response?.data?.detail
       if (d === 'need_password') {
@@ -57,7 +74,7 @@ export default function Board() {
     if (!window.confirm(`게시글 '${b.title}'을(를) 삭제할까요?`)) return
     try {
       await api.delete(`/boards/${b.boardid}`)
-      setSel(null); setView('list'); load()
+      setSel(null); setView('list'); load()  // 팝업·작성창 모두 닫고 목록으로
     } catch (e) { alert(e.response?.data?.detail || '삭제에 실패했습니다') }
   }
 
@@ -69,8 +86,8 @@ export default function Board() {
         <span style={{ flex: 1 }} />
         {view === 'list' &&
           <button className="primary" onClick={() => { setEdit(null); setView('write') }}>글쓰기</button>}
-        {view !== 'list' &&
-          <button onClick={() => { setView('list'); setSel(null); setEdit(null); load() }}>목록</button>}
+        {view === 'write' &&
+          <button onClick={() => { setView('list'); setEdit(null); load() }}>목록</button>}
       </div>
 
       {view === 'list' && (
@@ -86,8 +103,10 @@ export default function Board() {
                 <td className="r">{b.boardid}</td>
                 <td>
                   <button className="link" onClick={() => openDetail(b)}>
-                    {!b.is_public && '🔒 '}{b.title}</button>
-                  {!b.is_public && <span className="bd-private">비공개</span>}
+                    {(b.has_passwd || !b.is_public) && '🔒 '}{b.title}</button>
+                  {!b.is_public
+                    ? <span className="bd-private">비공개</span>
+                    : b.has_passwd && <span className="bd-private">비밀번호</span>}
                 </td>
                 <td>{b.user_name || b.user_id}</td>
                 <td className="r">{b.file_count || ''}</td>
@@ -106,9 +125,10 @@ export default function Board() {
           onDone={() => { setView('list'); setEdit(null); load() }}
           onCancel={() => { setView('list'); setEdit(null) }} />}
 
-      {view === 'detail' && sel &&
-        <BoardDetail me={me} post={sel} pw={pw}
-          onEdit={() => { setEdit(sel); setView('write') }}
+      {sel && view === 'list' &&
+        <BoardDetailPopup me={me} post={sel} pw={pw}
+          onClose={() => setSel(null)}
+          onEdit={() => { setEdit(sel); setSel(null); setView('write') }}
           onDelete={() => delBoard(sel)}
           onReload={() => openDetail(sel, pw)} />}
 
@@ -134,12 +154,14 @@ export default function Board() {
   )
 }
 
-/* 글 작성·수정 폼 — 파일 다중 첨부 + 진행바 */
-function BoardForm({ edit, onDone, onCancel }) {
+/* 글 작성·수정 폼 — 파일 다중 첨부 + 진행바 (관리자 화면에서도 재사용) */
+export function BoardForm({ edit, onDone, onCancel }) {
   const [title, setTitle] = useState(edit?.title || '')
   const [content, setContent] = useState(edit?.content || '')
-  const [isPublic, setIsPublic] = useState(edit ? !!edit.is_public : true)
-  const [passwd, setPasswd] = useState('')     // 비공개 열람 비밀번호 (수정 시 빈칸=유지)
+  // 공개 범위: pub=공개, pw=공개(비밀번호 열람), prv=비공개(목록 비노출)
+  const [scope, setScope] = useState(
+    !edit ? 'pub' : !edit.is_public ? 'prv' : edit.has_passwd ? 'pw' : 'pub')
+  const [passwd, setPasswd] = useState('')     // 공개(비밀번호) 열람 비밀번호 (수정 시 빈칸=유지)
   const [files, setFiles] = useState([])       // 신규 작성: 저장 시 함께 올릴 대기 파일
   const [editFiles, setEditFiles] = useState(edit?.files || [])  // 수정 시 기존 첨부
   const [upPct, setUpPct] = useState(null)
@@ -184,18 +206,22 @@ function BoardForm({ edit, onDone, onCancel }) {
   const save = async e => {
     e.preventDefault()
     setErr('')
+    if (scope === 'pw' && !passwd && !(edit && edit.has_passwd)) {
+      setErr('공개(비밀번호 열람)는 열람 비밀번호를 입력해 주세요'); return
+    }
     try {
       setSaving(true)
       let boardid = edit?.boardid
       if (edit) {
-        const body = { title, content, is_public: isPublic ? 1 : 0 }
-        // 수정: 비공개일 때 비밀번호 입력값이 있으면 변경, 'clear' 동작은 해제
-        if (!isPublic && passwd) body.passwd = passwd
+        const body = { title, content, is_public: scope === 'prv' ? 0 : 1 }
+        if (scope === 'pw' && passwd) body.passwd = passwd      // 비밀번호 변경
+        else if (scope === 'pub') body.passwd = ''              // 공개 전환 → 비밀번호 해제
+        // prv는 passwd 미전송 → 서버가 비공개 전환과 함께 해제
         await api.put(`/boards/${boardid}`, body)
       } else {
         const { data } = await api.post('/boards', {
-          title, content, is_public: isPublic ? 1 : 0,
-          passwd: !isPublic && passwd ? passwd : null })
+          title, content, is_public: scope === 'prv' ? 0 : 1,
+          passwd: scope === 'pw' && passwd ? passwd : null })
         boardid = data.boardid
       }
       // 신규 작성 시에만: 저장하면서 대기 중인 파일들을 업로드
@@ -230,21 +256,24 @@ function BoardForm({ edit, onDone, onCancel }) {
   return (
     <form className="bd-form" onSubmit={save}>
       <label>제목
-        <input required maxLength={200} value={title}
+        <input required maxLength={100} value={title}
+          title="100자 이하로 입력하세요"
           onChange={e => setTitle(e.target.value)} />
       </label>
       <label>공개 여부
         <span className="bd-scope">
-          <label><input type="radio" checked={isPublic}
-            onChange={() => setIsPublic(true)} /> 공개</label>
-          <label><input type="radio" checked={!isPublic}
-            onChange={() => setIsPublic(false)} /> 비공개 (비밀번호 열람)</label>
+          <label><input type="radio" checked={scope === 'pub'}
+            onChange={() => setScope('pub')} /> 공개</label>
+          <label><input type="radio" checked={scope === 'pw'}
+            onChange={() => setScope('pw')} /> 공개 (비밀번호 열람)</label>
+          <label><input type="radio" checked={scope === 'prv'}
+            onChange={() => setScope('prv')} /> 비공개</label>
         </span>
       </label>
-      {!isPublic && (
+      {scope === 'pw' && (
         <label>열람 비밀번호
           <input type="password" value={passwd} maxLength={50}
-            placeholder={edit?.has_passwd ? '설정됨 — 변경 시에만 입력' : '미설정 시 작성자·관리자만 열람'}
+            placeholder={edit?.has_passwd ? '설정됨 — 변경 시에만 입력' : '열람 비밀번호 입력'}
             onChange={e => setPasswd(e.target.value)} />
         </label>
       )}
@@ -294,8 +323,9 @@ function BoardForm({ edit, onDone, onCancel }) {
   )
 }
 
-/* 상세 — 본문·첨부파일·댓글 */
-function BoardDetail({ me, post, pw, onEdit, onDelete, onReload }) {
+/* 상세 — 본문·첨부파일·댓글 (팝업 공용: 사용자 게시판 + 관리자 게시판 탭) */
+export function BoardDetail({ me, post, pw, onEdit, onDelete, onReload,
+  onTitleDown, onClose }) {
   const [text, setText] = useState('')
   const [pick, setPick] = useState([])          // 업로드 대기 중인 선택 파일
   const [upPct, setUpPct] = useState(null)
@@ -351,18 +381,58 @@ function BoardDetail({ me, post, pw, onEdit, onDelete, onReload }) {
     } catch (e) { alert(e.response?.data?.detail || '삭제에 실패했습니다') }
   }
 
+  // 공개 범위 변경 — pub 공개 / pw 공개(비밀번호 열람) / prv 비공개(목록 비노출)
+  const scopeOf = p => !p.is_public ? 'prv' : (p.has_passwd ? 'pw' : 'pub')
+  const setScope = v => {
+    const body = { is_public: v === 'prv' ? 0 : 1 }
+    if (v === 'pub') body.passwd = ''               // 공개 전환 → 비밀번호 해제
+    if (v === 'pw' && !post.has_passwd) {           // 기존 비밀번호 없으면 입력받기
+      const pw = window.prompt('열람 비밀번호를 입력하세요')
+      if (!pw) return
+      body.passwd = pw
+    }
+    api.put(`/boards/${post.boardid}`, body)
+      .then(onReload)
+      .catch(e => alert(e.response?.data?.detail || '변경에 실패했습니다'))
+  }
+
+  // 공개여부/수정/삭제/닫기 버튼 행 — 상·하단에 동일하게 표시
+  const btns = (
+    <div className="popup-btns">
+      {post.can_edit && (
+        <span className="bd-pubsel">
+          공개여부
+          <select value={scopeOf(post)}
+            onChange={e => setScope(e.target.value)}>
+            <option value="pub">공개</option>
+            <option value="pw">공개(비밀번호 열람)</option>
+            <option value="prv">비공개</option>
+          </select>
+        </span>
+      )}
+      {post.can_edit && onEdit && <button onClick={onEdit}>수정</button>}
+      {post.can_edit && onDelete &&
+        <button className="danger" onClick={onDelete}>삭제</button>}
+      {onClose && <button onClick={onClose}>닫기</button>}
+    </div>
+  )
+
   return (
     <div className="bd-detail">
       <div className="bd-head">
-        <h3>
-          {!post.is_public && '🔒 '}{post.title}
-          {!post.is_public && <span className="bd-private">비공개</span>}
+        <h3 onMouseDown={onTitleDown}
+          style={onTitleDown ? { cursor: 'move', userSelect: 'none' } : undefined}>
+          {(post.has_passwd || !post.is_public) && '🔒 '}{post.title}
+          {!post.is_public
+            ? <span className="bd-private">비공개</span>
+            : post.has_passwd && <span className="bd-private">비밀번호</span>}
         </h3>
         <span className="bd-meta">
           {post.user_name || post.user_id} · {fmtDT(post.create_date)}
           {post.update_date && ` (수정 ${fmtDT(post.update_date)})`}
         </span>
       </div>
+      {btns}
       {hasMd(post.content)
         ? <div className="bd-content md"
             dangerouslySetInnerHTML={mdHtml(post.content)} />
@@ -427,10 +497,28 @@ function BoardDetail({ me, post, pw, onEdit, onDelete, onReload }) {
         <button className="primary" onClick={addComment}>등록</button>
       </div>
 
-      <div className="popup-btns">
-        {post.can_edit && <button onClick={onEdit}>수정</button>}
-        {post.can_edit &&
-          <button className="danger" onClick={onDelete}>삭제</button>}
+      {btns}
+    </div>
+  )
+}
+
+/* 상세 팝업 — 오버레이 클릭·타이틀 드래그 (사용자 게시판 + 관리자 게시판 공용) */
+export function BoardDetailPopup({ me, post, pw, onClose, onEdit, onDelete,
+  onReload }) {
+  const { pos, onDown } = useDrag()
+  const downOnOverlay = useRef(false)   // 오버레이에서 눌러 오버레이에서 뗀 클릭만 닫기
+  return (
+    <div className="popup"
+      onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
+      onClick={e => {
+        if (e.target === e.currentTarget && downOnOverlay.current) onClose?.()
+        downOnOverlay.current = false
+      }}>
+      <div className="popup-body task-popup" onClick={e => e.stopPropagation()}
+        style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
+        <BoardDetail me={me} post={post} pw={pw} onTitleDown={onDown}
+          onEdit={onEdit} onDelete={onDelete} onReload={onReload}
+          onClose={onClose} />
       </div>
     </div>
   )

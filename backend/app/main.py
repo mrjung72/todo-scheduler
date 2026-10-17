@@ -322,6 +322,12 @@ def migrate(db):
     cols = {r[1] for r in db.execute(text("PRAGMA table_info(boards)"))}
     if cols and "passwd" not in cols:
         db.execute(text("ALTER TABLE boards ADD COLUMN passwd TEXT"))
+    # 공개여부 3단계화 — 비밀번호 설정된 비공개글은 "공개(비밀번호 열람)"으로 전환
+    # (비밀번호로 열람 가능하게 만든 원래 의도 보존)
+    if cols:
+        db.execute(text(
+            "UPDATE boards SET is_public = 1 "
+            "WHERE is_public = 0 AND passwd IS NOT NULL AND passwd != ''"))
     db.commit()
 
 

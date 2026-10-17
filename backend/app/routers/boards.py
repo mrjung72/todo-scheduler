@@ -8,10 +8,11 @@
 - 첨부파일: /api/attach-files 에 boardid 로 업로드 (board_attach_files)
 """
 import os
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -24,14 +25,38 @@ router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 STAFF_GRADES = (0, 1)
 
+# ---------- XSS 방어 ----------
+# 본문은 표·이미지 등 HTML을 허용하므로 전체 이스케이프 대신 위험 요소만 제거한다
+_DANGER_TAGS = ("script|iframe|object|embed|form|meta|link|base|svg|math|"
+                "style|applet|frame|frameset|noscript|template")
+_DANGER_TAG_RE = re.compile(
+    rf"<\s*({_DANGER_TAGS})\b[^>]*>.*?<\s*/\s*\1\s*>"
+    rf"|<\s*/?\s*({_DANGER_TAGS})\b[^>]*>", re.I | re.S)
+_ON_ATTR_RE = re.compile(r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", re.I)
+_JS_URL_RE = re.compile(
+    r"((?:href|src|xlink:href|action|formaction)\s*=\s*[\"']?)\s*"
+    r"(?:javascript|vbscript|data)\s*:[^\"'>\s]*", re.I)
+
+
+def _safe_text(v):
+    """XSS 방어 — 위험 태그·on* 이벤트 핸들러·스크립트 URI 제거."""
+    if not v:
+        return v
+    v = _DANGER_TAG_RE.sub("", v)
+    v = _ON_ATTR_RE.sub("", v)
+    v = _JS_URL_RE.sub(r"\1#", v)
+    return v
+
 
 def _staff(me) -> bool:
     return me.user_grade in STAFF_GRADES
 
 
 def _can_view(b: Board, me) -> bool:
-    """비밀번호 없이 직접 열람 가능 여부 — 공개글, 또는 작성자·스태프."""
-    return bool(b.is_public) or b.user_id == me.userid or _staff(me)
+    """비밀번호 없이 직접 열람 가능 여부 — 열람 비밀번호 없는 공개글, 또는 작성자·스태프.
+    공개(비밀번호 열람)글(is_public=1+passwd)은 비밀번호 확인이 필요."""
+    return (bool(b.is_public) and not b.passwd) \
+        or b.user_id == me.userid or _staff(me)
 
 
 def _pw_ok(b: Board, passwd: str | None) -> bool:
@@ -92,18 +117,24 @@ def _detail_out(db: Session, b: Board, me):
 @router.get("")
 def list_boards(q: str | None = None, db: Session = Depends(get_db),
                 me: User = Depends(get_current_user)):
-    """게시글 목록 (최신순). 비공개글도 목록에는 🔒 표시로 노출 — 열람은 비밀번호 필요.
+    """게시글 목록 (최신순).
+    비공개글은 작성자·스태프만 목록에 노출 — 일반사용자에게는 아예 조회되지 않음.
     검색 시 비공개글은 제목만 대상 (내용은 열람 권한 필요)."""
     query = (db.query(Board, User.user_name)
              .outerjoin(User, User.userid == Board.user_id))
+    if not _staff(me):
+        query = query.filter((Board.is_public == 1) | (Board.user_id == me.userid))
     if q:
         like = f"%{q}%"
         if _staff(me):
             query = query.filter(Board.title.like(like) | Board.content.like(like))
         else:
+            # 본문 검색은 비밀번호 없이 열람 가능한 글(공개·무암호 또는 본인 글)만 대상
+            open_post = (Board.is_public == 1) & Board.passwd.is_(None)
             query = query.filter(
                 Board.title.like(like) |
-                (Board.content.like(like) & (Board.is_public == 1)))
+                (Board.content.like(like) &
+                 (open_post | (Board.user_id == me.userid))))
     rows = query.order_by(Board.boardid.desc()).all()
     cc = dict(db.query(BoardComment.boardid, func.count())
               .group_by(BoardComment.boardid).all())
@@ -138,17 +169,45 @@ def open_board(boardid: int, body: BoardOpen,
 
 
 class BoardCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=200)
+    title: str = Field(min_length=1, max_length=100)
     content: str | None = None
     is_public: int = 1
     passwd: str | None = None          # 비공개 시 열람 비밀번호
 
+    @field_validator("title")
+    @classmethod
+    def _v_title(cls, v):
+        v = _safe_text(v)
+        if not (v or "").strip():
+            raise ValueError("제목은 비워둘 수 없습니다")
+        return v
+
+    @field_validator("content")
+    @classmethod
+    def _v_content(cls, v):
+        return _safe_text(v)
+
 
 class BoardUpdate(BaseModel):
-    title: str | None = Field(default=None, max_length=200)
+    title: str | None = Field(default=None, max_length=100)
     content: str | None = None
     is_public: int | None = None
     passwd: str | None = None          # 빈 문자열=해제, None=유지, 값=변경
+
+    @field_validator("title")
+    @classmethod
+    def _v_title(cls, v):
+        if v is None:
+            return v
+        v = _safe_text(v)
+        if not v.strip():
+            raise ValueError("제목은 비워둘 수 없습니다")
+        return v
+
+    @field_validator("content")
+    @classmethod
+    def _v_content(cls, v):
+        return _safe_text(v)
 
 
 @router.post("", status_code=201)
@@ -156,7 +215,7 @@ def create_board(body: BoardCreate, db: Session = Depends(get_db),
                  me: User = Depends(get_current_user)):
     b = Board(title=body.title, content=body.content,
               is_public=1 if body.is_public else 0, user_id=me.userid)
-    if not b.is_public and body.passwd:
+    if body.passwd:                        # 공개(비밀번호 열람) 포함 모든 범위에 적용
         b.passwd = hash_password(body.passwd)
     db.add(b)
     db.commit()
@@ -177,9 +236,11 @@ def update_board(boardid: int, body: BoardUpdate,
         b.content = body.content
     if body.is_public is not None:
         b.is_public = 1 if body.is_public else 0
-        if b.is_public:
-            b.passwd = None            # 공개로 전환 시 비밀번호 해제
-    if not b.is_public and body.passwd is not None:
+    # 공개여부 3단계: 공개 / 공개(비밀번호 열람=is_public+passwd) / 비공개
+    # 비공개로 전환되면 열람 비밀번호는 무의미하므로 함께 해제
+    if not b.is_public:
+        b.passwd = None
+    elif body.passwd is not None:
         b.passwd = hash_password(body.passwd) if body.passwd else None
     b.update_date = datetime.now()
     db.commit()
@@ -213,6 +274,11 @@ def delete_board(boardid: int, db: Session = Depends(get_db),
 class CommentIn(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
     passwd: str | None = None          # 비공개글 비밀번호 열람 중인 경우
+
+    @field_validator("content")
+    @classmethod
+    def _v_safe(cls, v):
+        return _safe_text(v)
 
 
 @router.post("/{boardid}/comments", status_code=201)

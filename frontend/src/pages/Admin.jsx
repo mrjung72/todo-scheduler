@@ -10,6 +10,7 @@ import UserInfoPopup from '../UserInfoPopup'
 import ReqUserInput from '../ReqUserInput'
 import RefreshBtn from '../RefreshBtn'
 import WorkLogEditor from '../WorkLogEditor'
+import { BoardDetailPopup, BoardForm } from './Board'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -2090,22 +2091,8 @@ function BoardsTab() {
   const [savedF] = useState(() => loadFilter('admin-boards'))
   const [q, setQ] = useState(savedF.q || '')
   const [pubF, setPubF] = useState(savedF.pub || '')
-  const [sel, setSel] = useState(null)         // 내용/댓글 열람 대상
-  const [pos, setPos] = useState({ x: 0, y: 0 })  // 팝업 드래그 위치
-  const downOnOverlay = useRef(false)  // 오버레이에서 눌러 오버레이에서 뗀 클릭만 닫기
-  // 타이틀바 드래그로 팝업 이동 (작업상세 팝업과 동일 방식)
-  const onTitleDown = e => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    const base = { x: e.clientX - pos.x, y: e.clientY - pos.y }
-    const move = ev => setPos({ x: ev.clientX - base.x, y: ev.clientY - base.y })
-    const up = () => {
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
-    }
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
-  }
+  const [sel, setSel] = useState(null)         // 상세 팝업 대상
+  const [editPost, setEditPost] = useState(null)  // 수정 폼 팝업 대상
   const load = useCallback(() =>
     api.get('/boards').then(r => setRows(r.data)), [])
   useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
@@ -2114,25 +2101,20 @@ function BoardsTab() {
     api.put(`/boards/${id}`, patch).then(load).catch(e => alert(errMsg(e)))
   const del = b => window.confirm(
       `게시글 '${b.title}'을(를) 삭제할까요?\n첨부파일·댓글도 함께 삭제됩니다.`) &&
-    api.delete(`/boards/${b.boardid}`).then(load).catch(e => alert(errMsg(e)))
+    api.delete(`/boards/${b.boardid}`)
+      .then(() => { setSel(null); load() }).catch(e => alert(errMsg(e)))
   const clearPw = b => window.confirm(
       `'${b.title}'의 열람 비밀번호를 해제할까요?\n(해제 후 비공개글은 작성자·관리자만 열람 가능)`) &&
     api.put(`/boards/${b.boardid}`, { passwd: '' })
       .then(load).catch(e => alert(errMsg(e)))
-  const openView = b => {
-    if (sel?.boardid !== b.boardid) setPos({ x: 0, y: 0 })  // 새 글 열 때만 위치 초기화
+  const openView = b =>
     api.get(`/boards/${b.boardid}`).then(r => setSel(r.data))
       .catch(e => alert(errMsg(e)))
-  }
-  const delComment = c =>
-    window.confirm('댓글을 삭제할까요?') &&
-    api.delete(`/boards/${sel.boardid}/comments/${c.commentid}`)
-      .then(() => openView(sel)).catch(e => alert(errMsg(e)))
-  const download = f => downloadFile(`/attach-files/board/${f.fileid}/download`)
 
   const kw = q.trim().toLowerCase()
+  const scopeOf = b => !b.is_public ? 'prv' : (b.has_passwd ? 'pw' : 'pub')
   const filtered = rows.filter(b =>
-    (pubF === '' || b.is_public === +pubF) &&
+    (pubF === '' || scopeOf(b) === pubF) &&
     (!kw || [b.title, b.user_id, b.user_name]
       .some(v => (v || '').toLowerCase().includes(kw))))
   const { paged, pager } = usePager(filtered, [q, pubF])
@@ -2140,7 +2122,8 @@ function BoardsTab() {
   const cols = [
     { label: '게시글ID', field: 'boardid' },
     { label: '제목', field: 'title' },
-    { label: '공개여부', field: 'is_public', get: b => b.is_public ? '공개' : '비공개' },
+    { label: '공개여부', field: 'is_public', get: b =>
+        !b.is_public ? '비공개' : (b.has_passwd ? '공개(비밀번호)' : '공개') },
     { label: '열람비밀번호(참조)', field: '_pw', get: b => b.has_passwd ? '설정' : '' },
     { label: '작성자ID', field: 'user_id' },
     { label: '작성자(참조)', field: '_user_name', get: b => b.user_name || '' },
@@ -2155,8 +2138,9 @@ function BoardsTab() {
       <div className="toolbar">
         <select value={pubF} onChange={e => setPubF(e.target.value)}>
           <option value="">공개여부(전체)</option>
-          <option value="1">공개</option>
-          <option value="0">비공개</option>
+          <option value="pub">공개</option>
+          <option value="pw">공개(비밀번호 열람)</option>
+          <option value="prv">비공개</option>
         </select>
         <input placeholder="검색 (제목/작성자)" value={q}
           onChange={e => setQ(e.target.value)} />
@@ -2187,13 +2171,24 @@ function BoardsTab() {
               <td className="r">{b.boardid}</td>
               <td>
                 <button className="link" onClick={() => openView(b)}>
-                  {!b.is_public && '🔒 '}{b.title}</button>
-                {!b.is_public && <span className="bd-private">비공개</span>}
+                  {(b.has_passwd || !b.is_public) && '🔒 '}{b.title}</button>
+                {!b.is_public
+                  ? <span className="bd-private">비공개</span>
+                  : b.has_passwd && <span className="bd-private">비밀번호</span>}
               </td>
               <td className="c">
-                <EditableCell value={b.is_public} disabled={!staff}
-                  onSave={v => save(b.boardid, { is_public: +v })}
-                  options={[{ value: 1, label: '공개' }, { value: 0, label: '비공개' }]} />
+                <EditableCell value={scopeOf(b)} disabled={!staff}
+                  onSave={v => {
+                    if (v === 'pw' && !b.has_passwd) {
+                      alert('비밀번호가 설정된 글만 공개(비밀번호 열람)로 바꿀 수 있습니다.\n상세 팝업 또는 수정에서 비밀번호를 설정해 주세요')
+                      return
+                    }
+                    save(b.boardid, v === 'prv' ? { is_public: 0 }
+                      : { is_public: 1, ...(v === 'pub' ? { passwd: '' } : {}) })
+                  }}
+                  options={[{ value: 'pub', label: '공개' },
+                    { value: 'pw', label: '공개(비밀번호)' },
+                    { value: 'prv', label: '비공개' }]} />
               </td>
               <td className="c">
                 {b.has_passwd
@@ -2220,57 +2215,20 @@ function BoardsTab() {
         [해제]는 비공개글의 열람 비밀번호를 지웁니다.
       </p>
       {sel && (
-        <div className="popup"
-          onMouseDown={e => { if (e.target === e.currentTarget) downOnOverlay.current = true }}
-          onClick={e => {
-            if (e.target === e.currentTarget && downOnOverlay.current) setSel(null)
-            downOnOverlay.current = false
-          }}>
-          <div className="popup-body task-popup" onClick={e => e.stopPropagation()}
-            style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
-            <h3 onMouseDown={onTitleDown}
-              style={{ cursor: 'move', userSelect: 'none' }}>
-              {!sel.is_public && '🔒 '}{sel.title}
-              {!sel.is_public && <span className="bd-private">비공개</span>}</h3>
-            <p className="bd-meta">
-              {sel.user_name || sel.user_id} · {fmtDT(sel.create_date)}
-              {sel.update_date && ` (수정 ${fmtDT(sel.update_date)})`}
-            </p>
-            <div className="bd-content">{sel.content || ''}</div>
-            <div className="blk-title">첨부파일</div>
-            <table className="grid">
-              <tbody>
-                {(sel.files || []).map(f => (
-                  <tr key={f.fileid}>
-                    <td><button className="link" onClick={() => download(f)}>
-                      {f.file_name}</button></td>
-                    <td className="r" style={{ width: 90 }}>{fmtSize(f.file_size)}</td>
-                    <td className="r" style={{ width: 140 }}>{fmtDT(f.create_date)}</td>
-                  </tr>
-                ))}
-                {!sel.files?.length &&
-                  <tr><td className="empty">첨부파일이 없습니다</td></tr>}
-              </tbody>
-            </table>
-            <div className="blk-title">댓글 {sel.comments?.length || 0}</div>
-            <div className="comment-list">
-              {(sel.comments || []).map(c => (
-                <div key={c.commentid} className="comment-row">
-                  <div className="comment-head">
-                    <b>{c.user_name || c.user_id}</b>
-                    <span className="comment-date">{fmtDT(c.create_date)}</span>
-                    {staff &&
-                      <button className="link" onClick={() => delComment(c)}>삭제</button>}
-                  </div>
-                  <div className="comment-body">{c.content}</div>
-                </div>
-              ))}
-              {!sel.comments?.length &&
-                <div className="comment-empty">댓글이 없습니다</div>}
-            </div>
-            <div className="popup-btns">
-              <button onClick={() => setSel(null)}>닫기</button>
-            </div>
+        <BoardDetailPopup
+          me={{ userid: myId(), user_grade: myGrade() }}
+          post={sel}
+          onClose={() => setSel(null)}
+          onEdit={staff ? () => { setEditPost(sel); setSel(null) } : null}
+          onDelete={staff ? () => del(sel) : null}
+          onReload={() => { openView(sel); load() }} />
+      )}
+      {editPost && (
+        <div className="popup" onClick={() => setEditPost(null)}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <BoardForm edit={editPost}
+              onDone={() => { setEditPost(null); load() }}
+              onCancel={() => setEditPost(null)} />
           </div>
         </div>
       )}
