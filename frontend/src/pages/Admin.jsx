@@ -51,6 +51,7 @@ const TABS = [
   { key: 'holidays', label: '작업자휴가' },
   { key: 'boards', label: '게시판' },
   { key: 'extract', label: '데이터 추출' },
+  { key: 'template', label: '템플릿 변환' },
 ]
 
 const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') || 'null')?.user_grade)
@@ -73,11 +74,11 @@ const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_gra
 // 3-개발매니저: 전체 조회 / 4-일반개발자: 기존과 동일 / 5-IT담당자: 지정 탭 조회
 const TAB_ACCESS = {
   3: ['sites', 'categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
-      'calendar', 'holidays', 'boards', 'extract'],
+      'calendar', 'holidays', 'boards', 'extract', 'template'],
   4: ['categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
-      'holidays', 'extract'],
+      'holidays', 'extract', 'template'],
   5: ['sites', 'categories', 'tasks', 'users', 'calendar', 'holidays',
-      'extract'],
+      'extract', 'template'],
 }
 
 export default function Admin() {
@@ -109,6 +110,7 @@ export default function Admin() {
       {tab === 'files' && <AttachFilesTab />}
       {tab === 'boards' && <BoardsTab />}
       {tab === 'extract' && <ExtractTab />}
+      {tab === 'template' && <TemplateTab />}
     </div>
   )
 }
@@ -2308,6 +2310,7 @@ function ExtractTab() {
   const [preset, setPreset] = useState('')
   const [flags, setFlags] = useState({ ...EXTRACT_FLAG_DEF })
   const [showCount, setShowCount] = useState(true)
+  const [lineNums, setLineNums] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const lineCount = input ? input.split(/\r?\n/).length : 0
@@ -2349,6 +2352,9 @@ function ExtractTab() {
     finalResults = [...counts].map(([v, n]) =>
       showCount && n > 1 ? `${v}  (${n}건)` : v)
   }
+  const outLines = lineNums
+    ? finalResults.map((v, i) => `${i + 1}. ${v}`)
+    : finalResults
 
   const selPreset = v => {
     setPreset(v)
@@ -2360,7 +2366,7 @@ function ExtractTab() {
     setFlags({ ...EXTRACT_FLAG_DEF })
   }
   const copyResults = () => {
-    const text = finalResults.join('\n')
+    const text = outLines.join('\n')
     const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1200) }
     const fallback = () => {
       const ta = document.createElement('textarea')
@@ -2415,8 +2421,12 @@ function ExtractTab() {
         </div>
         <div>
           <div className="ext-head">
-            <b>추출된 결과</b>
+            <b>추출된 결과 ({finalResults.length}건)</b>
             <label style={{ fontWeight: 400, fontSize: 13, marginLeft: 'auto', marginRight: 8 }}>
+              <input type="checkbox" checked={lineNums}
+                onChange={e => setLineNums(e.target.checked)} /> 라인번호 표시
+            </label>
+            <label style={{ fontWeight: 400, fontSize: 13, marginRight: 8 }}>
               <input type="checkbox" checked={showCount}
                 disabled={!flags.removeDuplicates}
                 onChange={e => setShowCount(e.target.checked)} /> 중복건수 표시
@@ -2426,7 +2436,7 @@ function ExtractTab() {
               {copied ? '✓ 복사됨' : '복사'}</button>
           </div>
           <textarea className="ext-ta" readOnly
-            value={finalResults.join('\n')} />
+            value={outLines.join('\n')} />
           <p className="hint">
             총 {finalResults.length}개 매치
             {flags.removeDuplicates && results.length > finalResults.length &&
@@ -2434,6 +2444,246 @@ function ExtractTab() {
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ---------- 템플릿 변환 탭 ---------- */
+/* CSV 데이터 행마다 ${변수} 템플릿을 적용해 반복 생성하는 도구 (순수 클라이언트).
+   참고 구현 개선 반영: 따옴표 인식 CSV 파서, 변수치환 정규식 이스케이프,
+   HTML 출력 시 데이터 이스케이프(XSS), \r\n 처리, 누락 변수·컬럼 수 불일치 안내 */
+const escHtml = s => String(s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+const TPL_VAR_RE = /\$\{([^}]+)\}/g
+
+// 따옴표 인식 CSV 파서 — 구분자·줄바꿈이 쌍따옴표 안이면 그대로, "" 는 " 로
+function parseTplCsv(text, sep) {
+  const rows = []
+  let row = [], cell = '', inQ = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i++ }
+        else inQ = false
+      } else cell += c
+    } else if (c === '"') inQ = true
+    else if (c === sep) { row.push(cell); cell = '' }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++
+      row.push(cell); cell = ''
+      rows.push(row); row = []
+    } else cell += c
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row) }
+  return rows.map(r => r.map(c => c.trim()))
+}
+
+const TPL_PRESETS = {
+  'greeting': { label: '인사말', description: '기본 인사말 템플릿',
+    template: '안녕하세요 ${name}님, 당신의 나이는 ${age}세입니다.' },
+  'email': { label: '이메일', description: '이메일 형식 템플릿',
+    template: 'To: ${email}\nSubject: ${subject}\n\n안녕하세요 ${name}님,\n\n${message}\n\n감사합니다.' },
+  'sql-insert': { label: 'SQL INSERT', description: 'SQL INSERT 구문 템플릿',
+    template: "INSERT INTO users (name, age, email) VALUES ('${name}', ${age}, '${email}');" },
+  'json': { label: 'JSON', description: 'JSON 객체 템플릿',
+    template: '{\n  "name": "${name}",\n  "age": ${age},\n  "email": "${email}"\n}' },
+  'html-table': { label: 'HTML 테이블 행', description: 'HTML 테이블 행 템플릿',
+    template: '<tr><td>${name}</td><td>${age}</td><td>${email}</td></tr>' },
+}
+const csvQ = s => `"${String(s).replace(/"/g, '""')}"`
+
+function TemplateTab() {
+  const [template, setTemplate] =
+    useState('안녕하세요 ${name}님, 당신의 나이는 ${age}세입니다.')
+  const [csvData, setCsvData] =
+    useState('name,age\n홍길동,30\n김철수,25\n이영희,28')
+  const [selTpl, setSelTpl] = useState('')
+  const [sep, setSep] = useState(',')
+  const [fmt, setFmt] = useState('text')
+  const [lineNums, setLineNums] = useState(false)
+  const [headerRow, setHeaderRow] = useState(true)
+  const [skipEmpty, setSkipEmpty] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  const realSep = sep === 'tab' ? '\t' : sep
+  const rows = useMemo(() => {
+    if (!csvData.trim()) return []
+    return parseTplCsv(csvData, realSep)
+      .filter(r => !skipEmpty || r.some(c => c !== ''))
+  }, [csvData, realSep, skipEmpty])
+  const headers = headerRow && rows.length ? rows[0] : []
+  const dataRows = headerRow ? rows.slice(1) : rows
+
+  // 템플릿 변수 vs CSV 컬럼 대조 — 누락 변수·컬럼 수 불일치 행 안내
+  const varNames = useMemo(() =>
+    headerRow ? headers : (rows[0] || []).map((_, i) => `col${i}`),
+    [headerRow, headers, rows])
+  const tplVars = useMemo(() =>
+    [...new Set([...template.matchAll(TPL_VAR_RE)].map(m => m[1]))],
+    [template])
+  const missingVars = tplVars.filter(v => !varNames.includes(v))
+  const badRows = headerRow
+    ? dataRows.filter(r => r.length !== headers.length).length
+    : 0
+
+  // 변수 치환 — 단일 패턴 + 콜백 (메타문자 헤더도 안전, 없는 변수는 그대로)
+  const applyTpl = (tpl, vars, esc = s => s) =>
+    tpl.replace(TPL_VAR_RE, (m, k) => (k in vars ? esc(vars[k]) : m))
+  const results = useMemo(() => {
+    if (!template.trim() || !dataRows.length) return []
+    return dataRows.map((row, i) => {
+      const vars = headerRow
+        ? Object.fromEntries(headers.map((h, j) => [h, row[j] ?? '']))
+        : Object.fromEntries(row.map((v, j) => [`col${j}`, v]))
+      return { index: i + 1, result: applyTpl(template, vars), row, vars }
+    })
+  }, [template, dataRows, headerRow, headers])
+
+  const textOut = results.map((r, i) =>
+    lineNums ? `${i + 1}. ${r.result}` : r.result).join('\n')
+  const htmlOut = useMemo(() => {
+    if (!template.trim() || !dataRows.length) return ''
+    // HTML 출력은 데이터 값만 이스케이프 (템플릿의 태그는 의도된 마크업)
+    return dataRows.map((row, i) => {
+      const vars = headerRow
+        ? Object.fromEntries(headers.map((h, j) => [h, row[j] ?? '']))
+        : Object.fromEntries(row.map((v, j) => [`col${j}`, v]))
+      const num = lineNums ? `<span class="hint">${i + 1}. </span>` : ''
+      const body = applyTpl(template, vars, escHtml)
+      return `<div style="margin-bottom:6px">${num}${body}</div>`
+    }).join('')
+  }, [template, dataRows, headerRow, headers, lineNums])
+  const jsonOut = JSON.stringify(results.map((r, i) => ({
+    ...(lineNums ? { line: i + 1 } : {}),
+    result: r.result,
+    originalData: headerRow ? r.vars : r.row,
+  })), null, 2)
+  const csvOut = useMemo(() => {
+    if (!results.length) return ''
+    const head = (lineNums ? `${csvQ('Line')}${realSep}` : '') +
+      `${csvQ('Result')}${realSep}${csvQ('Original Data')}`
+    const body = results.map((r, i) =>
+      (lineNums ? `${csvQ(i + 1)}${realSep}` : '') +
+      `${csvQ(r.result)}${realSep}${csvQ(r.row.join('; '))}`)
+    return [head, ...body].join('\n')
+  }, [results, lineNums, realSep])
+  const outText =
+    { text: textOut, html: htmlOut, json: jsonOut, csv: csvOut }[fmt]
+
+  const copyResults = () => {
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1200) }
+    const fallback = () => {
+      const ta = document.createElement('textarea')
+      ta.value = outText; ta.style.cssText = 'position:fixed;opacity:0'
+      document.body.appendChild(ta); ta.select()
+      try { document.execCommand('copy'); done() } catch {}
+      ta.remove()
+    }
+    navigator.clipboard?.writeText
+      ? navigator.clipboard.writeText(outText).then(done).catch(fallback)
+      : fallback()
+  }
+  const optCb = (val, set, label) => (
+    <label key={label} style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
+      <input type="checkbox" checked={val}
+        onChange={e => set(e.target.checked)} /> {label}
+    </label>
+  )
+
+  return (
+    <div>
+      <div className="toolbar" style={{ gap: 14 }}>
+        <b>CSV 데이터를 템플릿 형식으로 변환</b>
+        {optCb(lineNums, setLineNums, '라인번호 표시')}
+        {optCb(headerRow, setHeaderRow, '첫 번째 행을 헤더로 사용')}
+        {optCb(skipEmpty, setSkipEmpty, '빈 행 건너뛰기')}
+      </div>
+      <div className="extract-grid">
+        <div>
+          <div className="ext-head">
+            <b>템플릿</b>
+            <span>
+              <select value={selTpl} onChange={e => {
+                setSelTpl(e.target.value)
+                const p = TPL_PRESETS[e.target.value]
+                if (p) setTemplate(p.template)
+              }}>
+                <option value="">직접 입력</option>
+                {Object.entries(TPL_PRESETS).map(([k, p]) =>
+                  <option key={k} value={k}>{p.label}</option>)}
+              </select>{' '}
+              <button className="link" onClick={() => { setTemplate(''); setSelTpl('') }}>
+                초기화</button>
+            </span>
+          </div>
+          <textarea className="ext-ta" style={{ height: 140 }} value={template}
+            placeholder="템플릿을 입력하세요. 변수는 ${변수명} 형태로 사용 (예: 안녕하세요 ${name}님)"
+            onChange={e => setTemplate(e.target.value)} />
+          {selTpl && TPL_PRESETS[selTpl] &&
+            <p className="hint">💡 {TPL_PRESETS[selTpl].description}</p>}
+          {missingVars.length > 0 &&
+            <p className="hint" style={{ color: '#b45309' }}>
+              ⚠ 템플릿 변수 없음: {missingVars.join(', ')} — CSV 헤더와
+              일치하는지 확인하세요{!headerRow && ' (헤더 미사용 시 변수명은 col0, col1…)'}
+            </p>}
+
+          <div className="ext-head" style={{ marginTop: 12 }}>
+            <b>CSV 데이터</b>
+            <span>
+              <select value={sep} onChange={e => setSep(e.target.value)}>
+                <option value=",">쉼표(,)</option>
+                <option value=";">세미콜론(;)</option>
+                <option value="tab">탭</option>
+                <option value="|">파이프(|)</option>
+              </select>{' '}
+              <button className="link" onClick={() => setCsvData('')}>초기화</button>
+            </span>
+          </div>
+          <textarea className="ext-ta" style={{ height: 200 }} value={csvData}
+            placeholder={'CSV 데이터를 입력하세요\n예:\nname,age\n홍길동,30\n김철수,25'}
+            onChange={e => setCsvData(e.target.value)} />
+          <p className="hint">
+            총 {rows.length}개 행 ({headerRow ? '헤더 포함' : '헤더 제외'})
+            {headerRow && headers.length > 0 &&
+              <span> • 변수: {headers.join(', ')}</span>}
+            {badRows > 0 &&
+              <span style={{ color: '#b45309' }}>
+                {' '}• 컬럼 수 불일치 {badRows}행</span>}
+          </p>
+        </div>
+
+        <div>
+          <div className="ext-head">
+            <b>생성된 결과 ({results.length}건)</b>
+            <span>
+              <select value={fmt} onChange={e => setFmt(e.target.value)}>
+                <option value="text">텍스트</option>
+                <option value="html">HTML</option>
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+              </select>{' '}
+              <button className="link" onClick={copyResults}
+                disabled={!results.length}>
+                {copied ? '✓ 복사됨' : '복사'}</button>
+            </span>
+          </div>
+          {fmt === 'html'
+            ? <div className="ext-ta"
+                style={{ height: 392, overflow: 'auto', fontFamily: 'inherit',
+                  background: '#fff' }}
+                dangerouslySetInnerHTML={{ __html: htmlOut }} />
+            : <textarea className="ext-ta" style={{ height: 392 }} readOnly
+                value={outText} />}
+          <p className="hint">총 {results.length}개 결과 생성됨</p>
+        </div>
+      </div>
+      <p className="hint" style={{ marginTop: 12 }}>
+        💡 사용법 — 템플릿에 `${'{'}변수명{'}'}` 형태로 변수를 쓰고, CSV 첫 행에
+        변수명(헤더)을 입력하면 각 데이터 행이 템플릿에 적용되어 반복 생성됩니다.
+        헤더를 쓰지 않으면 변수명은 col0, col1, … 입니다.
+      </p>
     </div>
   )
 }
