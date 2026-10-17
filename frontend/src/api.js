@@ -236,7 +236,9 @@ export const hasMd = text => {
   if (/!\[[^\]]*\]\(|\[[^\]\n]+\]\([^)\n]+\)|^#{1,6}\s|```|^\s*[-*+]\s+\[[ xX]\]/m
       .test(text)) return true
   if (/\|[\s:|-]*-{3,}[\s:|-]*\|/.test(text)) return true   // 표 구분행
-  if (/<table[\s>]|<img[\s>]/i.test(text)) return true    // 붙여넣은 HTML 표·이미지
+  // 붙여넣은 HTML 콘텐츠 (표·이미지·목록·서식 등 렌더링 가능 태그)
+  if (/<(table|img|ul|ol|li|h[1-6]|p|br|strong|em|del|s|b|i|pre|blockquote|a|code|hr)[\s/>]/i
+      .test(text)) return true
   return false
 }
 
@@ -301,3 +303,7 @@ const sanitizeHtml = html => {
 // 마크다운 텍스트 → 안전한 HTML (GFM 표·체크박스 지원, 줄바꿈 유지)
 export const mdHtml = text =>
   ({ __html: sanitizeHtml(marked.parse(text || '', { breaks: true, gfm: true })) })
+
+// 외부에서 복사한 HTML 정제 — 렌더링과 동일한 화이트리스트 적용
+// (붙여넣은 리치 콘텐츠를 그대로 저장할 때 사용)
+export const cleanHtml = html => sanitizeHtml(html || '')

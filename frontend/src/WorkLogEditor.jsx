@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import api, { mdHtml } from './api'
+import api, { mdHtml, cleanHtml } from './api'
 
 // 작업이력 내용 편집기 — 마크다운 지원 (이미지 첨부·표 삽입·미리보기)
 // 이미지는 /attach-files에 업로드 후 본문에 마크다운으로 삽입된다.
@@ -37,10 +37,10 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
     })
   }
 
-  // 엑셀 셀 복사를 붙여넣으면 표로 변환 — HTML이 있으면 병합(colspan/rowspan)
-  // 까지 유지한 HTML 표로, 없으면 TSV를 마크다운 표로 변환 (첫 행은 헤더)
   const escH = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+
+  // 엑셀 표 DOM → 병합(colspan/rowspan) 유지 HTML 표
   const cellText = c => {
     const html = (c.innerHTML || '').replace(/<br[^>]*>/gi, '\n')
     const tmp = document.createElement('div')
@@ -48,53 +48,34 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
     return (tmp.textContent || '').replace(/ /g, ' ').split('\n')
       .map(s => escH(s.trim())).join('<br>')
   }
-  const onPaste = e => {
-    // 1) HTML 클립보드 — 병합 셀(colspan/rowspan)까지 유지
-    const html = e.clipboardData?.getData('text/html')
-    if (html) {
-      const tbl = new DOMParser().parseFromString(html, 'text/html')
-        .querySelector('table')
-      if (tbl && tbl.rows.length) {
-        e.preventDefault()
-        const rows = [...tbl.rows].map(r =>
-          '<tr>' + [...r.cells].map(c => {
-            const tag = c.tagName === 'TH' ? 'th' : 'td'
-            const a = (c.colSpan > 1 ? ` colspan="${c.colSpan}"` : '')
-              + (c.rowSpan > 1 ? ` rowspan="${c.rowSpan}"` : '')
-            return `<${tag}${a}>${cellText(c)}</${tag}>`
-          }).join('') + '</tr>').join('\n')
-        insert(`\n\n<table>\n${rows}\n</table>\n\n`)
-        return
-      }
-    }
-    // 2) TSV 클립보드 — 마크다운 표로 변환
-    const text = e.clipboardData?.getData('text/plain')
-    if (!text || !text.includes('\t')) return   // 일반 텍스트는 기본 붙여넣기
+  const tableHtml = tbl => {
+    const rows = [...tbl.rows].map(r =>
+      '<tr>' + [...r.cells].map(c => {
+        const tag = c.tagName === 'TH' ? 'th' : 'td'
+        const a = (c.colSpan > 1 ? ` colspan="${c.colSpan}"` : '')
+          + (c.rowSpan > 1 ? ` rowspan="${c.rowSpan}"` : '')
+        return `<${tag}${a}>${cellText(c)}</${tag}>`
+      }).join('') + '</tr>').join('\n')
+    return `<table>\n${rows}\n</table>`
+  }
+  // TSV(탭 구분) 텍스트 → 마크다운 표 (첫 행 헤더)
+  const tsvToMd = text => {
     const rows = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
       .split('\n').map(r => r.split('\t'))
-    if (rows[0].length < 2) return   // 단일 셀은 기본 붙여넣기
-    e.preventDefault()
     const cols = Math.max(...rows.map(r => r.length))
     const esc = c => (c || '')
       .replace(/^"|"$/g, '').replace(/""/g, '"')   // 엑셀 따옴표 해제
       .replace(/\|/g, '\\|').trim()
     const pad = rows.map(r =>
       [...Array(cols)].map((_, i) => esc(r[i])))
-    const md = '\n\n'
-      + '| ' + pad[0].join(' | ') + ' |\n'
+    return '| ' + pad[0].join(' | ') + ' |\n'
       + '| ' + pad[0].map(() => '---').join(' | ') + ' |\n'
       + pad.slice(1).map(r => '| ' + r.join(' | ') + ' |').join('\n')
-      + '\n\n'
-    insert(md)
   }
 
-  const addImage = async ev => {
-    const f = ev.target.files?.[0]
-    ev.target.value = ''
-    if (!f) return
-    if (!f.type.startsWith('image/')) { alert('이미지 파일만 삽입할 수 있습니다'); return }
+  const uploadImage = async f => {
     const fd = new FormData()
-    fd.append('file', f)
+    fd.append('file', f, f.name || `paste_${Date.now()}.png`)
     fd.append('taskid', taskid)
     if (workschid) fd.append('workschid', workschid)
     try {
@@ -104,6 +85,53 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
     } catch (e) {
       alert(e.response?.data?.detail || '이미지 업로드에 실패했습니다')
     }
+  }
+
+  // 붙여넣기: ① 이미지 파일 → 첨부 업로드 후 삽입
+  //           ② 엑셀(TSV) → 병합 유지 HTML 표 / 마크다운 표
+  //           ③ 기타 HTML(웹·문서 등 서식 복사) → 정제된 HTML 그대로
+  const onPaste = async e => {
+    const cd = e.clipboardData
+    // 1) 이미지 파일 붙여넣기 (스크린샷·이미지 복사)
+    const img = [...(cd?.files || [])].find(f => f.type.startsWith('image/'))
+    if (img) {
+      e.preventDefault()
+      await uploadImage(img)
+      return
+    }
+    const text = cd?.getData('text/plain') || ''
+    const html = cd?.getData('text/html') || ''
+    // 2) 엑셀 표 — 병합 유지 HTML 표 우선, 없으면 마크다운 표
+    if (text.includes('\t')) {
+      const rows0 = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
+        .split('\n').map(r => r.split('\t'))
+      if (rows0[0].length < 2) return   // 단일 셀은 기본 붙여넣기
+      e.preventDefault()
+      const tbl = html && new DOMParser()
+        .parseFromString(html, 'text/html').querySelector('table')
+      insert(tbl && tbl.rows.length
+        ? `\n\n${tableHtml(tbl)}\n\n` : `\n\n${tsvToMd(text)}\n\n`)
+      return
+    }
+    // 3) 다른 화면에서 긁어온 서식 콘텐츠 — 허용 태그만 남긴 HTML로 삽입
+    if (html && /<(table|img|ul|ol|li|h[1-6]|p|br|strong|em|del|s|b|i|pre|blockquote|a|code|hr)[\s/>]/i
+        .test(html)) {
+      const rich = cleanHtml(new DOMParser()
+        .parseFromString(html, 'text/html').body.innerHTML).trim()
+      if (rich) {
+        e.preventDefault()
+        insert(`\n\n${rich}\n\n`)
+      }
+    }
+    // 그 외 일반 텍스트는 기본 붙여넣기
+  }
+
+  const addImage = async ev => {
+    const f = ev.target.files?.[0]
+    ev.target.value = ''
+    if (!f) return
+    if (!f.type.startsWith('image/')) { alert('이미지 파일만 삽입할 수 있습니다'); return }
+    await uploadImage(f)
   }
 
   return (
@@ -123,7 +151,7 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
         ? <div className="log-detail md md-preview"
             dangerouslySetInnerHTML={mdHtml(value)} />
         : <textarea ref={taRef} className="req-edit" rows={rows} value={value}
-            placeholder="작업 내용을 입력하세요 (이미지·표·엑셀 붙여넣기 지원)"
+            placeholder="작업 내용을 입력하세요 (이미지·표·서식 복사 붙여넣기 지원)"
             onChange={e => setVal(e.target.value)} onPaste={onPaste} />}
     </div>
   )
