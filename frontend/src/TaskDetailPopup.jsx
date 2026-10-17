@@ -108,6 +108,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [boardPw, setBoardPw] = useState('')      // 게시글 열람 비밀번호(세션)
   const [boardLock, setBoardLock] = useState(null)  // 비밀번호 입력 대상 {b, pw, err}
   const [boardEdit, setBoardEdit] = useState(null)  // 게시글 수정 폼 팝업 대상
+  const [boardNew, setBoardNew] = useState(false)   // 게시글 쓰기 폼 팝업
   const isStaff = me && [0, 1].includes(me.user_grade)
   const canLogEdit = l => isStaff || l.work_userid === me?.userid
   const [pendFiles, setPendFiles] = useState([]) // 신규 이력 작성 중 올린 첨부 (저장 후 이력에 연결)
@@ -651,6 +652,9 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             onClick={() => selTab('stk')}>스티커</button>
           <button className={`btab${btab === 'bd' ? ' active' : ''}`}
             onClick={() => selTab('bd')}>관련 게시글</button>
+          {btab === 'bd' &&
+            <button className="link req-edit-btn"
+              onClick={() => setBoardNew(true)}>글쓰기</button>}
           {btab === 'req' && canEdit && reqEdit === null &&
             <button className="link req-edit-btn"
               onClick={() => setReqEdit(reqText)}>수정</button>}
@@ -801,9 +805,11 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     <tr key={b.boardid}>
                       <td className="r">{b.boardid}</td>
                       <td>
-                        <button className="link"
+                        <button className="link" title={b.title}
                           onClick={() => openBoard(b)}>
-                          {(b.has_passwd || !b.is_public) && '🔒 '}{b.title}</button>
+                          {(b.has_passwd || !b.is_public) && '🔒 '}
+                          {(b.title || '').length > 30
+                            ? b.title.slice(0, 30) + '…' : b.title}</button>
                         {!b.is_public
                           ? <span className="bd-private">비공개</span>
                           : b.has_passwd &&
@@ -947,11 +953,11 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         <div className="popup log-pop" onClick={e => {
           if (e.target === e.currentTarget) setBoardLock(null)
         }}>
-          <div className="popup-body" style={{ width: 320, transform: 'none' }}
+          <div className="popup-body pw-pop" style={{ width: 340, transform: 'none' }}
             onClick={e => e.stopPropagation()}>
-            <b className="blk-title" style={{ marginTop: 0 }}>비밀번호 입력</b>
+            <b className="pop-title-bar">🔒 비밀번호 입력</b>
             <div className="log-meta" style={{ marginBottom: 6 }}>
-              비밀번호가 필요한 게시글입니다</div>
+              <b>{boardLock.b.title}</b> — 비밀번호가 필요한 게시글입니다</div>
             <input type="password" autoFocus placeholder="열람 비밀번호"
               value={boardLock.pw} style={{ width: '100%', boxSizing: 'border-box' }}
               onChange={e => setBoardLock(l => ({ ...l, pw: e.target.value }))}
@@ -988,10 +994,23 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         <div className="popup" onClick={e => {
           if (e.target === e.currentTarget) setBoardEdit(null)
         }}>
-          <div className="popup-body" onClick={e => e.stopPropagation()}>
+          <div className="popup-body bd-form-pop" onClick={e => e.stopPropagation()}>
+            <b className="pop-title-bar">게시글 수정</b>
             <BoardForm edit={boardEdit}
               onDone={() => { setBoardEdit(null); setBoards(null); loadBoards() }}
               onCancel={() => setBoardEdit(null)} />
+          </div>
+        </div>
+      )}
+      {boardNew && (
+        <div className="popup" onClick={e => {
+          if (e.target === e.currentTarget) setBoardNew(false)
+        }}>
+          <div className="popup-body bd-form-pop" onClick={e => e.stopPropagation()}>
+            <b className="pop-title-bar">게시글 쓰기</b>
+            <BoardForm presetTask={task}
+              onDone={() => { setBoardNew(false); setBoards(null); loadBoards() }}
+              onCancel={() => setBoardNew(false)} />
           </div>
         </div>
       )}

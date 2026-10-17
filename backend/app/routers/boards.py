@@ -4,7 +4,8 @@
 - 공개(비밀번호 열람)글(is_public+passwd): 목록 노출, 일반사용자는
   비밀번호 입력 후 열람 (작성자·스태프는 바로 열람)
 - 비공개글: 목록 비노출, 작성자·스태프만 열람
-- 수정·삭제: 작성자 또는 스태프
+- 수정·삭제: 작성자만 가능 (관리자·스태프도 불가)
+- 공개범위(is_public·열람 비밀번호) 변경: 작성자 또는 스태프
 - 첨부파일: /api/attach-files 에 boardid 로 업로드 (board_attach_files)
 """
 import os
@@ -76,7 +77,7 @@ def _get_board(db: Session, boardid: int) -> Board:
 
 
 def _can_edit(b: Board, me) -> bool:
-    return b.user_id == me.userid or _staff(me)
+    return b.user_id == me.userid   # 작성자만 수정·삭제 (관리자·스태프 불가)
 
 
 def _board_out(b: Board, user_name=None, n_comments=None, n_files=None,
@@ -114,7 +115,8 @@ def _detail_out(db: Session, b: Board, me):
         {"commentid": c.commentid, "user_id": c.user_id, "user_name": name,
          "content": c.content, "create_date": c.create_date}
         for c, name in comments]
-    out["can_edit"] = _can_edit(b, me)
+    out["can_edit"] = _can_edit(b, me)                 # 수정·삭제 (작성자만)
+    out["can_scope"] = _can_edit(b, me) or _staff(me)  # 공개범위 변경 (작성자·스태프)
     return out
 
 
@@ -247,8 +249,15 @@ def update_board(boardid: int, body: BoardUpdate,
                  db: Session = Depends(get_db),
                  me: User = Depends(get_current_user)):
     b = _get_board(db, boardid)
-    if not _can_edit(b, me):
+    # 권한 분리: 제목·내용·관련작업 수정은 작성자만,
+    # 공개범위(is_public/passwd) 변경은 작성자 또는 스태프
+    fields = body.model_fields_set
+    if (fields - {"is_public", "passwd"}) and not _can_edit(b, me):
         raise HTTPException(403, "작성자만 수정할 수 있습니다")
+    if (fields & {"is_public", "passwd"}) \
+            and not (_can_edit(b, me) or _staff(me)):
+        raise HTTPException(
+            403, "공개 설정은 작성자 또는 관리자만 변경할 수 있습니다")
     if body.title is not None:
         b.title = body.title
     if body.content is not None:

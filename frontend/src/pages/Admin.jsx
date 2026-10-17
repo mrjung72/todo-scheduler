@@ -2187,8 +2187,11 @@ function BoardsTab() {
             <tr key={b.boardid}>
               <td className="r">{b.boardid}</td>
               <td>
-                <button className="link" onClick={() => openView(b)}>
-                  {(b.has_passwd || !b.is_public) && '🔒 '}{b.title}</button>
+                <button className="link" title={b.title}
+                  onClick={() => openView(b)}>
+                  {(b.has_passwd || !b.is_public) && '🔒 '}
+                  {(b.title || '').length > 70
+                    ? b.title.slice(0, 70) + '…' : b.title}</button>
                 {!b.is_public
                   ? <span className="bd-private">비공개</span>
                   : b.has_passwd && <span className="bd-private">비밀번호</span>}
@@ -2199,7 +2202,8 @@ function BoardsTab() {
                     #{b.taskid} {b.task_name || ''}</button>
                 : '-'}</td>
               <td className="c">
-                <EditableCell value={scopeOf(b)} disabled={!staff}
+                <EditableCell value={scopeOf(b)}
+                  disabled={b.user_id !== myId() && !staff}
                   onSave={v => {
                     if (v === 'pw' && !b.has_passwd) {
                       alert('비밀번호가 설정된 글만 공개(비밀번호 열람)로 바꿀 수 있습니다.\n상세 팝업 또는 수정에서 비밀번호를 설정해 주세요')
@@ -2214,7 +2218,7 @@ function BoardsTab() {
               </td>
               <td className="c">
                 {b.has_passwd
-                  ? <span>설정{staff &&
+                  ? <span>설정{(b.user_id === myId() || staff) &&
                       <button className="link" style={{ marginLeft: 6 }}
                         onClick={() => clearPw(b)}>해제</button>}</span>
                   : (!b.is_public ? '미설정' : '-')}
@@ -2224,7 +2228,7 @@ function BoardsTab() {
               <td className="r">{b.comment_count || ''}</td>
               <td className="c">{fmtDT(b.create_date)}</td>
               <td className="c">{fmtDT(b.update_date)}</td>
-              <td>{staff &&
+              <td>{b.user_id === myId() &&
                 <button className="danger" onClick={() => del(b)}>삭제</button>}</td>
             </tr>
           ))}
@@ -2233,21 +2237,23 @@ function BoardsTab() {
         </tbody>
       </table>
       <p className="hint">
-        스태프(관리자·수석)는 비공개글도 열람·수정·삭제할 수 있습니다.
-        [해제]는 비공개글의 열람 비밀번호를 지웁니다.
+        게시글은 작성자만 수정·삭제할 수 있습니다.
+        스태프(관리자·수석)는 비공개글 열람과 공개여부·비밀번호 변경만 가능합니다.
       </p>
       {sel && (
         <BoardDetailPopup
           me={{ userid: myId(), user_grade: myGrade() }}
           post={sel}
           onClose={() => setSel(null)}
-          onEdit={staff ? () => { setEditPost(sel); setSel(null) } : null}
-          onDelete={staff ? () => del(sel) : null}
+          onEdit={sel.user_id === myId()
+            ? () => { setEditPost(sel); setSel(null) } : null}
+          onDelete={sel.user_id === myId() ? () => del(sel) : null}
           onReload={() => { openView(sel); load() }} />
       )}
       {editPost && (
         <div className="popup" onClick={() => setEditPost(null)}>
-          <div className="popup-body" onClick={e => e.stopPropagation()}>
+          <div className="popup-body bd-form-pop" onClick={e => e.stopPropagation()}>
+            <b className="pop-title-bar">게시글 수정</b>
             <BoardForm edit={editPost}
               onDone={() => { setEditPost(null); load() }}
               onCancel={() => setEditPost(null)} />

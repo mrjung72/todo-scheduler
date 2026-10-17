@@ -179,9 +179,8 @@ def upload_file(file: UploadFile = File(...),
         board = db.get(Board, boardid)
         if not board:
             raise HTTPException(404, "게시글을 찾을 수 없습니다")
-        if not board.is_public and board.user_id != me.userid \
-                and me.user_grade not in (0, 1):
-            raise HTTPException(403, "비공개 게시글입니다")
+        if board.user_id != me.userid:
+            raise HTTPException(403, "작성자만 첨부할 수 있습니다")
         _check_attach_count(db, me, boardid=boardid)
         obj = BoardAttachFile(file_name=file.filename, boardid=boardid,
                               create_date=datetime.now())
@@ -286,12 +285,12 @@ def download_board_file(fileid: int, pw: str | None = None,
 @router.delete("/board/{fileid}", status_code=204)
 def delete_board_file(fileid: int, db: Session = Depends(get_db),
                       me=Depends(get_current_user)):
-    """게시판 첨부 삭제 — 글 작성자 또는 스태프."""
+    """게시판 첨부 삭제 — 글 작성자만 (게시글 수정 권한과 동일)."""
     obj = db.get(BoardAttachFile, fileid)
     if not obj:
         raise HTTPException(404, "첨부파일을 찾을 수 없습니다")
     b = db.get(Board, obj.boardid)
-    if b and b.user_id != me.userid and me.user_grade not in (0, 1):
+    if b and b.user_id != me.userid:
         raise HTTPException(403, "작성자만 삭제할 수 있습니다")
     if obj.file_filepath:
         path = _file_path(obj.file_filepath)

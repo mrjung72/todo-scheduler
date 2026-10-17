@@ -120,8 +120,11 @@ export default function Board() {
               <tr key={b.boardid}>
                 <td className="r">{b.boardid}</td>
                 <td>
-                  <button className="link" onClick={() => openDetail(b)}>
-                    {(b.has_passwd || !b.is_public) && '🔒 '}{b.title}</button>
+                  <button className="link" title={b.title}
+                    onClick={() => openDetail(b)}>
+                    {(b.has_passwd || !b.is_public) && '🔒 '}
+                    {(b.title || '').length > 70
+                      ? b.title.slice(0, 70) + '…' : b.title}</button>
                   {!b.is_public
                     ? <span className="bd-private">비공개</span>
                     : b.has_passwd && <span className="bd-private">비밀번호</span>}
@@ -160,9 +163,9 @@ export default function Board() {
 
       {lock && (
         <div className="popup" onClick={() => setLock(null)}>
-          <form className="popup-body" onClick={e => e.stopPropagation()}
+          <form className="popup-body pw-pop" onClick={e => e.stopPropagation()}
             onSubmit={tryUnlock}>
-            <h3>🔒 비공개 게시글</h3>
+            <b className="pop-title-bar">🔒 비공개 게시글</b>
             <p style={{ marginBottom: 10 }}>
               <b>{lock.b.title}</b> — 열람 비밀번호를 입력하세요</p>
             <input type="password" autoFocus style={{ width: '100%' }}
@@ -181,7 +184,7 @@ export default function Board() {
 }
 
 /* 글 작성·수정 폼 — 파일 다중 첨부 + 진행바 (관리자 화면에서도 재사용) */
-export function BoardForm({ edit, onDone, onCancel }) {
+export function BoardForm({ edit, presetTask, onDone, onCancel }) {
   const me = JSON.parse(localStorage.getItem('user') || 'null')
   const [title, setTitle] = useState(edit?.title || '')
   const [content, setContent] = useState(edit?.content || '')
@@ -197,7 +200,8 @@ export function BoardForm({ edit, onDone, onCancel }) {
   // 관련 작업 — "#번호 작업명" 검색 입력 (선택사항)
   const [tasks, setTasks] = useState([])
   const [taskSel, setTaskSel] = useState(
-    edit?.taskid ? `#${edit.taskid} ${edit.task_name || ''}` : '')
+    edit?.taskid ? `#${edit.taskid} ${edit.task_name || ''}`
+      : presetTask ? `#${presetTask.taskid} ${presetTask.task_name || ''}` : '')
   useEffect(() => {
     api.get('/tasks').then(r => setTasks(r.data)).catch(() => {})
   }, [])
@@ -327,7 +331,10 @@ export function BoardForm({ edit, onDone, onCancel }) {
       <label>관련 작업
         <input list="bd-task-dl" value={taskSel}
           placeholder="작업 검색 (#번호·작업명) — 선택사항"
+          disabled={!edit && !!presetTask}
           onChange={e => setTaskSel(e.target.value)} />
+        {!edit && presetTask &&
+          <span className="hint">이 작업의 게시글로 등록됩니다</span>}
         <datalist id="bd-task-dl">
           {tasks.map(t => <option key={t.taskid}
             value={`#${t.taskid} ${t.task_name}`} />)}
@@ -465,7 +472,7 @@ export function BoardDetail({ me, post, pw, onEdit, onDelete, onReload,
   // 공개여부/수정/삭제/닫기 버튼 행 — 상·하단에 동일하게 표시
   const btns = (
     <div className="popup-btns">
-      {post.can_edit && (
+      {post.can_scope && (
         <span className="bd-pubsel">
           공개여부
           <select value={scopeOf(post)}
@@ -486,7 +493,7 @@ export function BoardDetail({ me, post, pw, onEdit, onDelete, onReload,
   return (
     <div className="bd-detail">
       <div className="bd-head">
-        <h3 onMouseDown={onTitleDown}
+        <h3 className="pop-title-bar" onMouseDown={onTitleDown}
           style={onTitleDown ? { cursor: 'move', userSelect: 'none' } : undefined}>
           {(post.has_passwd || !post.is_public) && '🔒 '}{post.title}
           {!post.is_public
@@ -588,7 +595,8 @@ export function BoardDetailPopup({ me, post, pw, onClose, onEdit, onDelete,
         if (e.target === e.currentTarget && downOnOverlay.current) onClose?.()
         downOnOverlay.current = false
       }}>
-      <div className="popup-body task-popup" onClick={e => e.stopPropagation()}
+      <div className="popup-body task-popup bd-view-pop"
+        onClick={e => e.stopPropagation()}
         style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
         <BoardDetail me={me} post={post} pw={pw} onTitleDown={onDown}
           onEdit={onEdit} onDelete={onDelete} onReload={onReload}

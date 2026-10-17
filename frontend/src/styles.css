@@ -666,7 +666,28 @@ td.req-col input { width: 120px; }
 
 /* 게시판 */
 .bd-pubsel { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: 12px; color: #555; }
-.bd-form { display: flex; flex-direction: column; gap: 10px; max-width: 720px; }
+/* 게시글 작성/수정 팝업 — 조회 팝업(task-popup)과 동일 크기 + 따뜻한 배경 */
+.popup-body.bd-form-pop {
+  width: 720px; max-width: 95vw; max-height: 92vh;
+  resize: both; overflow: auto;
+  background: #fdf3e7; border: 1px solid #f3e0c3;
+}
+/* 팝업 상단 타이틀 바 — 전체폭 색 배경 */
+.pop-title-bar {
+  display: block; color: #fff; font-size: 15px; font-weight: 700;
+  background: #b45309; padding: 9px 14px;
+  border-radius: 6px 6px 0 0; margin: -20px -24px 14px;
+}
+/* 비밀번호 입력 등 소형 입력 팝업 — 따뜻한 배경 */
+.popup-body.pw-pop { background: #fdf3e7; border: 1px solid #f3e0c3; }
+/* 게시글 조회 팝업 — 따뜻한 배경 (task-popup 900px → 80% 수준) */
+.popup-body.bd-view-pop {
+  background: #fdf3e7; border: 1px solid #f3e0c3; width: 720px;
+}
+/* 조회 팝업의 타이틀 바는 드래그 핸들 겸용 — h3 기본 마진 제거 */
+.pop-title-bar.draggable { cursor: move; user-select: none; }
+h3.pop-title-bar { margin-top: -20px; font-size: 16px; }
+.bd-form { display: flex; flex-direction: column; gap: 10px; }
 .bd-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .bd-form textarea { resize: vertical; }
 .bd-scope { display: flex; gap: 16px; }
@@ -676,12 +697,12 @@ td.req-col input { width: 120px; }
 .bd-pickname { font-size: 12px; color: #374151; }
 .bd-private {
   margin-left: 6px; padding: 0 6px; border-radius: 8px;
-  background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 600;
+  background: #fef3c7; color: #92400e; font-size: 12px; font-weight: 600;
 }
 .bd-detail { max-width: 860px; }
 .bd-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .bd-head h3 { margin: 0; }
-.bd-meta { color: #9ca3af; font-size: 12px; }
+.bd-meta { color: #64748b; font-size: 14px; }
 .bd-content {
   margin: 12px 0; padding: 14px; border: 1px solid #e5e7eb; border-radius: 6px;
   white-space: pre-wrap; min-height: 120px; font-size: 14px;
