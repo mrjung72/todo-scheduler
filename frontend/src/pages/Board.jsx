@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import api, { fmtDT, fmtSize, uploadWithProgress, downloadFile } from '../api'
+import api, { fmtDT, fmtSize, uploadWithProgress, downloadFile,
+  hasMd, mdHtml } from '../api'
 import ProgressBar from '../ProgressBar'
+import WorkLogEditor from '../WorkLogEditor'
 
 /* 게시판 — 목록 / 작성·수정 / 상세(첨부·댓글) */
 export default function Board() {
@@ -144,6 +146,14 @@ function BoardForm({ edit, onDone, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const fileRef = useRef(null)
+  // 신규 작성 시 본문 이미지 — 게시글 ID가 없으므로 pending 토큰으로 보관하고
+  // 저장(글 생성) 후 실제 fileid로 본문 URL을 치환한다
+  const pendRef = useRef([])   // [{ token, file }]
+  const pendingImage = async f => {
+    const token = `pending-${Date.now()}-${pendRef.current.length}`
+    pendRef.current.push({ token, file: f })
+    return { fileid: token, file_name: f.name || 'image.png' }
+  }
 
   // 수정 화면 전용: 게시글 ID가 이미 있으므로 선택 파일을 즉시 업로드
   const uploadNow = async () => {
@@ -190,6 +200,19 @@ function BoardForm({ edit, onDone, onCancel }) {
       }
       // 신규 작성 시에만: 저장하면서 대기 중인 파일들을 업로드
       if (!edit) {
+        // 본문에 임시 URL로 삽입된 이미지 → 실제 첨부로 올리고 URL 치환
+        let body2 = content
+        for (const p of pendRef.current) {
+          if (!body2.includes(`board/${p.token}/`)) continue  // 본문에서 지워진 임시 이미지
+          const fd = new FormData()
+          fd.append('file', p.file)
+          fd.append('boardid', boardid)
+          const { data } = await api.post('/attach-files', fd)
+          body2 = body2.replaceAll(
+            `board/${p.token}/download`, `board/${data.fileid}/download`)
+        }
+        if (body2 !== content)
+          await api.put(`/boards/${boardid}`, { content: body2 })
         for (const f of files) {
           const fd = new FormData()
           fd.append('file', f)
@@ -225,10 +248,10 @@ function BoardForm({ edit, onDone, onCancel }) {
             onChange={e => setPasswd(e.target.value)} />
         </label>
       )}
-      <label>내용
-        <textarea rows={10} value={content}
-          onChange={e => setContent(e.target.value)} />
-      </label>
+      <label>내용</label>
+      <WorkLogEditor value={content} onChange={setContent} rows={10}
+        boardid={edit?.boardid ?? null}
+        pendingImage={edit ? null : pendingImage} />
       <label>첨부파일</label>
       {edit && !!editFiles.length && (
         <table className="grid">
@@ -340,7 +363,10 @@ function BoardDetail({ me, post, pw, onEdit, onDelete, onReload }) {
           {post.update_date && ` (수정 ${fmtDT(post.update_date)})`}
         </span>
       </div>
-      <div className="bd-content">{post.content || ''}</div>
+      {hasMd(post.content)
+        ? <div className="bd-content md"
+            dangerouslySetInnerHTML={mdHtml(post.content)} />
+        : <div className="bd-content">{post.content || ''}</div>}
 
       <div className="blk-title">첨부파일</div>
       <table className="grid">

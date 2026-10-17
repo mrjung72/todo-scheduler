@@ -1,11 +1,14 @@
 import { useRef, useState } from 'react'
 import api, { mdHtml, cleanHtml } from './api'
 
-// 작업이력 내용 편집기 — 마크다운 지원 (이미지 첨부·표 삽입·미리보기)
+// 작업이력·요청내용·게시글 본문 편집기 — 마크다운 지원 (이미지 첨부·표 삽입·미리보기)
 // 이미지는 /attach-files에 업로드 후 본문에 마크다운으로 삽입된다.
 // onUploaded(file): 업로드된 첨부 객체 통지 — 신규 이력은 저장 후 workschid 재연결용
+// boardid: 게시판 모드 — 첨부를 board_attach_files에 기록하고 board/ 다운로드 URL 삽입.
+// pendingImage(file): 게시글 ID가 없는 신규 작성 시 호출 — {fileid: 'pending-*'} 를
+// 반환하면 그 자리에 임시 URL을 삽입하고, 호출측이 저장 후 실제 fileid로 치환한다.
 export default function WorkLogEditor({ value, onChange, taskid, workschid,
-  onUploaded, rows = 8 }) {
+  onUploaded, rows = 8, boardid, pendingImage }) {
   const [preview, setPreview] = useState(false)
   const taRef = useRef(null)
   // 업로드 등 비동기 작업 후에도 최신 본문을 읽도록 ref로 동기화
@@ -74,14 +77,24 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
   }
 
   const uploadImage = async f => {
-    const fd = new FormData()
-    fd.append('file', f, f.name || `paste_${Date.now()}.png`)
-    fd.append('taskid', taskid)
-    if (workschid) fd.append('workschid', workschid)
     try {
+      // 게시판 신규 작성 — 게시글 ID가 없으므로 임시 첨부로 두고 본문에 임시 URL 삽입
+      if (boardid === null && pendingImage) {
+        const data = await pendingImage(f)
+        insert(`\n\n![${data.file_name}](/api/attach-files/board/${data.fileid}/download)\n\n`)
+        return
+      }
+      const fd = new FormData()
+      fd.append('file', f, f.name || `paste_${Date.now()}.png`)
+      if (boardid) fd.append('boardid', boardid)
+      else {
+        fd.append('taskid', taskid)
+        if (workschid) fd.append('workschid', workschid)
+      }
       const { data } = await api.post('/attach-files', fd)
       onUploaded?.(data)
-      insert(`\n\n![${data.file_name}](/api/attach-files/${data.fileid}/download)\n\n`)
+      insert(`\n\n![${data.file_name}](/api/attach-files/` +
+        `${boardid ? 'board/' : ''}${data.fileid}/download)\n\n`)
     } catch (e) {
       alert(e.response?.data?.detail || '이미지 업로드에 실패했습니다')
     }

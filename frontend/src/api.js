@@ -279,7 +279,7 @@ const sanitizeHtml = html => {
         let src = el.getAttribute('src') || ''
         if (!okUrl(src)) continue
         // 첨부파일 이미지는 현재 세션 토큰을 붙여 인증 (다운로드 전용 쿼리 인증)
-        if (/^\/api\/attach-files\/\d+\/download/.test(src)
+        if (/^\/api\/attach-files\/(board\/)?\d+\/download/.test(src)
             && !src.includes('token='))
           src += `${src.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
         el.setAttribute('src', src)
