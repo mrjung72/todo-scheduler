@@ -28,10 +28,15 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 PUBLIC_KEY_B64 = "HkfFmGNgSoA8KMgHtGl2zgoeafyW9MAlqia-QfhxqtA="
 
 # 라이선스 정책
-# - 개인/기업 모두 무료 사용 가능 — 키 없으면 활성 사용자 FREE_SEATS명까지
+# - 키는 배포판에 항상 포함 — 없으면 누락/변조로 보고 조회 전용 차단
+# - 개인/기업 무료는 free 키로 배포 — 활성 사용자 FREE_SEATS명까지
+#   (admin 계정은 사용자 수 집계에서 제외), 유효기간 최대 FREE_MAX_DAYS일
+#   (갱신 키 발급으로 계속 사용 가능)
 # - 기업용(ent)은 연 구독: 키에 seats(사용자 수 상한) + exp(만료일) 포함
-# - free 키에 seats 미지정 시 FREE_SEATS 적용, ent 키 미지정 시 무제한
+# - free 키에 seats 미지정 시 FREE_SEATS 적용(지정해도 FREE_SEATS 상한),
+#   ent 키 미지정 시 무제한
 FREE_SEATS = 5
+FREE_MAX_DAYS = 366   # 무료 키 최대 유효기간 1년
 
 _PUB = Ed25519PublicKey.from_public_bytes(
     base64.urlsafe_b64decode(PUBLIC_KEY_B64))
@@ -68,17 +73,17 @@ def parse_key(key: str) -> dict:
 def status() -> dict:
     """현재 라이선스 상태. 매 호출마다 파일을 다시 읽어 재기동 없이 갱신됨.
 
-    키 없음 → 무료 티어(valid, FREE_SEATS명 상한). 만료/변조 → 읽기 전용."""
+    키는 배포판에 항상 포함 — 없음/만료/변조 → 읽기 전용."""
     try:
         key = open(KEY_FILE, encoding="utf-8").read().strip()
     except OSError:
         key = ""
     if not key:
-        return {"installed": False, "valid": True, "expired": False,
-                "free_tier": True, "seats": FREE_SEATS,
-                "name": "", "type": "free", "expires": None,
+        return {"installed": False, "valid": False, "expired": True,
+                "free_tier": False, "seats": 0,
+                "name": "", "type": "", "expires": None,
                 "days_left": None,
-                "msg": f"무료 라이선스 — 최대 {FREE_SEATS}명"}
+                "msg": "라이선스 키가 없습니다"}
     try:
         data = parse_key(key)
     except ValueError as e:
@@ -98,8 +103,20 @@ def status() -> dict:
                     "msg": "라이선스 만료일 형식이 올바르지 않습니다"}
     ltype = data.get("type", "free")
     seats = data.get("seats")
-    if not isinstance(seats, int) or seats <= 0:
-        seats = FREE_SEATS if ltype == "free" else None   # None = 무제한
+    if ltype == "free":
+        # 무료 키: 만료일 필수 + 최대 1년, 사용자 수는 5명 상한
+        if not data.get("exp"):
+            return {"installed": True, "valid": False, "expired": True,
+                    "free_tier": False, "seats": 0,
+                    "msg": "무료 라이선스는 만료일이 필요합니다"}
+        if days is not None and days > FREE_MAX_DAYS:
+            return {"installed": True, "valid": False, "expired": True,
+                    "free_tier": False, "seats": 0,
+                    "msg": "무료 라이선스는 최대 1년까지만 유효합니다"}
+        if not isinstance(seats, int) or seats <= 0 or seats > FREE_SEATS:
+            seats = FREE_SEATS
+    elif not isinstance(seats, int) or seats <= 0:
+        seats = None   # ent: 미지정 시 무제한
     return {"installed": True, "valid": not expired, "expired": expired,
             "free_tier": ltype == "free", "seats": seats,
             "name": data.get("name", ""), "type": ltype,

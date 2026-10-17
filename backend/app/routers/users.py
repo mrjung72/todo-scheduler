@@ -53,12 +53,15 @@ def _check_staff(me: User):
 
 
 def _check_seats(db: Session):
-    """라이선스 사용자 수 상한 — 활성 사용자(user_stat='Y')가 seats 이상이면 차단."""
+    """라이선스 사용자 수 상한 — 활성 사용자가 seats 이상이면 차단.
+    admin 계정은 집계에서 제외."""
     st = license_status()
     seats = st.get("seats")
     if seats is None or not st["valid"]:
         return
-    used = db.query(User).filter(User.user_stat == "Y").count()
+    used = (db.query(User)
+            .filter(User.user_stat == "Y", User.userid != ADMIN_USERID)
+            .count())
     if used >= seats:
         raise HTTPException(
             403, f"라이선스 사용자 수 제한({seats}명)에 도달했습니다. "

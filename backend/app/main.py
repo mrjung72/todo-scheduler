@@ -373,8 +373,11 @@ async def startup():
     _start_auto_transition()
     lic = license_status()
     if lic["valid"]:
+        exp = (f"{lic['expires']} 만료 (D-{lic['days_left']})"
+               if lic["expires"] else "무기한")
+        seats = f"{lic['seats']}명" if lic["seats"] else "무제한"
         print(f"[license] {lic.get('name','?')} — "
-              f"{lic['expires']} 만료 (D-{lic['days_left']})")
+              f"{lic['type']} · {seats} · {exp}")
     else:
         print(f"[license] {lic['msg']} — 조회 전용 모드로 동작합니다")
 

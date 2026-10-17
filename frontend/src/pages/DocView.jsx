@@ -7,6 +7,8 @@ import { marked } from 'marked'
 const DOCS = {
   manual: { file: '사용자매뉴얼.md', title: '사용자 매뉴얼' },
   history: { file: '버전변경이력.md', title: '버전 변경 이력' },
+  history0: { file: '버전변경이력-0.x.md', title: '버전 변경 이력 (0.x)' },
+  license: { file: '라이선스정책.md', title: '라이선스 정책' },
 }
 
 export default function DocView() {

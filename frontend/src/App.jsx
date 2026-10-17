@@ -90,6 +90,7 @@ export default function App() {
       <span>Copyright © 클린소프트(Clean Soft). All rights reserved.</span>
       <Link to="/docs/manual">사용자매뉴얼</Link>
       <Link to="/docs/history">버전변경이력</Link>
+      <Link to="/docs/license">라이선스정책</Link>
     </footer>
   )
 
