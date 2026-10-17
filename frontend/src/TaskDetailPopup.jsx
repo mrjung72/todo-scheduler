@@ -444,82 +444,113 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
         </h3>
         <div className="popup-info info-daily">
             <div className="info-col">
-              <p><b>요청자</b> {fmtUser(task.req_user_name, task.req_userid,
-                task.req_user_title, task.req_user_dept)}</p>
-              <p><b>작업자</b> {fmtUser(task.work_user_name, task.work_userid,
-                task.work_user_title, task.work_user_dept)}</p>
-              <p><b>우선순위</b> {prioEdit === null ? (<>
-                {prio}
-                {canEditFields &&
-                  <button className="link"
-                    onClick={() => setPrioEdit(prio)}>수정</button>}
-              </>) : (<>
-                <input type="number" step="1" style={{ maxWidth: 80 }}
-                  value={prioEdit}
-                  onChange={e => setPrioEdit(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && savePrio()} />
-                <button className="link" onClick={savePrio}>저장</button>
-                <button className="link" onClick={() => setPrioEdit(null)}>취소</button>
-              </>)}</p>
-              <p><b>예상시간</b> {hoursEdit === null ? (<>
-                {estHours}h
-                {workDays != null && ` (총 ${workDays}일)`}
-                {dayHours != null && ` / 하루 ${dayHours}시간`}
-                {canEditHours &&
-                  <button className="link"
-                    onClick={() => setHoursEdit(estHours)}>수정</button>}
-              </>) : (<>
-                <input type="number" min="0.5" step="0.5" style={{ maxWidth: 80 }}
-                  value={hoursEdit}
-                  onChange={e => setHoursEdit(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && saveHours()} />h
-                <button className="link" onClick={saveHours}>저장</button>
-                <button className="link" onClick={() => setHoursEdit(null)}>취소</button>
-              </>)}</p>
-              <p><b>스케쥴</b> {schedEdit === null ? (<>
-                {schedApply === 'N' ? '미적용 (단순업무)' : '적용'}
-                {canEdit && ['R', 'C'].includes(task.task_stat) &&
-                  <button className="link"
-                    onClick={() => setSchedEdit(schedApply)}>수정</button>}
-              </>) : (<>
-                <select value={schedEdit}
-                  onChange={e => setSchedEdit(e.target.value)}>
-                  <option value="Y">적용 (스케쥴링 작업)</option>
-                  <option value="N">미적용 (단순업무)</option>
-                </select>
-                <button className="link" onClick={saveSched}>저장</button>
-                <button className="link" onClick={() => setSchedEdit(null)}>취소</button>
-              </>)}</p>
-              <p><b>업무유형</b> {catEdit === null ? (<>
-                {catCd ? (catNm ? `${catNm}(${catCd})` : catCd) : '-'}
-                {canEdit &&
-                  <button className="link"
-                    onClick={() => setCatEdit(catCd || '')}>수정</button>}
-              </>) : (<>
-                <select value={catEdit}
-                  onChange={e => setCatEdit(e.target.value)}>
-                  <option value="">-</option>
-                  {cats.map(c =>
-                    <option key={c.task_category_cd} value={c.task_category_cd}>
-                      {c.task_category_nm}({c.task_category_cd})</option>)}
-                </select>
-                <button className="link" onClick={saveCat}>저장</button>
-                <button className="link" onClick={() => setCatEdit(null)}>취소</button>
-              </>)}</p>
-              <p><b>요청일자</b> {reqDateEdit === null ? (<>
-                {fmtDT(tf.req_date ?? task.req_date) || '-'}
-                {canEdit &&
-                  <button className="link" onClick={() =>
-                    setReqDateEdit((tf.req_date ?? task.req_date)
-                      ? (tf.req_date ?? task.req_date).slice(0, 16) : '')}>수정</button>}
-              </>) : (<>
-                <input type="datetime-local" value={reqDateEdit}
-                  onChange={e => setReqDateEdit(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && saveReqDate()} />
-                <button className="link" onClick={saveReqDate}>저장</button>
-                <button className="link" onClick={() => setReqDateEdit(null)}>취소</button>
-              </>)}</p>
-              <p><b>시작</b> {startEdit === null ? (<>
+              <div className="sec-box">
+              <table className="info-tbl">
+              <colgroup><col className="c-lb"/><col/><col className="c-lb2"/><col/></colgroup>
+              <tbody>
+              <tr><td className="lb">요청자</td><td colSpan={3}>
+                {fmtUser(task.req_user_name, task.req_userid,
+                  task.req_user_title, task.req_user_dept)}
+                {(task.req_userid || task.req_user_email) &&
+                  <span className="uid">
+                    ({[task.req_userid, task.req_user_email]
+                      .filter(Boolean).join(' · ')})
+                  </span>}
+              </td></tr>
+              <tr><td className="lb">요청일시</td><td>
+                {reqDateEdit === null ? (<>
+                  {fmtDT(tf.req_date ?? task.req_date) || '-'}
+                  {canEdit &&
+                    <button className="link" onClick={() =>
+                      setReqDateEdit((tf.req_date ?? task.req_date)
+                        ? (tf.req_date ?? task.req_date).slice(0, 16) : '')}>수정</button>}
+                </>) : (<>
+                  <input type="datetime-local" value={reqDateEdit}
+                    onChange={e => setReqDateEdit(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveReqDate()} />
+                  <button className="link" onClick={saveReqDate}>저장</button>
+                  <button className="link" onClick={() => setReqDateEdit(null)}>취소</button>
+                </>)}</td>
+                <td className="lb">우선순위</td><td>
+                {prioEdit === null ? (<>
+                  {prio}
+                  {canEditFields &&
+                    <button className="link"
+                      onClick={() => setPrioEdit(prio)}>수정</button>}
+                </>) : (<>
+                  <input type="number" step="1" style={{ maxWidth: 80 }}
+                    value={prioEdit}
+                    onChange={e => setPrioEdit(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && savePrio()} />
+                  <button className="link" onClick={savePrio}>저장</button>
+                  <button className="link" onClick={() => setPrioEdit(null)}>취소</button>
+                </>)}</td></tr>
+              <tr><td className="lb">스케쥴</td><td>
+                {schedEdit === null ? (<>
+                  {schedApply === 'N' ? '미적용 (단순업무)' : '적용'}
+                  {canEdit && ['R', 'C'].includes(task.task_stat) &&
+                    <button className="link"
+                      onClick={() => setSchedEdit(schedApply)}>수정</button>}
+                </>) : (<>
+                  <select value={schedEdit}
+                    onChange={e => setSchedEdit(e.target.value)}>
+                    <option value="Y">적용 (스케쥴링 작업)</option>
+                    <option value="N">미적용 (단순업무)</option>
+                  </select>
+                  <button className="link" onClick={saveSched}>저장</button>
+                  <button className="link" onClick={() => setSchedEdit(null)}>취소</button>
+                </>)}</td>
+                <td className="lb">업무유형</td><td>
+                {catEdit === null ? (<>
+                  {catCd ? (catNm ? `${catNm}(${catCd})` : catCd) : '-'}
+                  {canEdit &&
+                    <button className="link"
+                      onClick={() => setCatEdit(catCd || '')}>수정</button>}
+                </>) : (<>
+                  <select value={catEdit}
+                    onChange={e => setCatEdit(e.target.value)}>
+                    <option value="">-</option>
+                    {cats.map(c =>
+                      <option key={c.task_category_cd} value={c.task_category_cd}>
+                        {c.task_category_nm}({c.task_category_cd})</option>)}
+                  </select>
+                  <button className="link" onClick={saveCat}>저장</button>
+                  <button className="link" onClick={() => setCatEdit(null)}>취소</button>
+                </>)}</td></tr>
+              </tbody></table>
+              </div>
+              <div className="sec-box">
+              <table className="info-tbl">
+              <colgroup><col className="c-lb"/><col/><col/><col/></colgroup>
+              <tbody>
+              <tr><td className="lb">작업자</td><td colSpan={3}>
+                {fmtUser(task.work_user_name, task.work_userid,
+                  task.work_user_title, task.work_user_dept)}
+                {(task.work_userid || task.work_user_email) &&
+                  <span className="uid">
+                    ({[task.work_userid, task.work_user_email]
+                      .filter(Boolean).join(' · ')})
+                  </span>}
+              </td></tr>
+              <tr><td className="lb">예상시간</td><td colSpan={3}>
+                {hoursEdit === null ? (<>
+                  {estHours}h
+                  {workDays != null && ` (총 ${workDays}일)`}
+                  {dayHours != null && ` / 하루 ${dayHours}시간`}
+                  {canEditHours &&
+                    <button className="link"
+                      onClick={() => setHoursEdit(estHours)}>수정</button>}
+                </>) : (<>
+                  <input type="number" min="0.5" step="0.5" style={{ maxWidth: 80 }}
+                    value={hoursEdit}
+                    onChange={e => setHoursEdit(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveHours()} />h
+                  <button className="link" onClick={saveHours}>저장</button>
+                  <button className="link" onClick={() => setHoursEdit(null)}>취소</button>
+                </>)}
+              </td></tr>
+              <tr><td className="lb">시작일시</td><td colSpan={3}>
+                {startEdit === null ? (<>
                 {fmtDT(startDate) || '-'}
                 {!!startFixed &&
                   <span className="badge" title="시작일시가 고정되어 재계산에도 유지됩니다">고정</span>}
@@ -528,46 +559,53 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                     setStartEdit(startDate ? startDate.slice(0, 16) : '')}>수정</button>}
                 {canEditFields && !!startFixed &&
                   <button className="link" onClick={unfixStart}>고정해제</button>}
+                {canEdit && ['W', 'P', 'O'].includes(task.task_stat) &&
+                  <button onClick={doRecalc} disabled={recalcBusy}
+                    style={{ marginLeft: 12 }}
+                    title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}
               </>) : (<>
                 <input type="datetime-local" value={startEdit}
                   onChange={e => setStartEdit(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && saveStart()} />
                 <button className="link" onClick={saveStart}>저장</button>
                 <button className="link" onClick={() => setStartEdit(null)}>취소</button>
-              </>)}</p>
-              <p><b>종료(예상)</b> {fmtDT(endEst) || '-'}
-                {canEdit && ['W', 'P', 'O'].includes(task.task_stat) &&
-                  <button onClick={doRecalc} disabled={recalcBusy}
-                    style={{ marginLeft: 12 }}
-                    title="대기중 작업의 일정을 우선순위 기준으로 재계산합니다">작업스케쥴링 재실행</button>}
+              </>)}</td></tr>
+              <tr><td className="lb">종료(예상)</td><td colSpan={3}>
+                {fmtDT(endEst) || '-'}
                 {['P', 'O'].includes(task.task_stat) && endEst &&
                   new Date(endEst) < new Date() &&
                   <span className="pt-overdue" title="종료예상일시 경과">💣 기한 초과</span>}
-              </p>
-              <p><b>종료(실제)</b> {fmtDT(task.task_end_date) || '-'}</p>
-            </div>
-            {daily && daily.length > 0 && (
-              <div className="daily">
-                <b>일별 작업시간</b> ({daily.reduce((a, d) => a + d.hours, 0).toFixed(1)}h)
-                <table>
-                  <tbody>
-                    {daily.map(d => {
-                      const wd = '일월화수목금토'[new Date(d.date).getDay()]
-                      return (
-                        <tr key={d.date}>
-                          <td>{d.date} ({wd})</td>
-                          <td className="r">
-                            {d.hours}h
-                            {d.holiday &&
-                              <span className="badge hol-badge">휴가{d.holiday !== '종일' ? ` ${d.holiday}` : ''}</span>}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              </td></tr>
+              <tr><td className="lb">종료(실제)</td><td colSpan={3}>
+                {fmtDT(task.task_end_date) || '-'}</td></tr>
+              </tbody></table>
               </div>
-            )}
+            </div>
+            <div className="daily">
+              <b>일별 작업시간</b>
+              {daily && daily.length > 0 &&
+                ` (${daily.reduce((a, d) => a + d.hours, 0).toFixed(1)}h)`}
+              <table>
+                <tbody>
+                  {(daily || []).map(d => {
+                    const wd = '일월화수목금토'[new Date(d.date).getDay()]
+                    return (
+                      <tr key={d.date}>
+                        <td>{d.date} ({wd})</td>
+                        <td className="r">
+                          {d.hours}h
+                          {d.holiday &&
+                            <span className="badge hol-badge">휴가{d.holiday !== '종일' ? ` ${d.holiday}` : ''}</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {(!daily || !daily.length) && (
+                    <tr><td colSpan="2" className="empty">작업시간이 없습니다</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         <div className="btab-bar">
           <button className={`btab${btab === 'req' ? ' active' : ''}`}

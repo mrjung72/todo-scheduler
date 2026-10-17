@@ -64,10 +64,12 @@ def _detail_query(db: Session):
             ReqUser.user_name.label("req_user_name"),
             ReqUser.dept_name.label("req_user_dept"),
             ReqUser.job_title.label("req_user_title"),
+            ReqUser.user_email.label("req_user_email"),
             ItosUser.user_name.label("itos_user_name"),
             WorkUser.user_name.label("work_user_name"),
             WorkUser.dept_name.label("work_user_dept"),
             WorkUser.job_title.label("work_user_title"),
+            WorkUser.user_email.label("work_user_email"),
             WorkUser.work_hours_day.label("work_hours_day"),
             Site.site_name.label("site_name"),
             TaskCategory.task_category_nm.label("task_category_nm"),
@@ -129,15 +131,17 @@ def _revert_ok(task: Task, prev_stat, last_chg, now) -> bool:
 def _to_detail(row, cal: dict = None, prev_stat: str = None,
                can_revert: bool = False, stat_chg=None,
                stickers=None) -> TaskDetail:
-    (task, req_name, req_dept, req_title, itos_name,
-     work_name, work_dept, work_title, work_hours_day, site_name,
+    (task, req_name, req_dept, req_title, req_email, itos_name,
+     work_name, work_dept, work_title, work_email, work_hours_day, site_name,
      cat_nm) = row
     data = {c.name: getattr(task, c.name) for c in Task.__table__.columns}
     data.update(
         req_user_name=req_name, req_user_dept=req_dept, req_user_title=req_title,
+        req_user_email=req_email,
         itos_user_name=itos_name,
         work_user_name=work_name, work_user_dept=work_dept,
-        work_user_title=work_title, work_hours_day=work_hours_day,
+        work_user_title=work_title, work_user_email=work_email,
+        work_hours_day=work_hours_day,
         site_name=site_name, task_category_nm=cat_nm,
     )
     # 휴일작업인데 기간에 근무일이 포함되면 경고 플래그

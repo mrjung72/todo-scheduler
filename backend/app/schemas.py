@@ -219,11 +219,13 @@ class TaskDetail(TaskOut):
     req_user_name: Optional[str] = None
     req_user_dept: Optional[str] = None
     req_user_title: Optional[str] = None
+    req_user_email: Optional[str] = None
     itos_user_name: Optional[str] = None
     site_name: Optional[str] = None
     work_user_name: Optional[str] = None
     work_user_dept: Optional[str] = None
     work_user_title: Optional[str] = None
+    work_user_email: Optional[str] = None
     work_hours_day: Optional[float] = None   # 작업자의 하루 개발시간 (None=기본 근무구간)
     task_category_nm: Optional[str] = None   # 업무유형명 (task_category 조인)
     weekday_included: Optional[bool] = False   # 휴일작업 기간에 근무일 포함 여부(경고)
