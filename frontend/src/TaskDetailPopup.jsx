@@ -3,7 +3,7 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtDTS, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
   taskColor, taskColorComp, uploadWithProgress, downloadFile as dlFile,
-  STICKER_EMOJIS, stickerTip, hasMd, mdHtml } from './api'
+  STICKER_EMOJIS, stickerTip, hasMd, mdHtml, attachCheck, attachHint } from './api'
 import ProgressBar from './ProgressBar'
 import WorkLogEditor from './WorkLogEditor'
 import { BoardDetailPopup, BoardForm } from './pages/Board'
@@ -342,6 +342,13 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const uploadFile = async (workschid = null, ev = null) => {
     const f = ev ? ev.target.files?.[0] : fileRef.current?.files?.[0]
     if (!f) { alert('첨부할 파일을 선택하세요'); return }
+    const limMsg = attachCheck(me, (files || []).length, [f])
+    if (limMsg) {   // 등급별 개수·용량 사전 검사 (서버에서도 동일 규칙)
+      alert(limMsg)
+      if (ev) ev.target.value = ''
+      else if (fileRef.current) fileRef.current.value = ''
+      return
+    }
     const fd = new FormData()
     fd.append('file', f)
     fd.append('taskid', task.taskid)
@@ -703,6 +710,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                 <div className="attach-add">
                   <input type="file" ref={fileRef} />
                   <button onClick={() => uploadFile()}>첨부</button>
+                  {attachHint(me) &&
+                    <span className="hint">{attachHint(me)}</span>}
                 </div>
                 <ProgressBar pct={upPct} />
               </>)}
@@ -916,6 +925,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                           <input type="file" hidden
                             onChange={e => uploadFile(logView.workschid, e)} />
                         </label>
+                        {attachHint(me) &&
+                          <span className="hint">{attachHint(me)}</span>}
                       </div>
                       <ProgressBar pct={upPct} />
                     </>}

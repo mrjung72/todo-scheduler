@@ -44,6 +44,29 @@ export const uploadWithProgress = (url, fd, onProgress) => {
   })
 }
 
+// 첨부 제한 — 등급별 (백엔드 attach_files 와 동일 규칙)
+// 관리자·수석(0·1) 무제한 / 개발담당·IT업무담당(2~5): 10개·100MB / 그 외(6~9): 5개·10MB
+export const attachLimit = me =>
+  [0, 1].includes(me?.user_grade) ? null
+    : me?.user_grade <= 5 ? { count: 10, mb: 100 } : { count: 5, mb: 10 }
+
+// 첨부 전 사전 검사 → 에러 메시지 or null (cur: 기존 첨부 수, files: File|File[])
+export const attachCheck = (me, cur, files) => {
+  const lim = attachLimit(me)
+  if (!lim) return null
+  const fs = Array.isArray(files) ? files : [files]
+  if (cur + fs.length > lim.count)
+    return `첨부파일은 최대 ${lim.count}개까지 가능합니다 (현재 ${cur}개)`
+  const over = fs.find(f => f.size > lim.mb * 1024 * 1024)
+  return over ? `'${over.name}' 파일이 ${lim.mb}MB 용량 제한을 초과했습니다` : null
+}
+
+// 첨부 제한 안내 문구 (제한 없는 스태프는 빈 문자열)
+export const attachHint = me => {
+  const lim = attachLimit(me)
+  return lim ? `최대 ${lim.count}개 · 파일당 ${lim.mb}MB` : ''
+}
+
 // 첨부파일 네이티브 다운로드 — 브라우저가 스트리밍 저장 + 자체 진행률 표시.
 // 대용량 파일을 메모리(blob)에 버퍼링하지 않아 큰 파일에 적합.
 // 헤더를 못 붙이는 대신 ?token= 쿼리로 인증 (다운로드 엔드포인트만 허용됨)

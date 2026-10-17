@@ -80,6 +80,55 @@ def _check_blocked(filename: str | None):
             400, f"'.{ext}' 형식의 파일은 보안상 업로드할 수 없습니다")
 
 
+# 첨부 규칙 — 등급별 (작업/게시글당 파일개수, 파일 1개당 용량)
+def _attach_limits(me):
+    """→ (max_count|None, max_bytes|None).
+    관리자(0)·수석개발자(1) 무제한, 개발담당(2~4)·IT업무담당자(5) 10개/100MB,
+    그 외 사용자(6~9) 5개/10MB."""
+    g = me.user_grade
+    if g in (0, 1):
+        return None, None
+    if g <= 5:
+        return 10, 100 * 1024 * 1024
+    return 5, 10 * 1024 * 1024
+
+
+def _check_attach_count(db: Session, me, taskid=None, boardid=None):
+    """등급별 개수 제한 검사 — 작업 또는 게시글당."""
+    max_count, _ = _attach_limits(me)
+    if max_count is None:
+        return
+    if boardid is not None:
+        n = db.query(BoardAttachFile).filter(
+            BoardAttachFile.boardid == boardid).count()
+        label = "게시글"
+    else:
+        n = db.query(TaskAttachFile).filter(
+            TaskAttachFile.taskid == taskid).count()
+        label = "작업"
+    if n >= max_count:
+        raise HTTPException(
+            400, f"{label}당 첨부파일은 최대 {max_count}개까지 등록할 수 있습니다")
+
+
+def _save_upload(file: UploadFile, path: str, me):
+    """청크 단위로 저장하면서 등급별 파일당 용량 제한 적용 (초과 시 부분 파일 삭제)."""
+    _, max_bytes = _attach_limits(me)
+    total, over = 0, False
+    with open(path, "wb") as out:
+        while chunk := file.file.read(1024 * 1024):
+            total += len(chunk)
+            if max_bytes is not None and total > max_bytes:
+                over = True
+                break
+            out.write(chunk)
+    if over:
+        os.remove(path)
+        raise HTTPException(
+            413, f"첨부파일은 파일당 최대 "
+                 f"{max_bytes // (1024 * 1024)}MB까지 업로드할 수 있습니다")
+
+
 def _board_file_out(f: BoardAttachFile):
     return {"fileid": f.fileid, "file_name": f.file_name, "boardid": f.boardid,
             "file_size": _file_size(f.file_filepath),
@@ -133,6 +182,7 @@ def upload_file(file: UploadFile = File(...),
         if not board.is_public and board.user_id != me.userid \
                 and me.user_grade not in (0, 1):
             raise HTTPException(403, "비공개 게시글입니다")
+        _check_attach_count(db, me, boardid=boardid)
         obj = BoardAttachFile(file_name=file.filename, boardid=boardid,
                               create_date=datetime.now())
         db.add(obj)
@@ -141,8 +191,7 @@ def upload_file(file: UploadFile = File(...),
         dir_path = os.path.join(UPLOAD_DIR, "board_files", str(boardid))
         os.makedirs(dir_path, exist_ok=True)
         path = os.path.join(dir_path, safe_name)
-        with open(path, "wb") as out:
-            out.write(file.file.read())
+        _save_upload(file, path, me)   # 실패 시 미커밋 flush 롤백됨
         obj.file_filepath = os.path.relpath(path, BACKEND_DIR)
         db.commit()
         return _board_file_out(obj)
@@ -152,6 +201,7 @@ def upload_file(file: UploadFile = File(...),
     if not task:
         raise HTTPException(404, "작업을 찾을 수 없습니다")
     check_owner_or_admin(me, task.work_userid)
+    _check_attach_count(db, me, taskid=taskid)
     obj = TaskAttachFile(file_name=file.filename, taskid=taskid,
                          workschid=workschid, create_date=datetime.now())
     db.add(obj)
@@ -161,8 +211,7 @@ def upload_file(file: UploadFile = File(...),
     dir_path = os.path.join(UPLOAD_DIR, "task_files", str(taskid))
     os.makedirs(dir_path, exist_ok=True)
     path = os.path.join(dir_path, safe_name)
-    with open(path, "wb") as out:
-        out.write(file.file.read())
+    _save_upload(file, path, me)
     # backend/ 기준 상대경로로 저장 (커스텀 UPLOAD_DIR 절대경로도 그대로 인식)
     obj.task_filepath = os.path.relpath(path, BACKEND_DIR)
     db.commit()
@@ -180,6 +229,7 @@ def register_meta(body: AttachMeta, db: Session = Depends(get_db),
         if not task:
             raise HTTPException(404, "작업을 찾을 수 없습니다")
         check_owner_or_admin(me, task.work_userid)
+        _check_attach_count(db, me, taskid=body.taskid)
     obj = TaskAttachFile(file_name=body.file_name, taskid=body.taskid,
                          workschid=body.workschid,
                          task_filepath=body.task_filepath,

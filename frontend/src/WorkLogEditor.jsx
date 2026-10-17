@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import api, { mdHtml, cleanHtml } from './api'
+import api, { mdHtml, cleanHtml, attachLimit } from './api'
 
 // 작업이력·요청내용·게시글 본문 편집기 — 마크다운 지원 (이미지 첨부·표 삽입·미리보기)
 // 이미지는 /attach-files에 업로드 후 본문에 마크다운으로 삽입된다.
@@ -77,6 +77,13 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
   }
 
   const uploadImage = async f => {
+    // 등급별 파일당 용량 사전 검사 (개수는 서버가 검사)
+    const lim = attachLimit(
+      JSON.parse(localStorage.getItem('user') || 'null'))
+    if (lim && f.size > lim.mb * 1024 * 1024) {
+      alert(`첨부파일은 파일당 최대 ${lim.mb}MB까지 업로드할 수 있습니다`)
+      return
+    }
     try {
       // 게시판 신규 작성 — 게시글 ID가 없으므로 임시 첨부로 두고 본문에 임시 URL 삽입
       if (boardid === null && pendingImage) {

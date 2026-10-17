@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import api, { fmtDT, fmtSize, uploadWithProgress, downloadFile,
-  hasMd, mdHtml } from '../api'
+  hasMd, mdHtml, attachCheck, attachHint } from '../api'
 import ProgressBar from '../ProgressBar'
 import WorkLogEditor from '../WorkLogEditor'
 
@@ -158,6 +158,7 @@ export default function Board() {
 
 /* 글 작성·수정 폼 — 파일 다중 첨부 + 진행바 (관리자 화면에서도 재사용) */
 export function BoardForm({ edit, onDone, onCancel }) {
+  const me = JSON.parse(localStorage.getItem('user') || 'null')
   const [title, setTitle] = useState(edit?.title || '')
   const [content, setContent] = useState(edit?.content || '')
   // 공개 범위: pub=공개, pw=공개(비밀번호 열람), prv=비공개(목록 비노출)
@@ -190,6 +191,8 @@ export function BoardForm({ edit, onDone, onCancel }) {
   const uploadNow = async () => {
     const fs = Array.from(fileRef.current?.files || [])
     if (!fs.length) { alert('첨부할 파일을 선택하세요'); return }
+    const limMsg = attachCheck(me, editFiles.length, fs)
+    if (limMsg) { setErr(limMsg); return }
     try {
       for (const f of fs) {
         const fd = new FormData()
@@ -223,6 +226,11 @@ export function BoardForm({ edit, onDone, onCancel }) {
       setErr('관련 작업은 목록에서 "#번호 작업명" 형식으로 선택해 주세요'); return
     }
     const taskid = tm ? +tm[1] : null
+    if (!edit) {   // 신규: 대기 파일 + 본문 임시 이미지 전부 사전 검사
+      const limMsg = attachCheck(me, 0,
+        [...files, ...pendRef.current.map(p => p.file)])
+      if (limMsg) { setErr(limMsg); return }
+    }
     try {
       setSaving(true)
       let boardid = edit?.boardid
@@ -305,7 +313,9 @@ export function BoardForm({ edit, onDone, onCancel }) {
       <WorkLogEditor value={content} onChange={setContent} rows={10}
         boardid={edit?.boardid ?? null}
         pendingImage={edit ? null : pendingImage} />
-      <label>첨부파일</label>
+      <label>첨부파일
+        <span className="hint">({attachHint(me) || '제한 없음'})</span>
+      </label>
       {edit && !!editFiles.length && (
         <table className="grid">
           <tbody>
@@ -325,7 +335,13 @@ export function BoardForm({ edit, onDone, onCancel }) {
       <span>
         <label className="btn-file">파일 선택
           <input type="file" multiple hidden ref={fileRef}
-            onChange={e => setFiles(Array.from(e.target.files || []))} />
+            onChange={e => {
+              const fs = Array.from(e.target.files || [])
+              const limMsg = attachCheck(me,
+                editFiles.length + (edit ? 0 : pendRef.current.length), fs)
+              if (limMsg) { setErr(limMsg); e.target.value = ''; return }
+              setErr(''); setFiles(fs)
+            }} />
         </label>
         {edit &&
           <button type="button" onClick={uploadNow}
@@ -362,6 +378,8 @@ export function BoardDetail({ me, post, pw, onEdit, onDelete, onReload,
 
   const uploadNow = async () => {
     if (!pick.length) { alert('첨부할 파일을 선택하세요'); return }
+    const limMsg = attachCheck(me, (post.files || []).length, pick)
+    if (limMsg) { alert(limMsg); return }
     try {
       for (const f of pick) {
         const fd = new FormData()
@@ -488,13 +506,20 @@ export function BoardDetail({ me, post, pw, onEdit, onDelete, onReload,
         <div className="bd-attach-row">
           <label className="btn-file">파일 선택
             <input type="file" hidden multiple ref={fileRef}
-              onChange={e => setPick(Array.from(e.target.files || []))} />
+              onChange={e => {
+                const fs = Array.from(e.target.files || [])
+                const limMsg = attachCheck(me, (post.files || []).length, fs)
+                if (limMsg) { alert(limMsg); e.target.value = ''; return }
+                setPick(fs)
+              }} />
           </label>
           {!!pick.length &&
             <span className="bd-pickname">
               {pick.map(f => f.name).join(', ')}</span>}
           <button onClick={uploadNow}
             disabled={!pick.length || upPct != null}>업로드</button>
+          {attachHint(me) &&
+            <span className="hint"> {attachHint(me)}</span>}
         </div>
       )}
       <ProgressBar pct={upPct} />

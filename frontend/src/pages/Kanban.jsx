@@ -287,7 +287,7 @@ export default function Kanban() {
                             {t.stickers.map(s => s.emoji).join(' ')}</span>}
                       </div>
                       <button className="kb-detail" title="작업 상세"
-                        onClick={e => { e.stopPropagation(); setSel(t) }}>상세</button>
+                        onClick={e => { e.stopPropagation(); setSelId(t.taskid); setSel(t) }}>상세</button>
                     </div>
                   ))}
                   {!items.length && <div className="kb-empty">없음</div>}
