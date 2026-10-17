@@ -316,8 +316,14 @@ const revMap = m => Object.fromEntries(Object.entries(m).map(([k, l]) => [l, k])
 const errMsg = e => {
   const d = e.response?.data?.detail
   if (typeof d === 'string') return d
+  if (Array.isArray(d)) return d.map(x => x.msg || JSON.stringify(x)).join('\n')
   return d ? JSON.stringify(d) : (e.message || '처리 중 오류가 발생했습니다')
 }
+// 등록 규칙 (소문자 변환 후 검사)
+const RULE_ID = /^[a-z0-9._-]{1,20}$/   // 사이트ID·사용자ID
+const RULE_CD = /^[A-Z0-9]{3,5}$/       // 업무유형코드
+const RULE_ID_HINT = '20자 이하 영문/숫자/마침표(.)/하이픈(-)/언더바(_)'
+const RULE_CD_HINT = '3~5자리 영문/숫자'
 // 'YYYY-MM-DD HH:mm' → ISO(초 포함). 형식이 맞지 않으면 null
 const dtOf = v => {
   const s = (v || '').trim().replace(' ', 'T')
@@ -453,8 +459,12 @@ function UsersTab() {
       {staff && (
       <form className="newtask" onSubmit={add} autoComplete="off">
         <input required placeholder="사용자ID" value={form.userid}
-          autoComplete="off"
-          onChange={e => setForm({ ...form, userid: e.target.value })} />
+          autoComplete="off" maxLength={20} pattern="[a-z0-9._-]+"
+          className={form.userid && !RULE_ID.test(form.userid) ? 'bad' : ''}
+          title={RULE_ID_HINT}
+          onChange={e => setForm({ ...form, userid: e.target.value.toLowerCase() })} />
+        {form.userid && !RULE_ID.test(form.userid) &&
+          <span className="fld-err">ID: {RULE_ID_HINT}만 가능</span>}
         <input required placeholder="사용자명" value={form.user_name}
           onChange={e => setForm({ ...form, user_name: e.target.value })} />
         <input placeholder="부서" value={form.dept_name}
@@ -622,7 +632,12 @@ function SitesTab() {
       </div>
       {staff && <form className="newtask" onSubmit={add}>
         <input required placeholder="사이트ID" value={form.siteid}
-          onChange={e => setForm({ ...form, siteid: e.target.value })} />
+          maxLength={20} pattern="[a-z0-9._-]+"
+          className={form.siteid && !RULE_ID.test(form.siteid) ? 'bad' : ''}
+          title={RULE_ID_HINT}
+          onChange={e => setForm({ ...form, siteid: e.target.value.toLowerCase() })} />
+        {form.siteid && !RULE_ID.test(form.siteid) &&
+          <span className="fld-err">ID: {RULE_ID_HINT}만 가능</span>}
         <input required placeholder="사이트명" value={form.site_name}
           onChange={e => setForm({ ...form, site_name: e.target.value })} />
         <input placeholder="설명" value={form.site_remark}
@@ -733,17 +748,21 @@ function CategoriesTab() {
         <ExcelButtons name="업무유형" cols={cols} rows={filtered} />
       </div>
       {staff && <form className="newtask" onSubmit={add}>
-        <input required placeholder="업무유형코드" maxLength={20}
-          value={form.task_category_cd}
-          onChange={e => setForm({ ...form, task_category_cd: e.target.value })} />
-        <input required placeholder="업무유형명" maxLength={100}
-          value={form.task_category_nm}
-          onChange={e => setForm({ ...form, task_category_nm: e.target.value })} />
         <select required value={form.siteid}
           onChange={e => setForm({ ...form, siteid: e.target.value })}>
           <option value="">사이트</option>
           {sites.map(s => <option key={s.siteid} value={s.siteid}>{s.site_name}</option>)}
         </select>
+        <input required placeholder="업무유형코드" minLength={3} maxLength={5}
+          pattern="[A-Z0-9]+" title={RULE_CD_HINT}
+          className={form.task_category_cd && !RULE_CD.test(form.task_category_cd) ? 'bad' : ''}
+          value={form.task_category_cd}
+          onChange={e => setForm({ ...form, task_category_cd: e.target.value.toUpperCase() })} />
+        {form.task_category_cd && !RULE_CD.test(form.task_category_cd) &&
+          <span className="fld-err">코드: {RULE_CD_HINT}만 가능</span>}
+        <input required placeholder="업무유형명" maxLength={100}
+          value={form.task_category_nm}
+          onChange={e => setForm({ ...form, task_category_nm: e.target.value })} />
         <select value={form.use_stat}
           onChange={e => setForm({ ...form, use_stat: e.target.value })}>
           <option value="Y">Y</option>
@@ -1513,9 +1532,6 @@ function SchedulesTab() {
   const staff = isStaff()
   const viewer = isViewer()
   const can = s => staff || (!viewer && s.work_userid === myId())
-  const empty = { taskid: '', work_userid: staff ? '' : (myId() || ''),
-    work_remark: '', work_date: '' }
-  const [form, setForm] = useState(empty)
 
   const load = useCallback(() => {
     api.get('/schedules').then(r => setRows(r.data))
@@ -1576,30 +1592,8 @@ function SchedulesTab() {
     } catch (e) { alert(errMsg(e)) }
   }
 
-  const add = async e => {
-    e.preventDefault()
-    // 작업 선택은 검색 입력 — "#번호 작업명" 또는 번호만 입력
-    const m = (form.taskid || '').match(/#(\d+)/)
-    const tid = m ? +m[1] : +(form.taskid || '')
-    if (!tid || !taskOf(tid)) {
-      alert('작업 목록에서 작업을 선택해 주세요'); return
-    }
-    try {
-      await api.post('/schedules', { ...form, taskid: tid,
-        work_date: form.work_date
-          ? (form.work_date.length === 16 ? form.work_date + ':00' : form.work_date)
-          : null })
-      setForm(empty); load()
-    } catch (e) { alert(errMsg(e)) }
-  }
   const del = id => window.confirm(`작업이력 #${id} 삭제?`) &&
     api.delete(`/schedules/${id}`).then(load).catch(e => alert(errMsg(e)))
-
-  // 작업자는 개발자(등급 1·3·4)만 선택 가능. 단 기존 배정된 작업자가 개발자가 아니면
-  // 값이 깨지지 않도록 해당 작업자만 선택지에 포함
-  const devOpt = users.filter(isDevWorker)
-    .map(u => ({ value: u.userid, label: u.user_name }))
-  const uopt = [{ value: '', label: '-' }, ...devOpt]
 
   const userName = id => users.find(u => u.userid === id)?.user_name ?? ''
   const filtered = (!q.trim() ? rows : rows.filter(s => {
@@ -1657,28 +1651,7 @@ function SchedulesTab() {
         <ExcelButtons name="작업이력" cols={cols} rows={filtered}
           onUpload={staff ? upload : null} onDone={load} />
       </div>
-      {!viewer && <form className="newtask" onSubmit={add}>
-        <input list="sched-task-dl" required value={form.taskid}
-          placeholder="작업 검색 (#번호·작업명)" style={{ width: 260 }}
-          onChange={e => setForm({ ...form, taskid: e.target.value })} />
-        <datalist id="sched-task-dl">
-          {tasks.map(t => <option key={t.taskid}
-            value={`#${t.taskid} ${t.task_name}`} />)}
-        </datalist>
-        {staff && (
-          <select value={form.work_userid}
-            onChange={e => setForm({ ...form, work_userid: e.target.value })}>
-            <option value="">작업자</option>
-            {uopt.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        )}
-        <input placeholder="작업내용" value={form.work_remark}
-          onChange={e => setForm({ ...form, work_remark: e.target.value })} />
-        <input type="datetime-local" title="작업일시 (미입력 시 등록시각)"
-          value={form.work_date}
-          onChange={e => setForm({ ...form, work_date: e.target.value })} />
-        <button type="submit">추가</button>
-      </form>}
+
       {pager}
       <table className="grid">
         <thead><tr>

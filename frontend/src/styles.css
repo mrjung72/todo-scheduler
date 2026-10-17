@@ -110,6 +110,8 @@ input.num { width: 64px; }
   background: #fff; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px;
 }
 .newtask input { min-width: 120px; }
+.newtask input.bad { border-color: #dc2626; }
+.fld-err { color: #dc2626; font-size: 11px; white-space: nowrap; align-self: center; }
 .newtask input[type="checkbox"] { min-width: 0; }  /* 체크박스는 120px 제외 */
 .newtask label.chk { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; }
 

@@ -1,6 +1,19 @@
+import re
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,20}")
+_CD_RE = re.compile(r"[A-Za-z0-9]{3,5}")
+
+
+def _id_check(v: str, label: str) -> str:
+    """사이트ID/사용자ID — 20자 이하 영문자/숫자/마침표/하이픈/언더바. 소문자로 저장."""
+    v = v.strip().lower()
+    if not re.fullmatch(_ID_RE, v):
+        raise ValueError(
+            f"{label}는 20자 이하의 영문자/숫자/마침표(.)/하이픈(-)/언더바(_)만 사용할 수 있습니다")
+    return v
 
 
 # ---------- users ----------
@@ -20,6 +33,11 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     userid: str
     password: Optional[str] = None   # 미입력 시 기본값 '1234'
+
+    @field_validator("userid")
+    @classmethod
+    def _v_userid(cls, v: str) -> str:
+        return _id_check(v, "사용자ID")
 
 
 class UserUpdate(UserBase):
@@ -44,6 +62,11 @@ class SiteBase(BaseModel):
 
 class SiteCreate(SiteBase):
     siteid: str
+
+    @field_validator("siteid")
+    @classmethod
+    def _v_siteid(cls, v: str) -> str:
+        return _id_check(v, "사이트ID")
 
 
 class SiteUpdate(BaseModel):
@@ -237,10 +260,18 @@ class TaskDetail(TaskOut):
 
 # ---------- task_category ----------
 class TaskCategoryIn(BaseModel):
-    task_category_cd: str = Field(min_length=1, max_length=20)
+    task_category_cd: str = Field(min_length=3, max_length=5)
     task_category_nm: str = Field(min_length=1, max_length=100)
     siteid: str
     use_stat: Optional[str] = "Y"
+
+    @field_validator("task_category_cd")
+    @classmethod
+    def _v_cd(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not re.fullmatch(_CD_RE, v):
+            raise ValueError("업무유형코드는 3~5자리 영문자/숫자만 사용할 수 있습니다")
+        return v
 
 
 class TaskCategoryUpdate(BaseModel):
@@ -249,8 +280,14 @@ class TaskCategoryUpdate(BaseModel):
     use_stat: Optional[str] = None
 
 
-class TaskCategoryOut(TaskCategoryIn):
+class TaskCategoryOut(BaseModel):
+    """조회용 — 기존 데이터가 신규 코드 규칙을 벗어나도 출력 가능해야 하므로
+    입력 검증은 상속하지 않는다."""
     model_config = ConfigDict(from_attributes=True)
+    task_category_cd: str
+    task_category_nm: str
+    siteid: str
+    use_stat: Optional[str] = "Y"
     site_name: Optional[str] = None
     create_date: Optional[datetime] = None
 
