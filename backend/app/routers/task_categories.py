@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import TaskCategory, Site, User
+from ..models import TaskCategory, Site, User, Task
 from ..schemas import TaskCategoryIn, TaskCategoryUpdate, TaskCategoryOut
 from ..security import get_current_user, require_staff
 
@@ -74,12 +74,12 @@ def update_category(cd: str, body: TaskCategoryUpdate,
 @router.delete("/{cd}", status_code=204)
 def delete_category(cd: str, db: Session = Depends(get_db),
                     me: User = Depends(require_staff)):
-    """업무유형 삭제 — 사용 중인 작업은 코드를 해제(NULL)한다."""
+    """업무유형 삭제 — 작업에 적용된 유형은 삭제 불가."""
     obj = db.get(TaskCategory, cd)
     if not obj:
         raise HTTPException(404, "업무유형을 찾을 수 없습니다")
-    from ..models import Task
-    db.query(Task).filter(Task.task_category_cd == cd) \
-        .update({"task_category_cd": None})
+    n = db.query(Task).filter(Task.task_category_cd == cd).count()
+    if n:
+        raise HTTPException(409, f"이 업무유형이 적용된 작업이 {n}건 있어 삭제할 수 없습니다")
     db.delete(obj)
     db.commit()

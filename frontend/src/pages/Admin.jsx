@@ -948,8 +948,8 @@ function TasksTab() {
     : wkOpt.filter(o => o.value === '' || o.value === myId())
   const sopt = [{ value: '', label: '-' },
     ...sites.map(s => ({ value: s.siteid, label: s.site_name }))]
-  // 현업담당자 검색 리스트다운 대상 (현업담당자 7, 기타사용자 9)
-  const reqUsers = users.filter(u => u.duty_class === 'B')   // 현업담당자 후보 = 업무담당
+  // 현업담당자 검색 리스트다운 대상 — 어드민(admin)을 제외한 모든 사용자
+  const reqUsers = users.filter(u => u.userid !== 'admin')
 
   const reqUid = resolveUserid(reqF, users)
   const filtered = (!q.trim() ? rows : rows.filter(t => {
