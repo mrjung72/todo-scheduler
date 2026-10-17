@@ -99,7 +99,7 @@ export default function App() {
     if (signupInit !== null)
       return <Signup initial={signupInit} onBack={() => setSignupInit(null)} />
     if (wantLogin) return <Login onLogin={u => { setMe(u); setWantLogin(false) }}
-      onSignup={() => { setWantLogin(false); setSignupInit({}) }}
+      onSignup={lic?.free_tier ? null : () => { setWantLogin(false); setSignupInit({}) }}
       onReapply={info => { setWantLogin(false); setSignupInit(info) }} />
     return (
       <div className="app">
@@ -108,7 +108,8 @@ export default function App() {
             TODO 작업 스케줄러{cfg && <span className="version"> v{cfg.version}</span>}
           </Link>
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button onClick={() => setSignupInit({})}>회원가입</button>
+            {!lic?.free_tier &&
+              <button onClick={() => setSignupInit({})}>회원가입</button>}
             <button className="primary" onClick={() => setWantLogin(true)}>로그인</button>
           </span>
         </header>

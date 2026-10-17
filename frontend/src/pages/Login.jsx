@@ -39,7 +39,8 @@ export default function Login({ onLogin, onSignup, onReapply }) {
           <button type="button" className="primary"
             onClick={() => onReapply(form)}>회원정보 수정</button>}
         <button type="submit" className="primary">로그인</button>
-        <button type="button" className="link" onClick={onSignup}>회원가입</button>
+        {onSignup &&
+          <button type="button" className="link" onClick={onSignup}>회원가입</button>}
       </form>
     </div>
   )

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..models import User
 from ..security import verify_password, make_token, hash_password
+from ..license import status as license_status
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -64,7 +65,12 @@ def check_userid(userid: str, db: Session = Depends(get_db)):
 
 @router.post("/signup", status_code=201)
 def signup(body: SignupBody, db: Session = Depends(get_db)):
-    """회원가입 — 관리자 승인(user_stat='A' -> 'Y') 후 로그인 가능."""
+    """회원가입 — 관리자 승인(user_stat='A' -> 'Y') 후 로그인 가능.
+    무료 라이선스에서는 제공하지 않음 (관리자가 사용자 탭에서 계정 생성)."""
+    if license_status().get("free_tier"):
+        raise HTTPException(
+            403, "무료 라이선스에서는 회원가입을 사용할 수 없습니다. "
+                 "관리자에게 계정 생성을 요청하세요")
     body.userid = body.userid.strip().lower()
     if not _ID_RE.match(body.userid):
         raise HTTPException(400, "회원ID는 영문자, 숫자, _, -, . 만 사용할 수 있습니다")
