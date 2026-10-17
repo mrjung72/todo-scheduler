@@ -87,21 +87,15 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
     }
   }
 
-  // 붙여넣기: ① 이미지 파일 → 첨부 업로드 후 삽입
-  //           ② 엑셀(TSV) → 병합 유지 HTML 표 / 마크다운 표
+  // 붙여넣기: ① 엑셀(TSV) 표 — 탭 구분이 있으면 표로 (엑셀은 표의 이미지도
+  //           클립보드에 함께 넣으므로 이미지보다 표를 우선 검사)
+  //           ② 이미지 파일 → 첨부 업로드 후 삽입 (스크린샷·이미지 복사)
   //           ③ 기타 HTML(웹·문서 등 서식 복사) → 정제된 HTML 그대로
   const onPaste = async e => {
     const cd = e.clipboardData
-    // 1) 이미지 파일 붙여넣기 (스크린샷·이미지 복사)
-    const img = [...(cd?.files || [])].find(f => f.type.startsWith('image/'))
-    if (img) {
-      e.preventDefault()
-      await uploadImage(img)
-      return
-    }
     const text = cd?.getData('text/plain') || ''
     const html = cd?.getData('text/html') || ''
-    // 2) 엑셀 표 — 병합 유지 HTML 표 우선, 없으면 마크다운 표
+    // 1) 엑셀 표 — 병합 유지 HTML 표 우선, 없으면 마크다운 표
     if (text.includes('\t')) {
       const rows0 = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
         .split('\n').map(r => r.split('\t'))
@@ -111,6 +105,13 @@ export default function WorkLogEditor({ value, onChange, taskid, workschid,
         .parseFromString(html, 'text/html').querySelector('table')
       insert(tbl && tbl.rows.length
         ? `\n\n${tableHtml(tbl)}\n\n` : `\n\n${tsvToMd(text)}\n\n`)
+      return
+    }
+    // 2) 이미지 파일 붙여넣기 (스크린샷·이미지 복사)
+    const img = [...(cd?.files || [])].find(f => f.type.startsWith('image/'))
+    if (img) {
+      e.preventDefault()
+      await uploadImage(img)
       return
     }
     // 3) 다른 화면에서 긁어온 서식 콘텐츠 — 허용 태그만 남긴 HTML로 삽입

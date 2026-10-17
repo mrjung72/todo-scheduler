@@ -593,18 +593,22 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             style={{ minHeight: minH || undefined }}>
             {reqEdit !== null ? (
               <>
-                <textarea className="req-edit" rows="10" value={reqEdit}
-                  onChange={e => setReqEdit(e.target.value)} />
+                <WorkLogEditor value={reqEdit} rows={10}
+                  onChange={setReqEdit} taskid={task.taskid}
+                  onUploaded={() => loadFiles()} />
                 <div className="popup-btns">
                   <button className="primary" onClick={saveReq}>저장</button>
                   <button onClick={() => setReqEdit(null)}>취소</button>
                 </div>
               </>
+            ) : (hasMd(reqText) ? (
+              <div className="req-detail md"
+                dangerouslySetInnerHTML={mdHtml(reqText)} />
             ) : (
               <div className="req-detail">
                 {reqText || '작업요청 내용이 없습니다'}
               </div>
-            )}
+            ))}
             <div className="daily">
               <b>첨부파일</b>
               <table>
@@ -614,6 +618,10 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
                       <td>
                         <button className="link"
                           onClick={() => downloadFile(f)}>{f.file_name}</button>
+                        {(isStaff || task.work_userid === me?.userid) &&
+                          <button className="danger att-del"
+                            title="첨부파일 삭제"
+                            onClick={() => deleteFile(f)}>✕</button>}
                       </td>
                       <td className="r">{fmtSize(f.file_size)}</td>
                       <td className="r">{fmtDT(f.create_date)}</td>
