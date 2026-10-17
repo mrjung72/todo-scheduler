@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import api, { fmtDT, fmtSize, uploadWithProgress, downloadFile,
   hasMd, mdHtml, attachCheck, attachHint } from '../api'
 import ProgressBar from '../ProgressBar'
+import TaskDetailPopup from '../TaskDetailPopup'
 import WorkLogEditor from '../WorkLogEditor'
 
 // 팝업 드래그 이동 (관리자 게시판 팝업과 동일 방식)
@@ -30,6 +31,8 @@ export default function Board() {
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(null)         // 상세 대상
   const [edit, setEdit] = useState(null)       // 수정 대상 (write 폼 재사용)
+  const [taskPop, setTaskPop] = useState(null) // 관련 작업 상세 팝업 대상
+  const tasksRef = useRef(null)                // 작업 목록 캐시 (관련작업 링크용)
   const [pw, setPw] = useState('')             // 비공개글 열람 비밀번호(세션)
   const [lock, setLock] = useState(null)       // {b, pw, err} 비밀번호 입력 대상글
 
@@ -78,6 +81,19 @@ export default function Board() {
     } catch (e) { alert(e.response?.data?.detail || '삭제에 실패했습니다') }
   }
 
+  // 관련 작업 클릭 → 작업 상세 팝업 (/tasks 목록에서 찾아 표시, 최초 1회만 조회)
+  const openTask = b => {
+    if (!b.taskid) return
+    const show = list => {
+      const t = list.find(x => x.taskid === b.taskid)
+      t ? setTaskPop(t)
+        : alert('작업을 찾을 수 없습니다 (삭제되었을 수 있습니다)')
+    }
+    tasksRef.current ? show(tasksRef.current)
+      : api.get('/tasks').then(r => { tasksRef.current = r.data; show(r.data) })
+          .catch(e => alert(e.response?.data?.detail || '작업 조회에 실패했습니다'))
+  }
+
   return (
     <div>
       <div className="toolbar">
@@ -94,7 +110,8 @@ export default function Board() {
         <table className="grid">
           <thead><tr>
             <th style={{ width: 60 }}>번호</th><th>제목</th>
-            <th style={{ width: 110 }}>작성자</th><th style={{ width: 130 }}>관련작업</th>
+            <th style={{ width: 130 }}>관련작업</th>
+            <th style={{ width: 110 }}>작성자</th>
             <th style={{ width: 70 }}>첨부</th>
             <th style={{ width: 70 }}>댓글</th><th style={{ width: 140 }}>작성일시</th>
           </tr></thead>
@@ -109,8 +126,12 @@ export default function Board() {
                     ? <span className="bd-private">비공개</span>
                     : b.has_passwd && <span className="bd-private">비밀번호</span>}
                 </td>
+                <td>{b.taskid
+                  ? <button className="link" title="작업 상세 보기"
+                      onClick={() => openTask(b)}>
+                      #{b.taskid} {b.task_name || ''}</button>
+                  : ''}</td>
                 <td>{b.user_name || b.user_id}</td>
-                <td>{b.taskid ? `#${b.taskid} ${b.task_name || ''}` : ''}</td>
                 <td className="r">{b.file_count || ''}</td>
                 <td className="r">{b.comment_count || ''}</td>
                 <td className="r">{fmtDT(b.create_date)}</td>
@@ -133,6 +154,9 @@ export default function Board() {
           onEdit={() => { setEdit(sel); setSel(null); setView('write') }}
           onDelete={() => delBoard(sel)}
           onReload={() => openDetail(sel, pw)} />}
+
+      {taskPop && <TaskDetailPopup task={taskPop}
+        onClose={() => setTaskPop(null)} onChanged={load} />}
 
       {lock && (
         <div className="popup" onClick={() => setLock(null)}>

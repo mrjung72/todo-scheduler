@@ -2093,6 +2093,8 @@ function BoardsTab() {
   const [pubF, setPubF] = useState(savedF.pub || '')
   const [sel, setSel] = useState(null)         // 상세 팝업 대상
   const [editPost, setEditPost] = useState(null)  // 수정 폼 팝업 대상
+  const [selTask, setSelTask] = useState(null) // 관련 작업 상세 팝업 대상
+  const tasksRef = useRef(null)                // 작업 목록 캐시 (관련작업 링크용)
   const load = useCallback(() =>
     api.get('/boards').then(r => setRows(r.data)), [])
   useEffect(() => { load().catch(e => alert(errMsg(e))) }, [load])
@@ -2110,6 +2112,18 @@ function BoardsTab() {
   const openView = b =>
     api.get(`/boards/${b.boardid}`).then(r => setSel(r.data))
       .catch(e => alert(errMsg(e)))
+  // 관련 작업 클릭 → 작업 상세 팝업 (/tasks 목록에서 찾아 표시, 최초 1회만 조회)
+  const openTask = b => {
+    if (!b.taskid) return
+    const show = list => {
+      const t = list.find(x => x.taskid === b.taskid)
+      t ? setSelTask(t)
+        : alert('작업을 찾을 수 없습니다 (삭제되었을 수 있습니다)')
+    }
+    tasksRef.current ? show(tasksRef.current)
+      : api.get('/tasks').then(r => { tasksRef.current = r.data; show(r.data) })
+          .catch(e => alert(errMsg(e)))
+  }
 
   const kw = q.trim().toLowerCase()
   const scopeOf = b => !b.is_public ? 'prv' : (b.has_passwd ? 'pw' : 'pub')
@@ -2161,9 +2175,9 @@ function BoardsTab() {
       <table className="grid">
         <thead><tr>
           <th style={{ width: 55 }}>번호</th><th>제목</th>
+          <th style={{ width: 140 }}>관련작업</th>
           <th style={{ width: 80 }}>공개여부</th><th style={{ width: 90 }}>비밀번호</th>
           <th style={{ width: 110 }}>작성자</th>
-          <th style={{ width: 140 }}>관련작업</th>
           <th style={{ width: 50 }}>첨부</th><th style={{ width: 50 }}>댓글</th>
           <th style={{ width: 140 }}>작성일시</th>
           <th style={{ width: 140 }}>수정일시</th><th style={{ width: 60 }}></th>
@@ -2179,6 +2193,11 @@ function BoardsTab() {
                   ? <span className="bd-private">비공개</span>
                   : b.has_passwd && <span className="bd-private">비밀번호</span>}
               </td>
+              <td>{b.taskid
+                ? <button className="link" title="작업 상세 보기"
+                    onClick={() => openTask(b)}>
+                    #{b.taskid} {b.task_name || ''}</button>
+                : '-'}</td>
               <td className="c">
                 <EditableCell value={scopeOf(b)} disabled={!staff}
                   onSave={v => {
@@ -2201,7 +2220,6 @@ function BoardsTab() {
                   : (!b.is_public ? '미설정' : '-')}
               </td>
               <td>{b.user_name || b.user_id}</td>
-              <td>{b.taskid ? `#${b.taskid} ${b.task_name || ''}` : '-'}</td>
               <td className="r">{b.file_count || ''}</td>
               <td className="r">{b.comment_count || ''}</td>
               <td className="c">{fmtDT(b.create_date)}</td>
@@ -2236,6 +2254,8 @@ function BoardsTab() {
           </div>
         </div>
       )}
+      {selTask && <TaskDetailPopup task={selTask}
+        onClose={() => setSelTask(null)} onChanged={load} />}
     </div>
   )
 }
