@@ -328,6 +328,10 @@ def migrate(db):
         db.execute(text(
             "UPDATE boards SET is_public = 1 "
             "WHERE is_public = 0 AND passwd IS NOT NULL AND passwd != ''"))
+    # boards.taskid — 관련 작업 연결
+    if cols and "taskid" not in cols:
+        db.execute(text(
+            "ALTER TABLE boards ADD COLUMN taskid INTEGER REFERENCES tasks(taskid)"))
     db.commit()
 
 

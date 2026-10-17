@@ -2127,6 +2127,8 @@ function BoardsTab() {
     { label: '열람비밀번호(참조)', field: '_pw', get: b => b.has_passwd ? '설정' : '' },
     { label: '작성자ID', field: 'user_id' },
     { label: '작성자(참조)', field: '_user_name', get: b => b.user_name || '' },
+    { label: '관련작업', field: 'taskid', get: b =>
+        b.taskid ? `#${b.taskid} ${b.task_name || ''}` : '' },
     { label: '첨부(참조)', field: '_fc', get: b => b.file_count ?? '' },
     { label: '댓글(참조)', field: '_cc', get: b => b.comment_count ?? '' },
     { label: '작성일시', field: 'create_date', get: b => fmtDT(b.create_date) },
@@ -2161,6 +2163,7 @@ function BoardsTab() {
           <th style={{ width: 55 }}>번호</th><th>제목</th>
           <th style={{ width: 80 }}>공개여부</th><th style={{ width: 90 }}>비밀번호</th>
           <th style={{ width: 110 }}>작성자</th>
+          <th style={{ width: 140 }}>관련작업</th>
           <th style={{ width: 50 }}>첨부</th><th style={{ width: 50 }}>댓글</th>
           <th style={{ width: 140 }}>작성일시</th>
           <th style={{ width: 140 }}>수정일시</th><th style={{ width: 60 }}></th>
@@ -2198,6 +2201,7 @@ function BoardsTab() {
                   : (!b.is_public ? '미설정' : '-')}
               </td>
               <td>{b.user_name || b.user_id}</td>
+              <td>{b.taskid ? `#${b.taskid} ${b.task_name || ''}` : '-'}</td>
               <td className="r">{b.file_count || ''}</td>
               <td className="r">{b.comment_count || ''}</td>
               <td className="c">{fmtDT(b.create_date)}</td>
@@ -2207,7 +2211,7 @@ function BoardsTab() {
             </tr>
           ))}
           {!filtered.length &&
-            <tr><td colSpan="10" className="empty">게시글이 없습니다</td></tr>}
+            <tr><td colSpan="11" className="empty">게시글이 없습니다</td></tr>}
         </tbody>
       </table>
       <p className="hint">

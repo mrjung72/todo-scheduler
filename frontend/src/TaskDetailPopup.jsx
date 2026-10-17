@@ -6,6 +6,7 @@ import api, { fmtDT, fmtDTS, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, NEXT_STAT,
   STICKER_EMOJIS, stickerTip, hasMd, mdHtml } from './api'
 import ProgressBar from './ProgressBar'
 import WorkLogEditor from './WorkLogEditor'
+import { BoardDetailPopup, BoardForm } from './pages/Board'
 
 // 작업내용 소스 하이라이트: 언어 자동감지, 신뢰도 낮으면 일반 텍스트로
 const highlightCode = text => {
@@ -102,6 +103,11 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   const [logs, setLogs] = useState(null)
   const [logForm, setLogForm] = useState(null)   // {workschid?, work_remark} 작업이력 등록/수정
   const [logView, setLogView] = useState(null)   // 작업내용 상세 팝업
+  const [boards, setBoards] = useState(null)      // 관련 게시글 목록 (게시글 탭)
+  const [selBoard, setSelBoard] = useState(null)  // 게시글 상세 팝업 대상
+  const [boardPw, setBoardPw] = useState('')      // 게시글 열람 비밀번호(세션)
+  const [boardLock, setBoardLock] = useState(null)  // 비밀번호 입력 대상 {b, pw, err}
+  const [boardEdit, setBoardEdit] = useState(null)  // 게시글 수정 폼 팝업 대상
   const isStaff = me && [0, 1].includes(me.user_grade)
   const canLogEdit = l => isStaff || l.work_userid === me?.userid
   const [pendFiles, setPendFiles] = useState([]) // 신규 이력 작성 중 올린 첨부 (저장 후 이력에 연결)
@@ -151,6 +157,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
   useEffect(() => {
     setTf({})   // 다른 작업으로 열릴 때 이전 수정값 초기화
     setBtab('req'); setHis(null); setLogs(null)
+    setBoards(null); setSelBoard(null); setBoardLock(null); setBoardEdit(null)
     api.get(`/tasks/${task.taskid}/daily`)
       .then(r => setDaily(r.data)).catch(() => setDaily([]))
     api.get('/task-categories', { params: { siteid: task.siteid || undefined } })
@@ -354,6 +361,7 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
     setBtab(tab)
     if (tab === 'his' && !logs) loadLogs()
     if (tab === 'stk' && !stickers) loadStickers()
+    if (tab === 'bd' && !boards) loadBoards()
     if (tab === 'chg' && !his)
       api.get(`/tasks/${task.taskid}/his`)
         .then(r => setHis(r.data)).catch(console.error)
@@ -377,6 +385,24 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
       await api.delete(`/tasks/${task.taskid}/stickers/${stickerid}`)
       loadStickers(); onChanged?.()
     } catch (e) { alert(e.response?.data?.detail || '스티커 삭제에 실패했습니다') }
+  }
+
+  // 게시글 탭 — 이 작업에 연결된 게시글 목록 조회 (서버가 공개범위 필터 적용)
+  const loadBoards = () =>
+    api.get('/boards', { params: { taskid: task.taskid } })
+      .then(r => setBoards(r.data)).catch(console.error)
+  // 게시글 열람 — 비밀번호 필요 글이면 입력 팝업
+  const openBoard = (b, passwd = '') => {
+    const req = passwd
+      ? api.post(`/boards/${b.boardid}/open`, { password: passwd })
+      : api.get(`/boards/${b.boardid}`)
+    req.then(r => { setSelBoard(r.data); setBoardPw(passwd); setBoardLock(null) })
+      .catch(e => {
+        const d = e.response?.data?.detail
+        if (d === 'need_password') setBoardLock({ b, pw: '', err: '' })
+        else if (passwd) setBoardLock(l => l && { ...l, err: '비밀번호가 일치하지 않습니다' })
+        else alert(typeof d === 'string' ? d : '게시글 조회에 실패했습니다')
+      })
   }
 
   // 상태변경이력 초기화 (스태프) — 현재 상태의 기준 이력 1건만 남김
@@ -616,6 +642,8 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
             onClick={() => selTab('chg')}>상태변경이력</button>
           <button className={`btab${btab === 'stk' ? ' active' : ''}`}
             onClick={() => selTab('stk')}>스티커</button>
+          <button className={`btab${btab === 'bd' ? ' active' : ''}`}
+            onClick={() => selTab('bd')}>관련 게시글</button>
           {btab === 'req' && canEdit && reqEdit === null &&
             <button className="link req-edit-btn"
               onClick={() => setReqEdit(reqText)}>수정</button>}
@@ -749,6 +777,42 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               {!stickers && <div className="empty">불러오는 중…</div>}
             </div>
           </div>
+        ) : btab === 'bd' ? (
+          <div className="popup-info req-info">
+            <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
+              <table>
+                <thead><tr>
+                  <th style={{ width: 50 }}>번호</th><th>제목</th>
+                  <th style={{ width: 110 }}>작성자</th>
+                  <th style={{ width: 60 }}>댓글</th>
+                  <th style={{ width: 140 }}>작성일시</th>
+                </tr></thead>
+                <tbody>
+                  {(boards || []).map(b => (
+                    <tr key={b.boardid}>
+                      <td className="r">{b.boardid}</td>
+                      <td>
+                        <button className="link"
+                          onClick={() => openBoard(b)}>
+                          {(b.has_passwd || !b.is_public) && '🔒 '}{b.title}</button>
+                        {!b.is_public
+                          ? <span className="bd-private">비공개</span>
+                          : b.has_passwd &&
+                            <span className="bd-private">비밀번호</span>}
+                      </td>
+                      <td>{b.user_name || b.user_id}</td>
+                      <td className="r">{b.comment_count || ''}</td>
+                      <td>{fmtDT(b.create_date)}</td>
+                    </tr>
+                  ))}
+                  {boards && !boards.length &&
+                    <tr><td colSpan="5" className="empty">관련 게시글이 없습니다</td></tr>}
+                  {!boards &&
+                    <tr><td colSpan="5" className="empty">불러오는 중…</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
           <div className="popup-info req-info">
             <div className="daily" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
@@ -867,6 +931,58 @@ export default function TaskDetailPopup({ task, onClose, onChanged }) {
               )}
             </div>
           </div>
+      )}
+      {boardLock && (
+        <div className="popup log-pop" onClick={e => {
+          if (e.target === e.currentTarget) setBoardLock(null)
+        }}>
+          <div className="popup-body" style={{ width: 320, transform: 'none' }}
+            onClick={e => e.stopPropagation()}>
+            <b className="blk-title" style={{ marginTop: 0 }}>비밀번호 입력</b>
+            <div className="log-meta" style={{ marginBottom: 6 }}>
+              비밀번호가 필요한 게시글입니다</div>
+            <input type="password" autoFocus placeholder="열람 비밀번호"
+              value={boardLock.pw} style={{ width: '100%', boxSizing: 'border-box' }}
+              onChange={e => setBoardLock(l => ({ ...l, pw: e.target.value }))}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && boardLock.pw)
+                  openBoard(boardLock.b, boardLock.pw)
+              }} />
+            {boardLock.err &&
+              <p className="err" style={{ marginTop: 6 }}>{boardLock.err}</p>}
+            <div className="popup-btns">
+              <button className="primary" disabled={!boardLock.pw}
+                onClick={() => openBoard(boardLock.b, boardLock.pw)}>확인</button>
+              <button onClick={() => setBoardLock(null)}>취소</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {selBoard && (
+        <BoardDetailPopup me={me} post={selBoard} pw={boardPw}
+          onClose={() => setSelBoard(null)}
+          onReload={() => openBoard(selBoard, boardPw)}
+          onEdit={() => { setBoardEdit(selBoard); setSelBoard(null) }}
+          onDelete={async () => {
+            if (!window.confirm('이 게시글을 삭제할까요?')) return
+            try {
+              await api.delete(`/boards/${selBoard.boardid}`)
+              setSelBoard(null); setBoards(null); loadBoards()
+            } catch (e) {
+              alert(e.response?.data?.detail || '삭제에 실패했습니다')
+            }
+          }} />
+      )}
+      {boardEdit && (
+        <div className="popup" onClick={e => {
+          if (e.target === e.currentTarget) setBoardEdit(null)
+        }}>
+          <div className="popup-body" onClick={e => e.stopPropagation()}>
+            <BoardForm edit={boardEdit}
+              onDone={() => { setBoardEdit(null); setBoards(null); loadBoards() }}
+              onCancel={() => setBoardEdit(null)} />
+          </div>
+        </div>
       )}
     </div>
   )

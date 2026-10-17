@@ -156,6 +156,7 @@ class Board(Base):
     is_public = Column(Integer, default=1)
     passwd = Column(Text)                               # 비공개 시 열람 비밀번호(pbkdf2 해시)
     user_id = Column(Text, ForeignKey("users.userid"))    # 작성자
+    taskid = Column(Integer, ForeignKey("tasks.taskid"))  # 관련 작업
     create_date = Column(DateTime, default=datetime.now)
     update_date = Column(DateTime)
 

@@ -1,9 +1,9 @@
 """게시판 — 글/댓글/첨부파일.
 
-- 공개글: 로그인 사용자 전원 조회
-- 비공개글: 작성자·스태프(관리자·수석)는 바로 열람, 그 외 사용자는
-  게시글 비밀번호(passwd) 입력 시 열람 가능 — 비밀번호 미설정 비공개글은
-  작성자·스태프만 열람
+- 공개글: 로그인 사용자 전원 열람
+- 공개(비밀번호 열람)글(is_public+passwd): 목록 노출, 일반사용자는
+  비밀번호 입력 후 열람 (작성자·스태프는 바로 열람)
+- 비공개글: 목록 비노출, 작성자·스태프만 열람
 - 수정·삭제: 작성자 또는 스태프
 - 첨부파일: /api/attach-files 에 boardid 로 업로드 (board_attach_files)
 """
@@ -17,7 +17,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Board, BoardComment, BoardAttachFile, User
+from ..models import Board, BoardComment, BoardAttachFile, User, Task
 from ..security import get_current_user, hash_password, verify_password
 from .attach_files import _file_path, _file_size
 
@@ -79,11 +79,13 @@ def _can_edit(b: Board, me) -> bool:
     return b.user_id == me.userid or _staff(me)
 
 
-def _board_out(b: Board, user_name=None, n_comments=None, n_files=None):
+def _board_out(b: Board, user_name=None, n_comments=None, n_files=None,
+               task_name=None):
     return {
         "boardid": b.boardid, "title": b.title, "content": b.content,
         "is_public": b.is_public, "has_passwd": bool(b.passwd),
         "user_id": b.user_id, "user_name": user_name,
+        "taskid": b.taskid, "task_name": task_name,
         "create_date": b.create_date, "update_date": b.update_date,
         "comment_count": n_comments, "file_count": n_files,
     }
@@ -104,7 +106,9 @@ def _detail_out(db: Session, b: Board, me):
                 .outerjoin(User, User.userid == BoardComment.user_id)
                 .filter(BoardComment.boardid == b.boardid)
                 .order_by(BoardComment.commentid).all())
-    out = _board_out(b, u.user_name if u else None)
+    t = db.get(Task, b.taskid) if b.taskid else None
+    out = _board_out(b, u.user_name if u else None,
+                     task_name=t.task_name if t else None)
     out["files"] = [_file_out(f) for f in files]
     out["comments"] = [
         {"commentid": c.commentid, "user_id": c.user_id, "user_name": name,
@@ -115,13 +119,17 @@ def _detail_out(db: Session, b: Board, me):
 
 
 @router.get("")
-def list_boards(q: str | None = None, db: Session = Depends(get_db),
+def list_boards(q: str | None = None, taskid: int | None = None,
+                db: Session = Depends(get_db),
                 me: User = Depends(get_current_user)):
-    """게시글 목록 (최신순).
+    """게시글 목록 (최신순). taskid 지정 시 해당 작업 관련 글만.
     비공개글은 작성자·스태프만 목록에 노출 — 일반사용자에게는 아예 조회되지 않음.
     검색 시 비공개글은 제목만 대상 (내용은 열람 권한 필요)."""
-    query = (db.query(Board, User.user_name)
-             .outerjoin(User, User.userid == Board.user_id))
+    query = (db.query(Board, User.user_name, Task.task_name)
+             .outerjoin(User, User.userid == Board.user_id)
+             .outerjoin(Task, Task.taskid == Board.taskid))
+    if taskid is not None:
+        query = query.filter(Board.taskid == taskid)
     if not _staff(me):
         query = query.filter((Board.is_public == 1) | (Board.user_id == me.userid))
     if q:
@@ -140,8 +148,9 @@ def list_boards(q: str | None = None, db: Session = Depends(get_db),
               .group_by(BoardComment.boardid).all())
     fc = dict(db.query(BoardAttachFile.boardid, func.count())
               .group_by(BoardAttachFile.boardid).all())
-    return [_board_out(b, name, cc.get(b.boardid, 0), fc.get(b.boardid, 0))
-            for b, name in rows]
+    return [_board_out(b, name, cc.get(b.boardid, 0), fc.get(b.boardid, 0),
+                       tname)
+            for b, name, tname in rows]
 
 
 @router.get("/{boardid}")
@@ -149,7 +158,7 @@ def board_detail(boardid: int, db: Session = Depends(get_db),
                  me: User = Depends(get_current_user)):
     b = _get_board(db, boardid)
     if not _can_view(b, me):
-        # 비밀번호가 설정된 비공개글은 need_password 신호로 프롬프트 유도
+        # 공개(비밀번호 열람)글은 need_password 신호로 비밀번호 프롬프트 유도
         raise HTTPException(403, "need_password" if b.passwd else "비공개 게시글입니다")
     return _detail_out(db, b, me)
 
@@ -172,7 +181,8 @@ class BoardCreate(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     content: str | None = None
     is_public: int = 1
-    passwd: str | None = None          # 비공개 시 열람 비밀번호
+    passwd: str | None = None          # 공개(비밀번호 열람) 시 열람 비밀번호
+    taskid: int | None = None          # 관련 작업
 
     @field_validator("title")
     @classmethod
@@ -193,6 +203,12 @@ class BoardUpdate(BaseModel):
     content: str | None = None
     is_public: int | None = None
     passwd: str | None = None          # 빈 문자열=해제, None=유지, 값=변경
+    taskid: int | None = None          # 관련 작업 (None=유지, 0/빈값 해제는 별도 처리)
+
+    @field_validator("taskid", mode="before")
+    @classmethod
+    def _v_taskid(cls, v):
+        return v if v else None       # 0·빈값 → None
 
     @field_validator("title")
     @classmethod
@@ -213,8 +229,11 @@ class BoardUpdate(BaseModel):
 @router.post("", status_code=201)
 def create_board(body: BoardCreate, db: Session = Depends(get_db),
                  me: User = Depends(get_current_user)):
+    if body.taskid and not db.get(Task, body.taskid):
+        raise HTTPException(400, "등록되지 않은 작업입니다")
     b = Board(title=body.title, content=body.content,
-              is_public=1 if body.is_public else 0, user_id=me.userid)
+              is_public=1 if body.is_public else 0, user_id=me.userid,
+              taskid=body.taskid)
     if body.passwd:                        # 공개(비밀번호 열람) 포함 모든 범위에 적용
         b.passwd = hash_password(body.passwd)
     db.add(b)
@@ -242,6 +261,10 @@ def update_board(boardid: int, body: BoardUpdate,
         b.passwd = None
     elif body.passwd is not None:
         b.passwd = hash_password(body.passwd) if body.passwd else None
+    if "taskid" in body.model_fields_set:   # 전송된 경우에만 변경 (null=해제)
+        if body.taskid and not db.get(Task, body.taskid):
+            raise HTTPException(400, "등록되지 않은 작업입니다")
+        b.taskid = body.taskid
     b.update_date = datetime.now()
     db.commit()
     return _board_out(b, me.user_name)

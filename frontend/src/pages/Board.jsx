@@ -94,7 +94,8 @@ export default function Board() {
         <table className="grid">
           <thead><tr>
             <th style={{ width: 60 }}>번호</th><th>제목</th>
-            <th style={{ width: 110 }}>작성자</th><th style={{ width: 70 }}>첨부</th>
+            <th style={{ width: 110 }}>작성자</th><th style={{ width: 130 }}>관련작업</th>
+            <th style={{ width: 70 }}>첨부</th>
             <th style={{ width: 70 }}>댓글</th><th style={{ width: 140 }}>작성일시</th>
           </tr></thead>
           <tbody>
@@ -109,13 +110,14 @@ export default function Board() {
                     : b.has_passwd && <span className="bd-private">비밀번호</span>}
                 </td>
                 <td>{b.user_name || b.user_id}</td>
+                <td>{b.taskid ? `#${b.taskid} ${b.task_name || ''}` : ''}</td>
                 <td className="r">{b.file_count || ''}</td>
                 <td className="r">{b.comment_count || ''}</td>
                 <td className="r">{fmtDT(b.create_date)}</td>
               </tr>
             ))}
             {!rows.length &&
-              <tr><td colSpan="6" className="empty">게시글이 없습니다</td></tr>}
+              <tr><td colSpan="7" className="empty">게시글이 없습니다</td></tr>}
           </tbody>
         </table>
       )}
@@ -167,6 +169,13 @@ export function BoardForm({ edit, onDone, onCancel }) {
   const [upPct, setUpPct] = useState(null)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  // 관련 작업 — "#번호 작업명" 검색 입력 (선택사항)
+  const [tasks, setTasks] = useState([])
+  const [taskSel, setTaskSel] = useState(
+    edit?.taskid ? `#${edit.taskid} ${edit.task_name || ''}` : '')
+  useEffect(() => {
+    api.get('/tasks').then(r => setTasks(r.data)).catch(() => {})
+  }, [])
   const fileRef = useRef(null)
   // 신규 작성 시 본문 이미지 — 게시글 ID가 없으므로 pending 토큰으로 보관하고
   // 저장(글 생성) 후 실제 fileid로 본문 URL을 치환한다
@@ -209,11 +218,17 @@ export function BoardForm({ edit, onDone, onCancel }) {
     if (scope === 'pw' && !passwd && !(edit && edit.has_passwd)) {
       setErr('공개(비밀번호 열람)는 열람 비밀번호를 입력해 주세요'); return
     }
+    const tm = (taskSel || '').match(/^#(\d+)/)
+    if (taskSel.trim() && !tm) {
+      setErr('관련 작업은 목록에서 "#번호 작업명" 형식으로 선택해 주세요'); return
+    }
+    const taskid = tm ? +tm[1] : null
     try {
       setSaving(true)
       let boardid = edit?.boardid
       if (edit) {
-        const body = { title, content, is_public: scope === 'prv' ? 0 : 1 }
+        const body = { title, content, is_public: scope === 'prv' ? 0 : 1,
+          taskid }
         if (scope === 'pw' && passwd) body.passwd = passwd      // 비밀번호 변경
         else if (scope === 'pub') body.passwd = ''              // 공개 전환 → 비밀번호 해제
         // prv는 passwd 미전송 → 서버가 비공개 전환과 함께 해제
@@ -221,7 +236,7 @@ export function BoardForm({ edit, onDone, onCancel }) {
       } else {
         const { data } = await api.post('/boards', {
           title, content, is_public: scope === 'prv' ? 0 : 1,
-          passwd: scope === 'pw' && passwd ? passwd : null })
+          taskid, passwd: scope === 'pw' && passwd ? passwd : null })
         boardid = data.boardid
       }
       // 신규 작성 시에만: 저장하면서 대기 중인 파일들을 업로드
@@ -277,6 +292,15 @@ export function BoardForm({ edit, onDone, onCancel }) {
             onChange={e => setPasswd(e.target.value)} />
         </label>
       )}
+      <label>관련 작업
+        <input list="bd-task-dl" value={taskSel}
+          placeholder="작업 검색 (#번호·작업명) — 선택사항"
+          onChange={e => setTaskSel(e.target.value)} />
+        <datalist id="bd-task-dl">
+          {tasks.map(t => <option key={t.taskid}
+            value={`#${t.taskid} ${t.task_name}`} />)}
+        </datalist>
+      </label>
       <label>내용</label>
       <WorkLogEditor value={content} onChange={setContent} rows={10}
         boardid={edit?.boardid ?? null}
@@ -430,6 +454,7 @@ export function BoardDetail({ me, post, pw, onEdit, onDelete, onReload,
         <span className="bd-meta">
           {post.user_name || post.user_id} · {fmtDT(post.create_date)}
           {post.update_date && ` (수정 ${fmtDT(post.update_date)})`}
+          {post.taskid && ` · 관련작업 #${post.taskid} ${post.task_name || ''}`}
         </span>
       </div>
       {btns}
