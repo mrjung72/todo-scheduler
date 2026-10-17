@@ -14,7 +14,7 @@ mkdir "%PKG%"
 xcopy /E /I /Q "%ROOT%backend\app" "%PKG%\app" >nul
 xcopy /E /I /Q "%ROOT%frontend\dist" "%PKG%\static" >nul
 copy /Y "%ROOT%backend\requirements.txt" "%PKG%\" >nul
-copy /Y "%ROOT%backend\.env.example" "%PKG%\" >nul
+copy /Y "%ROOT%backend\.env" "%PKG%\.env" >nul
 copy /Y "%ROOT%prod-run.bat" "%PKG%\run.bat" >nul
 rem license key -> app/license.key : 발급 프로젝트로 무료 키(5명,빌드일+365일) 자동 생성
 set LICGEN=%ROOT%..\todo-scheduler-license

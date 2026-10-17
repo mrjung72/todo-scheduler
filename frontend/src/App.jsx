@@ -141,7 +141,7 @@ export default function App() {
         </nav>
         {cfg && (
           <span className="workhours" title={`WORK_SEGMENTS=${cfg.work_segments}`}>
-            기본 {cfg.work_hours_per_day}시간/일 (사용자별 설정 가능)
+            기본 {cfg.work_hours_per_day}시간/일 (작업자별 설정 가능)
           </span>
         )}
         <span className="me">
