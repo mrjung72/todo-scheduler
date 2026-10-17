@@ -17,9 +17,21 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('user')) } catch { return null }
   })
 
+  const [lic, setLic] = useState(null)
   useEffect(() => {
     api.get('/config').then(r => setCfg(r.data)).catch(() => {})
+    api.get('/license').then(r => setLic(r.data)).catch(() => {})
   }, [])
+
+  // 라이선스 배너 — 만료/미등록: 빨간 경고(조회 전용), 만료 임박(30일↓): 노란 안내
+  const licBar = lic && (!lic.valid
+    ? <div className="lic-bar err">⚠ {lic.msg} — 조회만 가능합니다.
+        license.key 파일을 갱신해주세요.</div>
+    : lic.days_left != null && lic.days_left <= 30
+      ? <div className="lic-bar warn">
+          라이선스 만료까지 {lic.days_left}일 남았습니다 (만료일 {lic.expires}
+          {lic.name && ` · ${lic.name}`})</div>
+      : null)
 
   const [wantLogin, setWantLogin] = useState(false)
   // null=닫힘, {}=일반 회원가입, {userid,password}=승인불가 재신청 모드
@@ -99,6 +111,7 @@ export default function App() {
             <button className="primary" onClick={() => setWantLogin(true)}>로그인</button>
           </span>
         </header>
+        {licBar}
         <main>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -135,6 +148,7 @@ export default function App() {
           <button className="logout" onClick={logout}>로그아웃</button>
         </span>
       </header>
+      {licBar}
       <main>
         <Routes>
           <Route path="/" element={<Home />} />

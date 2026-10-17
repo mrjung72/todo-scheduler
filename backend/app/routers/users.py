@@ -9,6 +9,7 @@ from ..security import (
     hash_password, verify_password, get_current_user,
 )
 from ..scheduler import recalculate
+from ..license import status as license_status
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -49,6 +50,19 @@ def _check_staff(me: User):
     """사용자 관리 권한: 관리자(0)/수석개발자(1)."""
     if me.user_grade not in (0, 1):
         raise HTTPException(403, "권한이 없습니다")
+
+
+def _check_seats(db: Session):
+    """라이선스 사용자 수 상한 — 활성 사용자(user_stat='Y')가 seats 이상이면 차단."""
+    st = license_status()
+    seats = st.get("seats")
+    if seats is None or not st["valid"]:
+        return
+    used = db.query(User).filter(User.user_stat == "Y").count()
+    if used >= seats:
+        raise HTTPException(
+            403, f"라이선스 사용자 수 제한({seats}명)에 도달했습니다. "
+                 "기업용 라이선스가 필요합니다")
 
 
 def _check_not_admin_account(userid: str, me: User):
@@ -94,6 +108,8 @@ def create_user(body: UserCreate, db: Session = Depends(get_db),
         raise HTTPException(403, "해당 등급의 사용자를 생성할 수 없습니다")
     if db.get(User, body.userid):
         raise HTTPException(409, "이미 존재하는 사용자ID입니다")
+    if body.user_stat == "Y":
+        _check_seats(db)
     if body.default_siteid and not db.get(Site, body.default_siteid):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
     data = body.model_dump()
@@ -148,6 +164,9 @@ def update_user(userid: str, body: UserUpdate, db: Session = Depends(get_db),
         data["work_hours_day"] = None
     if data.get("default_siteid") and not db.get(Site, data["default_siteid"]):
         raise HTTPException(400, "존재하지 않는 사이트ID입니다")
+    # 회원가입 승인 등 비활성→활성 전환 시 사용자 수 상한 검사
+    if data.get("user_stat") == "Y" and obj.user_stat != "Y":
+        _check_seats(db)
     # 비밀번호는 본인만 직접 변경 가능 — 타인은 초기화(1234)만 가능
     if data.get("password") and userid != me.userid:
         raise HTTPException(

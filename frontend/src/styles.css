@@ -666,6 +666,10 @@ td.req-col input { width: 120px; }
 
 /* 게시판 */
 .bd-pubsel { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: 12px; color: #555; }
+/* 라이선스 배너 */
+.lic-bar { padding: 6px 14px; font-size: 13px; text-align: center; font-weight: 600; }
+.lic-bar.err { background: #fee2e2; color: #b91c1c; }
+.lic-bar.warn { background: #fef3c7; color: #92400e; }
 /* 데이터 추출 탭 — 소스/결과 2단 그리드 */
 .extract-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
 .split-row { display: flex; align-items: stretch; }

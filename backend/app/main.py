@@ -38,9 +38,35 @@ app.include_router(task_categories.router)
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
+from .license import status as license_status
+
 _AUTH_OPEN = {"/api/auth/login", "/api/health", "/api/config",
               "/api/auth/signup", "/api/auth/check-userid",
-              "/api/auth/reapply", "/api/auth/rejected-info"}
+              "/api/auth/reapply", "/api/auth/rejected-info",
+              "/api/license"}
+
+# 라이선스 없이도 허용하는 쓰기 경로 (로그인·회원가입 등)
+_LIC_WRITE_OPEN = ("/api/auth/",)
+
+
+@app.get("/api/license")
+def get_license():
+    """라이선스 상태 조회 (배너 표시용, 인증 불필요)."""
+    return license_status()
+
+
+@app.middleware("http")
+async def license_guard(request, call_next):
+    """라이선스 만료/미등록 시 쓰기(POST·PUT·DELETE·PATCH) 차단 — 조회만 허용."""
+    if (request.url.path.startswith("/api")
+            and request.method not in ("GET", "HEAD", "OPTIONS")
+            and not request.url.path.startswith(_LIC_WRITE_OPEN)
+            and not license_status()["valid"]):
+        return JSONResponse(
+            {"detail": "라이선스가 없거나 만료되어 조회만 가능합니다. "
+                       "license.key 파일을 갱신해주세요"},
+            status_code=403)
+    return await call_next(request)
 
 
 @app.exception_handler(IntegrityError)
@@ -345,6 +371,12 @@ async def startup():
     finally:
         db.close()
     _start_auto_transition()
+    lic = license_status()
+    if lic["valid"]:
+        print(f"[license] {lic.get('name','?')} — "
+              f"{lic['expires']} 만료 (D-{lic['days_left']})")
+    else:
+        print(f"[license] {lic['msg']} — 조회 전용 모드로 동작합니다")
 
 
 def _start_auto_transition():

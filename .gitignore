@@ -29,3 +29,7 @@ backend/static/
 Thumbs.db
 .idea/
 .vscode/
+
+# License (private key must never be committed/shipped)
+backend/license.key
+backend/license_private.pem
