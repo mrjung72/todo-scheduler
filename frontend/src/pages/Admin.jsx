@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api, { fmtDT, fmtSize, STAT_LABEL, TASK_TYPE_LABEL, DAY_STAT_LABEL,
@@ -50,6 +50,7 @@ const TABS = [
   { key: 'calendar', label: '달력' },
   { key: 'holidays', label: '작업자휴가' },
   { key: 'boards', label: '게시판' },
+  { key: 'extract', label: '데이터 추출' },
 ]
 
 const isStaff = () => [0, 1].includes(JSON.parse(localStorage.getItem('user') || 'null')?.user_grade)
@@ -72,10 +73,11 @@ const canManageUser = u => (MANAGED_GRADES[myGrade()] || []).includes(u.user_gra
 // 3-개발매니저: 전체 조회 / 4-일반개발자: 기존과 동일 / 5-IT담당자: 지정 탭 조회
 const TAB_ACCESS = {
   3: ['sites', 'categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
-      'calendar', 'holidays', 'boards'],
+      'calendar', 'holidays', 'boards', 'extract'],
   4: ['categories', 'tasks', 'schedules', 'schedhis', 'files', 'users',
-      'holidays'],
-  5: ['sites', 'categories', 'tasks', 'users', 'calendar', 'holidays'],
+      'holidays', 'extract'],
+  5: ['sites', 'categories', 'tasks', 'users', 'calendar', 'holidays',
+      'extract'],
 }
 
 export default function Admin() {
@@ -106,6 +108,7 @@ export default function Admin() {
       {tab === 'schedhis' && <SchedHisTab />}
       {tab === 'files' && <AttachFilesTab />}
       {tab === 'boards' && <BoardsTab />}
+      {tab === 'extract' && <ExtractTab />}
     </div>
   )
 }
@@ -2262,6 +2265,175 @@ function BoardsTab() {
       )}
       {selTask && <TaskDetailPopup task={selTask}
         onClose={() => setSelTask(null)} onChanged={load} />}
+    </div>
+  )
+}
+
+/* ---------- 데이터 추출 탭 ---------- */
+/* 정규식 패턴으로 소스 텍스트에서 매치를 추출하는 도구 (순수 클라이언트 처리).
+   참고 구현 개선 반영: 직접 입력도 동작, 빈 매치 무한루프 가드,
+   온전한 단어는 \b 대신 공백 전후방 탐색, 프리셋 적용 시 옵션 유지 */
+const DOMAIN_RE = '([\\w-]+\\.){1,3}(com|org|net|edu|gov|mil|int|io|ai|' +
+  'app|dev|test|local|kr|us|jp|cn|uk|de|in|au|ca|fr)'
+const EXTRACT_PRESETS = {
+  'at-words': { label: '@단어 추출', pattern: '@[\\w]+',
+    description: '@로 시작하는 단어 추출' },
+  'url': { label: 'URL', pattern: `https?://${DOMAIN_RE}`,
+    description: 'URL 추출' },
+  'domain': { label: '도메인', pattern: DOMAIN_RE,
+    description: '도메인 추출' },
+  'ip': { label: 'IP 주소', pattern: '(?:\\d{1,3}\\.){3}\\d{1,3}',
+    description: 'IP 주소 추출' },
+  'csr': { label: 'CSR번호', pattern: 'C\\d{8}-\\d{6}',
+    description: 'CSR번호 추출 (C + 8자리숫자 + - + 6자리숫자)' },
+  'email': { label: '이메일 주소', pattern: '[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,}',
+    description: '이메일 주소 추출' },
+  'phone': { label: '전화번호',
+    pattern: '(?:\\+?[0-9]{1,3}[-\\s]?)?[0-9]{2,4}[-\\s]?' +
+      '[0-9]{3,4}[-\\s]?[0-9]{3,4}',
+    description: '전화번호 추출' },
+  'line-start': { label: '줄 시작 단어', pattern: '^[a-zA-Z]+',
+    description: '각 줄의 시작 단어 추출 (줄단위 플래그 필요)' },
+  'line-end': { label: '줄 끝 단어', pattern: '[a-zA-Z]+$',
+    description: '각 줄의 끝 단어 추출 (줄단위 플래그 필요)' },
+}
+const EXTRACT_FLAG_DEF = {
+  global: true, ignoreCase: true, multiline: true,
+  wholeWord: false, removeDuplicates: false,
+}
+
+function ExtractTab() {
+  const [input, setInput] = useState('')
+  const [pattern, setPattern] = useState('')
+  const [preset, setPreset] = useState('')
+  const [flags, setFlags] = useState({ ...EXTRACT_FLAG_DEF })
+  const [showCount, setShowCount] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  const lineCount = input ? input.split(/\r?\n/).length : 0
+
+  // 정규식 추출 — 직접 입력도 동작, 빈 매치는 lastIndex 진행해 무한루프 방지
+  const results = useMemo(() => {
+    if (!input || !pattern) return []
+    // 온전한 단어(공백 기준): 앞뒤가 공백 또는 문자열 경계인 매치만
+    const pat = flags.wholeWord ? `(?<!\\S)(?:${pattern})(?!\\S)` : pattern
+    let fs = ''
+    if (flags.global) fs += 'g'
+    if (flags.ignoreCase) fs += 'i'
+    if (flags.multiline) fs += 'm'
+    try {
+      const re = new RegExp(pat, fs)
+      const out = []
+      if (flags.global) {
+        let m, guard = 0
+        while ((m = re.exec(input)) !== null) {
+          out.push(m[0])
+          if (m.index === re.lastIndex) re.lastIndex++   // 빈 매치 → 진행
+          if (++guard >= 100000) {
+            out.push('… (매치 100,000건 초과로 중단)')
+            break
+          }
+        }
+      } else {
+        const m = input.match(re)
+        if (m) out.push(m[0])
+      }
+      return out
+    } catch (e) { return [`정규식 오류: ${e.message}`] }
+  }, [input, pattern, flags])
+  // 중복 제거 시 값별 건수를 함께 표시 가능 (최초 등장 순서 유지)
+  let finalResults = results
+  if (flags.removeDuplicates) {
+    const counts = new Map()
+    for (const v of results) counts.set(v, (counts.get(v) || 0) + 1)
+    finalResults = [...counts].map(([v, n]) =>
+      showCount && n > 1 ? `${v}  (${n}건)` : v)
+  }
+
+  const selPreset = v => {
+    setPreset(v)
+    const p = EXTRACT_PRESETS[v]
+    if (p) setPattern(p.pattern)
+  }
+  const clearAll = () => {
+    setPreset(''); setPattern('')
+    setFlags({ ...EXTRACT_FLAG_DEF })
+  }
+  const copyResults = () => {
+    const text = finalResults.join('\n')
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1200) }
+    const fallback = () => {
+      const ta = document.createElement('textarea')
+      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'
+      document.body.appendChild(ta); ta.select()
+      try { document.execCommand('copy'); done() } catch {}
+      ta.remove()
+    }
+    navigator.clipboard?.writeText
+      ? navigator.clipboard.writeText(text).then(done).catch(fallback)
+      : fallback()
+  }
+  const flagCb = (key, label) => (
+    <label key={key} style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
+      <input type="checkbox" checked={flags[key]}
+        onChange={e => setFlags(f => ({ ...f, [key]: e.target.checked }))} /> {label}
+    </label>
+  )
+
+  return (
+    <div>
+      <div className="toolbar" style={{ flexWrap: 'wrap' }}>
+        <select value={preset} onChange={e => selPreset(e.target.value)}>
+          <option value="">직접 입력</option>
+          {Object.entries(EXTRACT_PRESETS).map(([k, p]) =>
+            <option key={k} value={k}>{p.label}</option>)}
+        </select>
+        {preset && <button onClick={clearAll}>초기화</button>}
+        <input style={{ flex: 1, minWidth: 240 }} value={pattern}
+          placeholder="정규식 패턴을 입력하세요 (예: \b\w+@\w+\.\w+\b)"
+          onChange={e => setPattern(e.target.value)} />
+      </div>
+      <div className="toolbar" style={{ gap: 14 }}>
+        {flagCb('global', '전체 적용')}
+        {flagCb('ignoreCase', '대소문자 무시')}
+        {flagCb('multiline', '줄단위(^,$)')}
+        {flagCb('wholeWord', '온전한 단어(공백 기준)')}
+        {flagCb('removeDuplicates', '중복 제거')}
+      </div>
+      {preset &&
+        <p className="hint">💡 {EXTRACT_PRESETS[preset].description}</p>}
+      <div className="extract-grid">
+        <div>
+          <div className="ext-head">
+            <b>소스 입력</b>
+            <button className="link" onClick={() => setInput('')}>초기화</button>
+          </div>
+          <textarea className="ext-ta" value={input}
+            placeholder="정규식을 적용할 텍스트를 입력하세요"
+            onChange={e => setInput(e.target.value)} />
+          <p className="hint">총 {lineCount}행</p>
+        </div>
+        <div>
+          <div className="ext-head">
+            <b>추출된 결과</b>
+            <label style={{ fontWeight: 400, fontSize: 13, marginLeft: 'auto', marginRight: 8 }}>
+              <input type="checkbox" checked={showCount}
+                disabled={!flags.removeDuplicates}
+                onChange={e => setShowCount(e.target.checked)} /> 중복건수 표시
+            </label>
+            <button className="link" onClick={copyResults}
+              disabled={!finalResults.length}>
+              {copied ? '✓ 복사됨' : '복사'}</button>
+          </div>
+          <textarea className="ext-ta" readOnly
+            value={finalResults.join('\n')} />
+          <p className="hint">
+            총 {finalResults.length}개 매치
+            {flags.removeDuplicates && results.length > finalResults.length &&
+              ` (전체 ${results.length}건 중 중복 ${results.length - finalResults.length}건 제거)`}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
