@@ -16,8 +16,12 @@ xcopy /E /I /Q "%ROOT%frontend\dist" "%PKG%\static" >nul
 copy /Y "%ROOT%backend\requirements.txt" "%PKG%\" >nul
 copy /Y "%ROOT%backend\.env.example" "%PKG%\" >nul
 copy /Y "%ROOT%prod-run.bat" "%PKG%\run.bat" >nul
-rem license key -> app/license.key (배포판 검색 경로)
-copy /Y "%ROOT%backend\license.key" "%PKG%\app\license.key" >nul
+rem license key -> app/license.key (배포용 무료 키, 개발용 license.key와 분리)
+if exist "%ROOT%backend\license-deploy.key" (
+    copy /Y "%ROOT%backend\license-deploy.key" "%PKG%\app\license.key" >nul
+) else (
+    echo [warn] backend\license-deploy.key 없음 - 라이선스 키 없이 패키징됨
+)
 
 echo [3/5] download wheels (offline install)...
 "%ROOT%backend\.venv\Scripts\python.exe" -m pip download -q -r "%PKG%\requirements.txt" -d "%PKG%\wheels" --only-binary :all:

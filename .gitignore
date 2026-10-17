@@ -32,4 +32,5 @@ Thumbs.db
 
 # License (private key must never be committed/shipped)
 backend/license.key
+backend/license-deploy.key
 backend/license_private.pem
